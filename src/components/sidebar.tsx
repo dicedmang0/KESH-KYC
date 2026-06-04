@@ -14,27 +14,12 @@ import {
   ArrowLeftRight, // icon Transfers
 } from 'lucide-react';
 import { useAuth } from '@/app/providers';
+import { getRoleFromToken } from '@/lib/api';
 
 function cn(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(' ');
 }
 
-// decode role dari JWT (payload.role)
-function getRoleFromToken(token: string | null | undefined): string | null {
-  if (!token) return null;
-  try {
-    const parts = token.split('.');
-    if (parts.length < 2) return null;
-    const payloadPart = parts[1];
-    const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
-    const json = atob(padded);
-    const payload = JSON.parse(json);
-    return payload.role ?? null;
-  } catch {
-    return null;
-  }
-}
 
 type Item = {
   href: string;
@@ -58,26 +43,20 @@ export default function Sidebar() {
 
   const role = getRoleFromToken(token);
 
-  // 🔒 Aturan visibilitas menu:
-  // - FinanceStaff / FinanceManager: hanya Transfers + Reports
-  // - SystemAdmin: semua menu
-  // - Lainnya: semua KECUALI Transfers & Settings (boleh dikustom lagi nanti)
-  let visibleItems: Item[];
+  // Role-to-menu map — update here when requirements change.
+  // Backend is source of truth; this is UX-only (hiding, not securing).
+  const ROLE_MENU: Record<string, string[]> = {
+    SystemAdmin:        ['/dashboard', '/users', '/kyc', '/transfers', '/reports', '/settings'],
+    BranchAdmin:        ['/dashboard', '/users', '/kyc', '/reports'],
+    ComplianceLead:     ['/dashboard', '/users', '/kyc', '/reports'],
+    ComplianceReviewer: ['/dashboard', '/users', '/kyc', '/reports'],
+    Auditor:            ['/dashboard', '/users', '/kyc', '/reports'],
+    FinanceStaff:       ['/dashboard', '/transfers', '/reports'],
+    FinanceManager:     ['/dashboard', '/transfers', '/reports'],
+  };
 
-  if (role === 'FinanceStaff' || role === 'FinanceManager') {
-    visibleItems = allItems.filter((item) =>
-      item.href === '/transfers' || item.href === '/reports'
-    );
-  } else if (role === 'SystemAdmin') {
-    visibleItems = allItems;
-  } else {
-    visibleItems = allItems.filter((item) => {
-      // sembunyikan Transfers & Settings untuk non-finance, non-SystemAdmin
-      if (item.href === '/transfers') return false;
-      if (item.href === '/settings') return false;
-      return true;
-    });
-  }
+  const allowedHrefs = new Set(ROLE_MENU[role ?? ''] ?? ['/dashboard']);
+  const visibleItems = allItems.filter(({ href }) => allowedHrefs.has(href));
 
   return (
     <>

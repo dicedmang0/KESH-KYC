@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/providers";
 import { apiFetch } from "@/lib/api";
@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 type Kind = "INDIVIDUAL" | "BUSINESS";
 
-export default function NewApplicationPage() {
+function NewApplicationPageInner() {
   const router = useRouter();
   const { token } = useAuth();
   const sp = useSearchParams();
@@ -23,8 +23,6 @@ export default function NewApplicationPage() {
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
-
   // ==== INDIVIDUAL form state ====
   const [i_full_name, setIName] = useState("");
   const [i_nik, setINik] = useState("");
@@ -49,23 +47,8 @@ export default function NewApplicationPage() {
   const [i_signature, setISignature] = useState<File | null>(null);
   const [i_iddoc, setIIddoc] = useState<File | null>(null);
 
-  // ==== BUSINESS form state ====
-  const [b_legal_name, setBLegal] = useState("");
-  const [b_trade_name, setBTrade] = useState("");
-  const [b_nib, setBNib] = useState("");
-  const [b_npwp, setBNpwp] = useState("");
-  const [b_industry, setBIndustry] = useState("");
-  const [b_incorp, setBIncorp] = useState("");
-  const [b_country, setBCountry] = useState("Indonesia");
-  const [b_address, setBAddress] = useState("");
-  const [b_city, setBCity] = useState("");
-  const [b_province, setBProv] = useState("");
-  const [b_postal, setBPostal] = useState("");
-  const [b_sig, setBSig] = useState<File | null>(null);
-  const [b_iddoc, setBIddoc] = useState<File | null>(null);
-
   // helper upload multipart → /applications/:id/documents/upload
-  async function uploadDoc(appId: number, file: File, docType: string) {
+  async function uploadDoc(appId: number | string, file: File, docType: string) {
     const form = new FormData();
     form.append("file", file);
     form.append("doc_type", docType);
@@ -78,69 +61,37 @@ export default function NewApplicationPage() {
     if (!token) return;
 
     setErr(null);
-    setOkMsg(null);
     setLoading(true);
     try {
-      let created: any;
+      const dto = {
+        full_name: i_full_name,
+        identity_type: i_identity_type,
+        identity_number: i_nik,
+        address_identity: i_address,
+        address_residential: i_address2 || null,
+        pob: i_pob,
+        dob: i_dob || null,
+        nationality: i_nationality,
+        phone: i_phone,
+        email: i_email || null,
+        gender: i_gender,
+        occupation: i_occupation,
+        signature_uri: null,
+      };
+      const created = await apiFetch<{ id?: number | string; application_id?: number | string }>(
+        "/applications/individual",
+        { method: "POST", body: JSON.stringify(dto) }
+      );
 
-      if (kind === "INDIVIDUAL") {
-        // DTO: POST /applications/individual
-        const dto = {
-          full_name: i_full_name,
-          identity_type: i_identity_type,
-          identity_number: i_nik,
-          address_identity: i_address,
-          address_residential: i_address2 || null,
-          pob: i_pob,
-          dob: i_dob || null,
-          nationality: i_nationality,
-          phone: i_phone,
-          email: i_email || null,
-          gender: i_gender,
-          occupation: i_occupation,
-          signature_uri: null,
-        };
-        created = await apiFetch("/applications/individual", {
-          method: "POST",
-          body: JSON.stringify(dto),
-        });
-      } else {
-        // DTO: POST /applications/business
-        const dto = {
-          legal_name: b_legal_name,
-          trade_name: b_trade_name || null,
-          nib: b_nib || null,
-          npwp: b_npwp || null,
-          industry_code: b_industry || null,
-          incorporation_date: b_incorp || null,
-          country: b_country || null,
-          address_line: b_address,
-          city: b_city,
-          province: b_province,
-          postal_code: b_postal,
-        };
-        created = await apiFetch("/applications/business", {
-          method: "POST",
-          body: JSON.stringify(dto),
-        });
-      }
-
-      const appId = created?.id || created?.application_id || created?.app_id;
+      const appId = created?.id ?? created?.application_id;
       if (!appId) throw new Error("Application ID not returned");
 
-      // upload files jika ada
-      if (kind === "INDIVIDUAL") {
-        if (i_signature) await uploadDoc(appId, i_signature, "SIGNATURE");
-        if (i_iddoc) await uploadDoc(appId, i_iddoc, i_identity_type);
-      } else {
-        if (b_sig) await uploadDoc(appId, b_sig, "SIGNATURE");
-        if (b_iddoc) await uploadDoc(appId, b_iddoc, "REGISTRY_DOC");
-      }
+      if (i_signature) await uploadDoc(appId, i_signature, "SIGNATURE");
+      if (i_iddoc) await uploadDoc(appId, i_iddoc, i_identity_type);
 
-      setOkMsg("Data berhasil disimpan.");
-      router.push("/users");
-    } catch (e: any) {
-      setErr(e.message || "Gagal menyimpan data");
+      router.push(`/users/${String(appId)}`);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Gagal menyimpan data");
     } finally {
       setLoading(false);
     }
@@ -162,12 +113,6 @@ export default function NewApplicationPage() {
           {err}
         </div>
       )}
-      {okMsg && (
-        <div className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">
-          {okMsg}
-        </div>
-      )}
-
       <form onSubmit={onSubmit} className="space-y-6">
         {kind === "INDIVIDUAL" ? (
           <Card>
@@ -391,20 +336,26 @@ export default function NewApplicationPage() {
           <BusinessWizard />
         )}
 
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex items-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {loading
-              ? "Saving..."
-              : kind === "INDIVIDUAL"
-              ? "Save KYC Data"
-              : "Save KYB Data"}
-          </button>
-        </div>
+        {kind === "INDIVIDUAL" && (
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex items-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {loading ? "Saving..." : "Save KYC Data"}
+            </button>
+          </div>
+        )}
       </form>
     </div>
+  );
+}
+
+export default function NewApplicationPage() {
+  return (
+    <Suspense fallback={<p className="p-6 text-sm text-slate-500">Loading…</p>}>
+      <NewApplicationPageInner />
+    </Suspense>
   );
 }

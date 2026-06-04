@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, getRoleFromToken } from '@/lib/api';
+import { useAuth } from '@/app/providers';
 
 type TransferRow = {
   id: number;
@@ -25,6 +26,8 @@ function formatIDR(v: string) {
 }
 
 export default function TransfersPage() {
+  const { token } = useAuth();
+  const role = getRoleFromToken(token);
   const [status, setStatus] = useState<string>('');
   const [rows, setRows] = useState<TransferRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,12 +60,14 @@ export default function TransfersPage() {
           <p className="text-sm text-muted-foreground">Pencatatan transfer to bank (manual)</p>
         </div>
 
-        <Link
-          href="/transfers/new"
-          className="rounded-lg bg-black text-white px-4 py-2 text-sm hover:opacity-90"
-        >
-          + New Transfer
-        </Link>
+        {role === 'FinanceStaff' && (
+          <Link
+            href="/transfers/new"
+            className="rounded-lg bg-black text-white px-4 py-2 text-sm hover:opacity-90"
+          >
+            + New Transfer
+          </Link>
+        )}
       </div>
 
       <div className="flex items-center gap-2">

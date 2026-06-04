@@ -2,7 +2,8 @@
 
 import { useRouter, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, getRoleFromToken } from '@/lib/api';
+import { useAuth } from '@/app/providers';
 
 type TransferRow = {
   id: number;
@@ -30,6 +31,8 @@ type TransferRow = {
 export default function TransferDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const { token } = useAuth();
+  const role = getRoleFromToken(token);
 
   // useParams bisa balikin string atau string[]
   const rawId = params?.id;
@@ -39,6 +42,7 @@ export default function TransferDetailPage() {
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionErr, setActionErr] = useState('');
 
   async function reload() {
     if (!id) return;
@@ -47,8 +51,8 @@ export default function TransferDetailPage() {
     try {
       const data = await apiFetch<TransferRow>(`/transfers/${id}`);
       setRow(data);
-    } catch (e: any) {
-      setErr(e?.message ?? 'Gagal load detail transfer');
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Gagal load detail transfer');
     } finally {
       setLoading(false);
     }
@@ -59,28 +63,38 @@ export default function TransferDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function action(path: string, body?: any, opts?: { redirectOnSuccess?: boolean }) {
+  async function action(
+    path: string,
+    body?: Record<string, unknown>,
+    opts?: { redirectOnSuccess?: boolean }
+  ) {
     if (!id) return;
     setActionLoading(true);
+    setActionErr('');
     try {
-      await apiFetch(`/transfers/${id}${path}`, {
-        method: 'POST',
-        body,
-      });
-
+      await apiFetch(`/transfers/${id}${path}`, { method: 'POST', body });
       if (opts?.redirectOnSuccess) {
-        // ✅ setelah submit → kembali ke list transfers
         router.push('/transfers');
       } else {
-        // untuk approve/reject/result, tetap di halaman detail dan reload data
         await reload();
       }
-    } catch (e: any) {
-      alert(e?.message ?? 'Action gagal');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Action gagal';
+      setActionErr(
+        msg.includes('403')
+          ? "You don't have permission to perform this action."
+          : msg
+      );
     } finally {
       setActionLoading(false);
     }
   }
+
+  // Role + status conditions for action visibility
+  const canSubmit = role === 'FinanceStaff' && row?.status === 'DRAFT';
+  const canDecide = role === 'FinanceManager' && row?.status === 'SUBMITTED';
+  const canSetResult = role === 'FinanceManager' && row?.status === 'APPROVED';
+  const hasAnyAction = canSubmit || canDecide || canSetResult;
 
   if (!id) {
     return (
@@ -168,64 +182,72 @@ export default function TransferDetailPage() {
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-wrap gap-2 pt-2">
-            {/* Submit → setelah sukses, redirect ke /transfers */}
-            <button
-              className="rounded-lg border px-3 py-2 text-sm"
-              disabled={actionLoading}
-              onClick={() => action('/submit', undefined, { redirectOnSuccess: true })}
-            >
-              Submit (FinanceStaff)
-            </button>
+          {/* Actions — shown only to roles with applicable permissions */}
+          {hasAnyAction && (
+            <div className="flex flex-wrap gap-2 pt-2">
+              {canSubmit && (
+                <button
+                  className="rounded-lg bg-amber-600 px-3 py-2 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
+                  disabled={actionLoading}
+                  onClick={() => action('/submit', undefined, { redirectOnSuccess: true })}
+                >
+                  Submit
+                </button>
+              )}
 
-            {/* Approve / Reject */}
-            <button
-              className="rounded-lg border px-3 py-2 text-sm"
-              disabled={actionLoading}
-              onClick={() => action('/decision', { decision: 'APPROVE' })}
-            >
-              Approve (FinanceManager)
-            </button>
-            <button
-              className="rounded-lg border px-3 py-2 text-sm"
-              disabled={actionLoading}
-              onClick={() =>
-                action('/decision', {
-                  decision: 'REJECT',
-                  note: 'Rejected from UI',
-                })
-              }
-            >
-              Reject (FinanceManager)
-            </button>
+              {canDecide && (
+                <>
+                  <button
+                    className="rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
+                    disabled={actionLoading}
+                    onClick={() => action('/decision', { decision: 'APPROVE' })}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    className="rounded-lg bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+                    disabled={actionLoading}
+                    onClick={() => action('/decision', { decision: 'REJECT', note: 'Rejected from UI' })}
+                  >
+                    Reject
+                  </button>
+                </>
+              )}
 
-            {/* Set Result */}
-            <button
-              className="rounded-lg border px-3 py-2 text-sm"
-              disabled={actionLoading}
-              onClick={() => action('/result', { result: 'SUCCESS' })}
-            >
-              Set SUCCESS (FinanceManager)
-            </button>
-            <button
-              className="rounded-lg border px-3 py-2 text-sm"
-              disabled={actionLoading}
-              onClick={() =>
-                action('/result', {
-                  result: 'FAILED',
-                  note: 'Failed from UI',
-                })
-              }
-            >
-              Set FAILED (FinanceManager)
-            </button>
-          </div>
+              {canSetResult && (
+                <>
+                  <button
+                    className="rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
+                    disabled={actionLoading}
+                    onClick={() => action('/result', { result: 'SUCCESS' })}
+                  >
+                    Set SUCCESS
+                  </button>
+                  <button
+                    className="rounded-lg bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+                    disabled={actionLoading}
+                    onClick={() => action('/result', { result: 'FAILED', note: 'Failed from UI' })}
+                  >
+                    Set FAILED
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
-          <p className="text-xs text-neutral-500 pt-1">
-            Submit bisa dilakukan oleh FinanceStaff; approve / set result oleh
-            FinanceManager. Kalau role tidak sesuai, backend akan mengembalikan 403.
-          </p>
+          {/* Action error / 403 feedback */}
+          {actionErr && (
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+              {actionErr}
+            </div>
+          )}
+
+          {/* Read-only notice for roles with no applicable actions */}
+          {!hasAnyAction && (
+            <p className="text-xs text-slate-500 italic pt-1">
+              Read-only view — no actions available for your role or current status.
+            </p>
+          )}
         </div>
       )}
     </div>

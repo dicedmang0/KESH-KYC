@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/app/providers";
 import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -79,7 +78,6 @@ function Stepper({ step }: { step: Step }) {
 
 export default function BusinessWizard() {
   const router = useRouter();
-  const { token } = useAuth();
 
   // ----- State umum -----
   const [step, setStep] = useState<Step>(1);
@@ -92,7 +90,7 @@ export default function BusinessWizard() {
   const [submitOK, setSubmitOK] = useState<string | null>(null);
 
   // setelah Step 1 berhasil → pegang appId untuk step berikutnya
-  const [appId, setAppId] = useState<number | null>(null);
+  const [appId, setAppId] = useState<number | string | null>(null);
 
   // ----- STEP 1: Company info -----
   const [legal_name, setLegalName] = useState("");
@@ -262,15 +260,26 @@ export default function BusinessWizard() {
 
   async function saveDocumentsThenNext() {
     setErrDocs(null);
+
+    const missingDocs: string[] = [];
+    if (!aktaFile) missingDocs.push("Akta Pendirian");
+    if (!nibFile) missingDocs.push("NIB / SIUP");
+    if (!npwpFile) missingDocs.push("NPWP Badan");
+
+    if (missingDocs.length > 0) {
+      setErrDocs(`Dokumen wajib belum dipilih: ${missingDocs.join(", ")}`);
+      return;
+    }
+
     setSaving(true);
     try {
-      if (aktaFile) await uploadDoc(aktaFile, "AKTA_PENDIRIAN");
-      if (nibFile) await uploadDoc(nibFile, "NIB_SIUP");
-      if (npwpFile) await uploadDoc(npwpFile, "NPWP_BADAN");
-      if (arIdFile) await uploadDoc(arIdFile, "KTP_KUASA"); // / PASPOR_KUASA
+      await uploadDoc(aktaFile!, "AKTA_PENDIRIAN");
+      await uploadDoc(nibFile!, "NIB_SIUP");
+      await uploadDoc(npwpFile!, "NPWP_BADAN");
+      if (arIdFile) await uploadDoc(arIdFile, "KTP_KUASA");
       setStep(4);
-    } catch (e: any) {
-      setErrDocs(e?.message || "Upload dokumen gagal");
+    } catch (e: unknown) {
+      setErrDocs(e instanceof Error ? e.message : "Upload dokumen gagal");
     } finally {
       setSaving(false);
     }
@@ -298,7 +307,7 @@ export default function BusinessWizard() {
 
       await apiFetch(`/applications/${appId}/submit`, { method: "PATCH" });
       setSubmitOK("Submitted. Screening & risk otomatis dijalankan.");
-      setTimeout(() => router.push("/users"), 600);
+      router.push(`/users/${String(appId)}`);
     } catch (e: any) {
       // tampilkan di banner step-4 (pakai errDocs biar hanya muncul di sini)
       setErrDocs(e?.message || "Submit gagal");

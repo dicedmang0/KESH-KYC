@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/app/providers";
@@ -23,12 +23,11 @@ type Status =
   | "DRAFT"
   | "SUBMITTED"
   | "IN_REVIEW"
-  | "ESCALATED"
   | "APPROVED"
   | "REJECTED";
 
 type Item = {
-  application_id: number;
+  application_id: number | string;
   type: Kind;
   status: Status;
   created_at: string;
@@ -53,7 +52,6 @@ const STATUS_OPTIONS: (Status | "ALL")[] = [
   "DRAFT",
   "SUBMITTED",
   "IN_REVIEW",
-  "ESCALATED",
   "APPROVED",
   "REJECTED",
 ];
@@ -63,7 +61,6 @@ function StatusBadge({ s }: { s: Status }) {
     DRAFT: "bg-slate-100 text-slate-700",
     SUBMITTED: "bg-amber-100 text-amber-700",
     IN_REVIEW: "bg-blue-100 text-blue-700",
-    ESCALATED: "bg-purple-100 text-purple-700",
     APPROVED: "bg-emerald-100 text-emerald-700",
     REJECTED: "bg-red-100 text-red-700",
   };
@@ -87,7 +84,7 @@ function RiskPill({ level }: { level?: Item["risk_level"] }) {
   return <span className={`px-2 py-0.5 rounded text-xs ${cls}`}>{level}</span>;
 }
 
-export default function UsersPage() {
+function UsersPageInner() {
   const { token } = useAuth();
   const router = useRouter();
   const sp = useSearchParams();
@@ -388,5 +385,13 @@ export default function UsersPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function UsersPage() {
+  return (
+    <Suspense fallback={<p className="p-6 text-sm text-slate-500">Loading…</p>}>
+      <UsersPageInner />
+    </Suspense>
   );
 }

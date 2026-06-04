@@ -223,7 +223,7 @@ export default function DashboardPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-base font-semibold text-slate-900">Recent KYC Submissions</CardTitle>
-          <button onClick={() => router.push("/kyc-submissions")} className="text-xs font-medium text-amber-700 hover:underline">
+          <button onClick={() => router.push("/users")} className="text-xs font-medium text-amber-700 hover:underline">
             View All Submissions
           </button>
         </CardHeader>

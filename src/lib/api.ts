@@ -1,6 +1,6 @@
 // src/lib/api.ts
 
-const RAW_API = process.env.NEXT_PUBLIC_API || "http://localhost:4000/api";
+const RAW_API = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000/api";
 export const API = RAW_API.replace(/\/+$/, ""); // hapus trailing "/"
 
 const TOKEN_KEY = "access_token";
@@ -135,4 +135,19 @@ export async function apiUpload(path: string, form: FormData, withAuth = true) {
   const ct = res.headers.get("content-type") || "";
   if (!ct.includes("application/json")) return res.text().catch(() => ({}));
   return res.json().catch(() => ({}));
+}
+
+// Decode role from a JWT access token (client-side only — no verification).
+export function getRoleFromToken(token: string | null | undefined): string | null {
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64.padEnd(Math.ceil(b64.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(padded)) as { role?: unknown };
+    return typeof payload.role === "string" ? payload.role : null;
+  } catch {
+    return null;
+  }
 }
