@@ -17,6 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileBarChart, Download } from "lucide-react";
+import { Pagination } from "@/components/pagination";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -221,6 +222,14 @@ function ReportsPageInner() {
   // refreshKey allows the Apply button to re-trigger the fetch effect
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // independent pagination state for each table
+  const [subPage, setSubPage] = useState(1);
+  const [subPageSize, setSubPageSize] = useState(20);
+  const [wlPage, setWlPage] = useState(1);
+  const [wlPageSize, setWlPageSize] = useState(20);
+  const [txPage, setTxPage] = useState(1);
+  const [txPageSize, setTxPageSize] = useState(20);
+
   // ── Fetch all data in parallel (async IIFE avoids "setState in effect" lint) ─
   useEffect(() => {
     if (!token) {
@@ -401,7 +410,7 @@ function ReportsPageInner() {
               <input
                 type="date"
                 value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
+                onChange={(e) => { setFromDate(e.target.value); setSubPage(1); setWlPage(1); setTxPage(1); }}
                 className="rounded-md border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-slate-200"
               />
             </div>
@@ -412,7 +421,7 @@ function ReportsPageInner() {
               <input
                 type="date"
                 value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
+                onChange={(e) => { setToDate(e.target.value); setSubPage(1); setWlPage(1); setTxPage(1); }}
                 className="rounded-md border px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-slate-200"
               />
             </div>
@@ -420,9 +429,10 @@ function ReportsPageInner() {
               <label className="text-xs font-medium text-slate-600">Type</label>
               <select
                 value={typeFilter}
-                onChange={(e) =>
-                  setTypeFilter(e.target.value as AppType | "ALL")
-                }
+                onChange={(e) => {
+                  setTypeFilter(e.target.value as AppType | "ALL");
+                  setSubPage(1);
+                }}
                 className="rounded-md border bg-white px-2 py-1.5 text-sm"
               >
                 {(["ALL", "INDIVIDUAL", "BUSINESS"] as const).map((t) => (
@@ -438,9 +448,10 @@ function ReportsPageInner() {
               </label>
               <select
                 value={statusFilter}
-                onChange={(e) =>
-                  setStatusFilter(e.target.value as AppStatus | "ALL")
-                }
+                onChange={(e) => {
+                  setStatusFilter(e.target.value as AppStatus | "ALL");
+                  setSubPage(1);
+                }}
                 className="rounded-md border bg-white px-2 py-1.5 text-sm"
               >
                 {(
@@ -472,6 +483,9 @@ function ReportsPageInner() {
                   setToDate("");
                   setTypeFilter("ALL");
                   setStatusFilter("ALL");
+                  setSubPage(1);
+                  setWlPage(1);
+                  setTxPage(1);
                 }}
                 className="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50"
               >
@@ -601,7 +615,7 @@ function ReportsPageInner() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredSubs.slice(0, 100).map((row, i) => {
+                    {filteredSubs.slice((subPage - 1) * subPageSize, subPage * subPageSize).map((row, i) => {
                       const id = resolveSubId(row);
                       return (
                         <TableRow key={id || String(i)}>
@@ -661,12 +675,14 @@ function ReportsPageInner() {
                   </TableBody>
                 </Table>
               </div>
-              {filteredSubs.length > 100 && (
-                <p className="pt-2 text-center text-xs text-slate-400">
-                  Showing first 100 of {filteredSubs.length}. Use filters to
-                  narrow down.
-                </p>
-              )}
+              <Pagination
+                page={subPage}
+                pageSize={subPageSize}
+                total={filteredSubs.length}
+                onPageChange={setSubPage}
+                onPageSizeChange={(s) => { setSubPageSize(s); setSubPage(1); }}
+                disabled={loadingSubs}
+              />
             </>
           ) : null}
         </CardContent>
@@ -689,6 +705,7 @@ function ReportsPageInner() {
               No watchlist uploads found.
             </p>
           ) : !errWatchlist ? (
+            <>
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -701,7 +718,7 @@ function ReportsPageInner() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredWatchlist.map((row, i) => (
+                  {filteredWatchlist.slice((wlPage - 1) * wlPageSize, wlPage * wlPageSize).map((row, i) => (
                     <TableRow key={String(row.id ?? i)}>
                       <TableCell className="text-sm text-slate-600">
                         {fmtDate(row.created_at)}
@@ -738,6 +755,15 @@ function ReportsPageInner() {
                 </TableBody>
               </Table>
             </div>
+            <Pagination
+              page={wlPage}
+              pageSize={wlPageSize}
+              total={filteredWatchlist.length}
+              onPageChange={setWlPage}
+              onPageSizeChange={(s) => { setWlPageSize(s); setWlPage(1); }}
+              disabled={loadingWatchlist}
+            />
+            </>
           ) : null}
         </CardContent>
       </Card>
@@ -784,7 +810,7 @@ function ReportsPageInner() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredTransfers.slice(0, 100).map((row, i) => {
+                    {filteredTransfers.slice((txPage - 1) * txPageSize, txPage * txPageSize).map((row, i) => {
                       const id = String(row.id ?? "");
                       return (
                         <TableRow key={id || String(i)}>
@@ -828,11 +854,14 @@ function ReportsPageInner() {
                   </TableBody>
                 </Table>
               </div>
-              {filteredTransfers.length > 100 && (
-                <p className="pt-2 text-center text-xs text-slate-400">
-                  Showing first 100 of {filteredTransfers.length}.
-                </p>
-              )}
+              <Pagination
+                page={txPage}
+                pageSize={txPageSize}
+                total={filteredTransfers.length}
+                onPageChange={setTxPage}
+                onPageSizeChange={(s) => { setTxPageSize(s); setTxPage(1); }}
+                disabled={loadingTransfers}
+              />
             </>
           )}
         </CardContent>

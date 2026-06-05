@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { Pagination } from '@/components/pagination';
 
 type AdminUser = {
   id: number;
@@ -28,6 +29,8 @@ export default function AdminManagementCard() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
+  const [adminPage, setAdminPage] = useState(1);
+  const [adminPageSize, setAdminPageSize] = useState(20);
 
   const [form, setForm] = useState({
     email: '',
@@ -218,7 +221,7 @@ export default function AdminManagementCard() {
             Belum ada admin.
           </div>
         ) : (
-          admins.map((u) => (
+          admins.slice((adminPage - 1) * adminPageSize, adminPage * adminPageSize).map((u) => (
             <div
               key={u.id}
               className="grid grid-cols-12 gap-2 px-4 py-2 text-sm border-t"
@@ -276,6 +279,14 @@ export default function AdminManagementCard() {
             </div>
           ))
         )}
+        <Pagination
+          page={adminPage}
+          pageSize={adminPageSize}
+          total={admins.length}
+          onPageChange={setAdminPage}
+          onPageSizeChange={(s) => { setAdminPageSize(s); setAdminPage(1); }}
+          disabled={loading}
+        />
       </div>
     </div>
   );

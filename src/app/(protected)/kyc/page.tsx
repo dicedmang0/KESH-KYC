@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, ShieldCheck, ShieldOff } from "lucide-react";
+import { ShieldCheck, ShieldOff } from "lucide-react";
+import { Pagination } from "@/components/pagination";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -138,7 +139,7 @@ function KycPageInner() {
     (sp.get("status") as AppStatus) || "ALL"
   );
   const [q, setQ] = useState(sp.get("q") || "");
-  const [pageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
 
   const [loading, setLoading] = useState(true);
@@ -186,19 +187,24 @@ function KycPageInner() {
     })();
   }, [token, activeTab, q, page, pageSize, router]);
 
-  // Client-side search filter (name / email / id) applied on top of server results
+  // Client-side filter: status fallback + text search on top of server results
   const filtered = useMemo(() => {
-    if (!q) return allItems;
+    let result = allItems;
+    // fallback: server may not filter by status — ensure client always filters correctly
+    if (activeTab !== "ALL") {
+      result = result.filter(
+        (row) => String(row.status ?? "").toUpperCase() === activeTab
+      );
+    }
+    if (!q) return result;
     const lower = q.toLowerCase();
-    return allItems.filter((row) => {
+    return result.filter((row) => {
       const id = resolveId(row).toLowerCase();
       const name = resolveName(row).toLowerCase();
       const email = (row.email || "").toLowerCase();
       return id.includes(lower) || name.includes(lower) || email.includes(lower);
     });
-  }, [allItems, q]);
-
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  }, [allItems, q, activeTab]);
 
   if (accessDenied) {
     return (
@@ -370,29 +376,14 @@ function KycPageInner() {
           )}
 
           {/* Pagination */}
-          {!loading && total > pageSize && (
-            <div className="flex items-center justify-between border-t pt-3 mt-3 text-sm">
-              <span>
-                Page {page} of {totalPages} ({total} total)
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 disabled:opacity-50"
-                >
-                  <ChevronLeft className="h-4 w-4" /> Previous
-                </button>
-                <button
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 disabled:opacity-50"
-                >
-                  Next <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          )}
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={setPage}
+            onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+            disabled={loading}
+          />
         </CardContent>
       </Card>
     </div>

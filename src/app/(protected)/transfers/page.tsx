@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { apiFetch, getRoleFromToken } from '@/lib/api';
 import { useAuth } from '@/app/providers';
+import { Pagination } from '@/components/pagination';
 
 type TransferRow = {
   id: number;
@@ -32,8 +33,13 @@ export default function TransfersPage() {
   const [rows, setRows] = useState<TransferRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   const q = useMemo(() => (status ? `?status=${encodeURIComponent(status)}` : ''), [status]);
+
+  // reset page when status filter changes
+  useEffect(() => { setPage(1); }, [status]);
 
   useEffect(() => {
     let alive = true;
@@ -51,6 +57,8 @@ export default function TransfersPage() {
     })();
     return () => { alive = false; };
   }, [q]);
+
+  const pagedRows = rows.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="p-6 space-y-4">
@@ -103,7 +111,7 @@ export default function TransfersPage() {
         ) : rows.length === 0 ? (
           <div className="p-4 text-sm text-muted-foreground">Belum ada data.</div>
         ) : (
-          rows.map((r) => (
+          pagedRows.map((r) => (
             <div key={r.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm border-t">
               <div className="col-span-1 font-medium">#{r.id}</div>
               <div className="col-span-2">
@@ -127,6 +135,15 @@ export default function TransfersPage() {
           ))
         )}
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={rows.length}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+        disabled={loading}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/app/providers";
@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight, Plus, Eye } from "lucide-react";
+import { Plus, Eye } from "lucide-react";
+import { Pagination } from "@/components/pagination";
 
 type Kind = "INDIVIDUAL" | "BUSINESS";
 type Status =
@@ -97,7 +98,7 @@ function UsersPageInner() {
   const [status, setStatus] = useState<Status | "ALL">(
     (sp.get("status") as any) || "ALL"
   );
-  const [pageSize, setPageSize] = useState(Number(sp.get("limit") || 50));
+  const [pageSize, setPageSize] = useState(Number(sp.get("limit") || 20));
   const [page, setPage] = useState(Math.max(1, Number(sp.get("page") || 1)));
 
   const [loading, setLoading] = useState(true);
@@ -136,10 +137,6 @@ function UsersPageInner() {
     })();
   }, [kind, q, status, page, pageSize]);
 
-  const totalPages = useMemo(
-    () => Math.max(1, Math.ceil((data.total || 0) / pageSize)),
-    [data.total, pageSize]
-  );
   const fmtDate = (iso?: string) => {
     if (!iso) return "-";
     const d = new Date(iso);
@@ -258,20 +255,6 @@ function UsersPageInner() {
                   </option>
                 ))}
               </select>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
-                }}
-                className="rounded-md border bg-white px-2 py-1.5 text-sm"
-              >
-                {[10, 25, 50, 100].map((n) => (
-                  <option key={n} value={n}>
-                    {n} per page
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
         </CardContent>
@@ -358,30 +341,14 @@ function UsersPageInner() {
           )}
 
           {/* Pagination */}
-          <div className="flex items-center justify-between border-t pt-3 mt-3 text-sm">
-            <div>
-              Showing {data.items.length ? data.offset + 1 : 0} to{" "}
-              {Math.min(data.offset + data.items.length, data.total)} of{" "}
-              {data.total} results
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="inline-flex items-center gap-1 rounded-md border px-2 py-1 disabled:opacity-50"
-              >
-                <ChevronLeft className="h-4 w-4" /> Previous
-              </button>
-              <span>{page}</span>
-              <button
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="inline-flex items-center gap-1 rounded-md border px-2 py-1 disabled:opacity-50"
-              >
-                Next <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={data.total}
+            onPageChange={setPage}
+            onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+            disabled={loading}
+          />
         </CardContent>
       </Card>
     </div>
