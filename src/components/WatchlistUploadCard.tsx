@@ -132,7 +132,7 @@ export default function WatchlistUploadCard() {
         <button
           type="submit"
           disabled={loading}
-          className="inline-flex items-center rounded-md bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+          className="inline-flex items-center rounded-md bg-kesh-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-kesh-600 disabled:opacity-40 transition-colors"
         >
           {loading ? 'Mengunggah...' : 'Upload'}
         </button>

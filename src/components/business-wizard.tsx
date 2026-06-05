@@ -56,7 +56,7 @@ function Stepper({ step }: { step: Step }) {
           <div
             className={`h-8 w-8 rounded-full text-xs flex items-center justify-center font-medium ${
               step >= it.n
-                ? "bg-black text-white"
+                ? "bg-kesh-700 text-white"
                 : "bg-slate-200 text-slate-600"
             }`}
           >
@@ -510,7 +510,7 @@ export default function BusinessWizard() {
                 type="button"
                 disabled={saving}
                 onClick={saveCompany}
-                className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="rounded-md bg-kesh-700 px-4 py-2 text-sm font-medium text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
               >
                 {saving ? "Saving..." : "Save & Continue"}
               </button>
@@ -627,7 +627,7 @@ export default function BusinessWizard() {
                   </button>
                   <button
                     type="button"
-                    className="rounded-md bg-black px-3 py-1.5 text-sm text-white"
+                    className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 transition-colors"
                     onClick={addParty}
                     disabled={saving}
                   >
@@ -721,7 +721,7 @@ export default function BusinessWizard() {
                     ? "Lengkapi minimal 1 Pengurus, 1 BO, 1 Authorized Rep"
                     : ""
                 }
-                className="rounded-md bg-black px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               >
                 Continue
               </button>
@@ -788,7 +788,7 @@ export default function BusinessWizard() {
                 type="button"
                 disabled={saving}
                 onClick={saveDocumentsThenNext}
-                className="rounded-md bg-black px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
               >
                 {saving ? "Uploading..." : "Save & Continue"}
               </button>
@@ -835,7 +835,7 @@ export default function BusinessWizard() {
                 type="button"
                 onClick={submitApplication}
                 disabled={submitting}
-                className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="rounded-md bg-kesh-700 px-4 py-2 text-sm font-medium text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
               >
                 {submitting ? "Submitting..." : "Submit Application"}
               </button>

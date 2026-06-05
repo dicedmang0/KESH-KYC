@@ -249,8 +249,8 @@ function KycPageInner() {
                   onClick={() => { setActiveTab(tab); setPage(1); }}
                   className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                     activeTab === tab
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-600 hover:bg-slate-100"
+                      ? "bg-kesh-700 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
                   }`}
                 >
                   {tab === "ALL" ? "All" : tab.replace("_", " ")}
@@ -301,7 +301,7 @@ function KycPageInner() {
               {(activeTab !== "ALL" || q) && (
                 <button
                   onClick={() => { setActiveTab("ALL"); setQ(""); setPage(1); }}
-                  className="text-xs text-amber-700 hover:underline"
+                  className="text-xs text-kesh-700 hover:underline font-medium"
                 >
                   Clear filters
                 </button>
@@ -359,7 +359,7 @@ function KycPageInner() {
                           {id ? (
                             <button
                               onClick={() => router.push(`/users/${id}`)}
-                              className="text-amber-700 hover:underline text-xs"
+                              className="text-kesh-700 hover:underline text-xs font-medium"
                             >
                               View
                             </button>

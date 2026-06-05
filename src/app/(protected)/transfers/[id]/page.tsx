@@ -102,7 +102,7 @@ export default function TransferDetailPage() {
         <h1 className="text-xl font-semibold">Transfer</h1>
         <p className="text-sm text-neutral-500">Invalid transfer ID.</p>
         <button
-          className="mt-4 text-sm underline"
+          className="mt-4 text-sm text-kesh-700 hover:underline"
           onClick={() => router.push('/transfers')}
         >
           Back
@@ -126,7 +126,7 @@ export default function TransferDetailPage() {
           )}
         </div>
         <button
-          className="text-sm underline"
+          className="text-sm text-kesh-700 hover:underline"
           onClick={() => router.push('/transfers')}
         >
           Back

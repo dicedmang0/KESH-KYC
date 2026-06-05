@@ -71,7 +71,7 @@ export default function TransfersPage() {
         {role === 'FinanceStaff' && (
           <Link
             href="/transfers/new"
-            className="rounded-lg bg-black text-white px-4 py-2 text-sm hover:opacity-90"
+            className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 transition-colors"
           >
             + New Transfer
           </Link>
@@ -127,7 +127,7 @@ export default function TransfersPage() {
               </div>
               <div className="col-span-2 font-medium">{formatIDR(r.amount)}</div>
               <div className="col-span-1 text-right">
-                <Link className="text-sm underline" href={`/transfers/${r.id}`}>
+                <Link className="text-sm text-kesh-700 hover:underline font-medium" href={`/transfers/${r.id}`}>
                   Open
                 </Link>
               </div>

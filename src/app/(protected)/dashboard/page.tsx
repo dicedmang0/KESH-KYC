@@ -145,14 +145,14 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col justify-between gap-2 rounded-xl bg-white p-4 shadow-sm sm:flex-row sm:items-center">
+      <div className="flex flex-col justify-between gap-2 rounded-xl bg-white border border-slate-200 p-4 shadow-sm sm:flex-row sm:items-center">
         <div>
           <p className="text-xs text-slate-400">Dashboard Overview</p>
-          <p className="text-sm font-medium text-slate-900">Welcome back, Administrator</p>
+          <p className="text-sm font-semibold text-slate-900">Welcome back, Administrator</p>
         </div>
         <div className="text-right">
           <p className="text-xs text-slate-400">Last updated</p>
-          <p className="text-xs font-medium text-slate-700">
+          <p className="text-xs font-medium text-slate-600">
             {summary?.lastUpdated
               ? new Date(summary.lastUpdated).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) + " today"
               : "a few seconds ago"}
@@ -223,7 +223,7 @@ export default function DashboardPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-base font-semibold text-slate-900">Recent KYC Submissions</CardTitle>
-          <button onClick={() => router.push("/users")} className="text-xs font-medium text-amber-700 hover:underline">
+          <button onClick={() => router.push("/users")} className="text-xs font-medium text-kesh-700 hover:underline">
             View All Submissions
           </button>
         </CardHeader>

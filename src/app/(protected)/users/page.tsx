@@ -199,7 +199,7 @@ function UsersPageInner() {
                   }}
                   className={`px-3 py-1.5 text-sm rounded-md ${
                     kind === "INDIVIDUAL"
-                      ? "bg-slate-900 text-white"
+                      ? "bg-kesh-700 text-white shadow-sm"
                       : "text-slate-700 hover:bg-slate-50"
                   }`}
                 >
@@ -212,7 +212,7 @@ function UsersPageInner() {
                   }}
                   className={`px-3 py-1.5 text-sm rounded-md ${
                     kind === "BUSINESS"
-                      ? "bg-slate-900 text-white"
+                      ? "bg-kesh-700 text-white shadow-sm"
                       : "text-slate-700 hover:bg-slate-50"
                   }`}
                 >
@@ -328,7 +328,7 @@ function UsersPageInner() {
                           onClick={() =>
                             router.push(`/users/${row.application_id}`)
                           }
-                          className="text-amber-700 hover:underline text-xs"
+                          className="text-kesh-700 hover:underline text-xs font-medium"
                         >
                           View
                         </button>

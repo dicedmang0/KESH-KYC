@@ -341,7 +341,7 @@ function NewApplicationPageInner() {
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex items-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="inline-flex items-center rounded-md bg-kesh-700 px-4 py-2 text-sm font-medium text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
             >
               {loading ? "Saving..." : "Save KYC Data"}
             </button>

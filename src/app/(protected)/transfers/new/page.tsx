@@ -95,7 +95,7 @@ export default function NewTransferPage() {
           <p className="text-sm">Only FinanceStaff can create transfers.</p>
           <button
             onClick={() => router.push('/transfers')}
-            className="mt-1 text-sm text-amber-700 hover:underline"
+            className="mt-1 text-sm text-kesh-700 hover:underline"
           >
             Go to Transfers
           </button>
@@ -201,7 +201,7 @@ export default function NewTransferPage() {
         <button
           onClick={submit}
           disabled={loading || !senderApplicationId}
-          className="rounded-lg bg-black text-white px-4 py-2 text-sm disabled:opacity-60"
+          className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-60 transition-colors"
         >
           {loading ? 'Saving…' : 'Create Draft'}
         </button>

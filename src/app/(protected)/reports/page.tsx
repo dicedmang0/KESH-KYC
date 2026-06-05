@@ -473,7 +473,7 @@ function ReportsPageInner() {
             <div className="flex gap-2 pb-0.5">
               <button
                 onClick={() => setRefreshKey((k) => k + 1)}
-                className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white hover:opacity-90"
+                className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 transition-colors"
               >
                 Apply
               </button>
@@ -661,7 +661,7 @@ function ReportsPageInner() {
                             {id ? (
                               <button
                                 onClick={() => router.push(`/users/${id}`)}
-                                className="text-xs text-amber-700 hover:underline"
+                                className="text-xs text-kesh-700 hover:underline font-medium"
                               >
                                 View
                               </button>
@@ -840,7 +840,7 @@ function ReportsPageInner() {
                                 onClick={() =>
                                   router.push(`/transfers/${id}`)
                                 }
-                                className="text-xs text-amber-700 hover:underline"
+                                className="text-xs text-kesh-700 hover:underline font-medium"
                               >
                                 View
                               </button>

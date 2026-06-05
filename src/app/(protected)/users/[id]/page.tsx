@@ -384,7 +384,7 @@ export default function UserDetailPage() {
             )}
           </div>
         </div>
-        <button onClick={() => router.back()} className="text-sm text-slate-500 underline">
+        <button onClick={() => router.back()} className="text-sm text-slate-500 hover:text-slate-700 underline transition-colors">
           Back
         </button>
       </div>
@@ -651,7 +651,7 @@ export default function UserDetailPage() {
                   )}
                   {filename && <span className="text-slate-500">— {filename}</span>}
                   {fileUrl && (
-                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-amber-700 underline text-xs">
+                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-kesh-700 underline text-xs hover:text-kesh-600">
                       Lihat
                     </a>
                   )}
@@ -703,7 +703,7 @@ export default function UserDetailPage() {
               <button
                 type="submit"
                 disabled={docUploading || !docFile}
-                className="rounded-md bg-black px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
               >
                 {docUploading ? 'Uploading…' : 'Upload'}
               </button>
@@ -824,7 +824,7 @@ export default function UserDetailPage() {
                 <button
                   type="submit"
                   disabled={partyLoading}
-                  className="rounded-md bg-black px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                  className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
                 >
                   {partyLoading ? 'Menyimpan…' : 'Simpan'}
                 </button>

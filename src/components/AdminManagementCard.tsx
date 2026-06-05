@@ -191,7 +191,7 @@ export default function AdminManagementCard() {
           <button
             type="submit"
             disabled={saving}
-            className="mt-2 rounded-lg bg-black text-white px-4 py-2 text-sm disabled:opacity-60"
+            className="mt-2 rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-60 transition-colors"
           >
             {saving ? 'Menyimpan…' : 'Buat Admin'}
           </button>
