@@ -124,8 +124,8 @@ export default function DashboardPage() {
         }));
         setSubmissions(recent);
         setLoadingSubs(false);
-      } catch (e: any) {
-        setError(e.message || "Failed to load dashboard");
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Failed to load dashboard");
         setLoadingSummary(false);
         setLoadingSubs(false);
       }

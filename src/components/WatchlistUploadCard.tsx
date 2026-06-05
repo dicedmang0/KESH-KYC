@@ -33,7 +33,7 @@ export default function WatchlistUploadCard() {
     try {
       const data = await apiFetch<WatchlistHistoryItem[]>('/watchlist/history?limit=20');
       setHistory(data);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Gagal load history:', e);
     } finally {
       setLoadingHistory(false);
@@ -63,12 +63,12 @@ export default function WatchlistUploadCard() {
     setLoading(true);
     try {
       const res = await apiUpload('/watchlist/upload', form);
-      const processedCount = (res as any)?.count ?? 0;
+      const processedCount = Number((res as Record<string, unknown>)?.count ?? 0);
       setMsg(`Upload ${listType} (${listSource}) berhasil. ${processedCount} baris berhasil diproses.`);
       setFile(null);
       await loadHistory(); // reload history setelah upload
-    } catch (e: any) {
-      setErr(e?.message || 'Gagal upload watchlist');
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Gagal upload watchlist');
     } finally {
       setLoading(false);
     }

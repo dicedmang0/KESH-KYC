@@ -133,7 +133,7 @@ function NewApplicationPageInner() {
                   <select
                     className="rounded-md border px-3 py-2 text-sm"
                     value={i_identity_type}
-                    onChange={(e) => setIIdentityType(e.target.value as any)}
+                    onChange={(e) => setIIdentityType(e.target.value as "KTP" | "SIM" | "PASPOR" | "LAINNYA")}
                     required
                   >
                     <option value="KTP">KTP</option>
@@ -252,7 +252,7 @@ function NewApplicationPageInner() {
                   <select
                     className="rounded-md border px-3 py-2 text-sm"
                     value={i_gender}
-                    onChange={(e) => setIGender(e.target.value as any)}
+                    onChange={(e) => setIGender(e.target.value as "M" | "F" | "O")}
                     required
                   >
                     <option value="M">Male</option>

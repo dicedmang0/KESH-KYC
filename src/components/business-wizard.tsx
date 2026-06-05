@@ -136,12 +136,12 @@ export default function BusinessWizard() {
           body: JSON.stringify(body),
         }
       );
-      const id = (res as any)?.id;
+      const id = res?.id;
       if (!id) throw new Error("Gagal membuat aplikasi (id kosong)");
       setAppId(id);
       setStep(2);
-    } catch (e: any) {
-      setErrCompany(e?.message || "Gagal menyimpan company info");
+    } catch (e: unknown) {
+      setErrCompany(e instanceof Error ? e.message : "Gagal menyimpan company info");
     } finally {
       setSaving(false);
     }
@@ -211,8 +211,8 @@ export default function BusinessWizard() {
       setPPhone("");
       setPEmail("");
       await fetchParties();
-    } catch (e: any) {
-      setErrParties(e?.message || "Gagal menambahkan party");
+    } catch (e: unknown) {
+      setErrParties(e instanceof Error ? e.message : "Gagal menambahkan party");
     } finally {
       setSaving(false);
     }
@@ -226,8 +226,8 @@ export default function BusinessWizard() {
         method: "DELETE",
       });
       await fetchParties();
-    } catch (e: any) {
-      setErrParties(e?.message || "Gagal menghapus party");
+    } catch (e: unknown) {
+      setErrParties(e instanceof Error ? e.message : "Gagal menghapus party");
     }
   }
 
@@ -308,9 +308,9 @@ export default function BusinessWizard() {
       await apiFetch(`/applications/${appId}/submit`, { method: "PATCH" });
       setSubmitOK("Submitted. Screening & risk otomatis dijalankan.");
       router.push(`/users/${String(appId)}`);
-    } catch (e: any) {
+    } catch (e: unknown) {
       // tampilkan di banner step-4 (pakai errDocs biar hanya muncul di sini)
-      setErrDocs(e?.message || "Submit gagal");
+      setErrDocs(e instanceof Error ? e.message : "Submit gagal");
     } finally {
       setSubmitting(false);
     }
@@ -566,7 +566,7 @@ export default function BusinessWizard() {
                     <select
                       className="rounded-md border px-3 py-2 text-sm"
                       value={p_id_type}
-                      onChange={(e) => setPIdType(e.target.value as any)}
+                      onChange={(e) => setPIdType(e.target.value as "KTP" | "SIM" | "PASPOR" | "LAINNYA")}
                     >
                       <option>KTP</option>
                       <option>SIM</option>

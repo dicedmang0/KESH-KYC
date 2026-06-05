@@ -46,8 +46,8 @@ export default function AdminManagementCard() {
     try {
       const data = await apiFetch<AdminUser[]>('/users/admins');
       setAdmins(data);
-    } catch (e: any) {
-      setErr(e?.message ?? 'Gagal load admin users');
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Gagal load admin users');
     } finally {
       setLoading(false);
     }
@@ -80,8 +80,8 @@ export default function AdminManagementCard() {
         password: '',
       });
       await loadAdmins();
-    } catch (e: any) {
-      setErr(e?.message ?? 'Gagal membuat admin');
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Gagal membuat admin');
     } finally {
       setSaving(false);
     }
@@ -101,8 +101,8 @@ export default function AdminManagementCard() {
         },
       });
       await loadAdmins();
-    } catch (e: any) {
-      setErr(e?.message ?? 'Gagal update admin');
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Gagal update admin');
     } finally {
       setSaving(false);
     }
@@ -236,7 +236,7 @@ export default function AdminManagementCard() {
                   className="border rounded-lg px-2 py-1 text-xs bg-white"
                   value={u.role}
                   onChange={(e) =>
-                    updateAdmin(u.id, { role: e.target.value } as any)
+                    updateAdmin(u.id, { role: e.target.value })
                   }
                 >
                   {INTERNAL_ROLES.map((r) => (
@@ -255,7 +255,7 @@ export default function AdminManagementCard() {
                       branch_id: e.target.value
                         ? Number(e.target.value)
                         : null,
-                    } as any)
+                    })
                   }
                 />
               </div>
@@ -267,7 +267,7 @@ export default function AdminManagementCard() {
                       : 'bg-red-100 text-red-700'
                   }`}
                   onClick={() =>
-                    updateAdmin(u.id, { is_active: !u.is_active } as any)
+                    updateAdmin(u.id, { is_active: !u.is_active })
                   }
                 >
                   {u.is_active ? 'Active' : 'Inactive'}

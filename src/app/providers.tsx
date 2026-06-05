@@ -17,6 +17,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setTokenState(readToken()); }, []);
 
   const setToken = (t: string | null) => {

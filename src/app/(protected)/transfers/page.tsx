@@ -49,8 +49,8 @@ export default function TransfersPage() {
       try {
         const data = await apiFetch<TransferRow[]>(`/transfers${q}`);
         if (alive) setRows(data);
-      } catch (e: any) {
-        if (alive) setErr(e?.message ?? 'Gagal load transfers');
+      } catch (e: unknown) {
+        if (alive) setErr(e instanceof Error ? e.message : 'Gagal load transfers');
       } finally {
         if (alive) setLoading(false);
       }

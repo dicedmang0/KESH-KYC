@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Eye } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Pagination } from "@/components/pagination";
 
 type Kind = "INDIVIDUAL" | "BUSINESS";
@@ -96,7 +96,7 @@ function UsersPageInner() {
   );
   const [q, setQ] = useState(sp.get("q") || "");
   const [status, setStatus] = useState<Status | "ALL">(
-    (sp.get("status") as any) || "ALL"
+    (sp.get("status") as Status | null) || "ALL"
   );
   const [pageSize, setPageSize] = useState(Number(sp.get("limit") || 20));
   const [page, setPage] = useState(Math.max(1, Number(sp.get("page") || 1)));
@@ -129,8 +129,8 @@ function UsersPageInner() {
 
         const res = await apiFetch<ApiRes>(`/kyc/registrants?${p.toString()}`);
         setData(res);
-      } catch (e: any) {
-        setErr(e.message || "Failed to load users");
+      } catch (e: unknown) {
+        setErr(e instanceof Error ? e.message : "Failed to load users");
       } finally {
         setLoading(false);
       }
@@ -244,7 +244,7 @@ function UsersPageInner() {
               <select
                 value={status}
                 onChange={(e) => {
-                  setStatus(e.target.value as any);
+                  setStatus(e.target.value as Status | "ALL");
                   setPage(1);
                 }}
                 className="rounded-md border bg-white px-2 py-1.5 text-sm"

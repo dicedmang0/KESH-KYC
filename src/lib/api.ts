@@ -26,10 +26,10 @@ function buildUrl(path: string) {
  * Kita override tipe body jadi "any" (support object JSON).
  */
 export type ApiFetchOptions = Omit<RequestInit, "body"> & {
-  body?: any;
+  body?: BodyInit | Record<string, unknown> | unknown[] | null;
 };
 
-function isJsonObjectBody(body: any) {
+function isJsonObjectBody(body: unknown): boolean {
   if (!body) return false;
   if (typeof body === "string") return false;
   if (body instanceof FormData) return false;
@@ -54,18 +54,13 @@ export async function apiFetch<T>(
     if (t) headers.set("Authorization", `Bearer ${t}`);
   }
 
-  let body: any = opts.body;
-
-  // Auto stringify untuk object JSON
-  if (isJsonObjectBody(body)) {
+  let body: BodyInit | null | undefined;
+  if (isJsonObjectBody(opts.body)) {
     if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-    body = JSON.stringify(body);
+    body = JSON.stringify(opts.body);
   } else {
-    // kalau body bukan FormData tapi kamu ingin JSON, biarkan default kamu
-    // jangan paksa Content-Type untuk FormData (browser yang set boundary)
+    body = opts.body as BodyInit | null | undefined;
     if (body && !(body instanceof FormData) && !headers.has("Content-Type")) {
-      // hanya set kalau body ada dan bukan FormData
-      // (ini menjaga perilaku lamamu)
       headers.set("Content-Type", "application/json");
     }
   }

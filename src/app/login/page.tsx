@@ -30,8 +30,8 @@ export default function LoginPage() {
       // (opsional) sanity check ping /auth/me
       try { await apiFetch('/auth/me'); } catch {}
       router.replace('/dashboard');
-    } catch (e: any) {
-      setErr(e.message);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Login failed");
     } finally {
       setLoading(false);
     }
