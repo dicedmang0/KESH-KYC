@@ -1,0 +1,37 @@
+import { Badge } from "@/components/ui/badge";
+import type { TransferResult, TransferStatus } from "@/lib/transfers";
+
+// Semantic colors per Transfer Recording v2 spec.
+const STATUS_STYLES: Record<TransferStatus, string> = {
+  DRAFT: "bg-slate-100 text-slate-700",
+  SUBMITTED: "bg-amber-100 text-amber-700",
+  APPROVED: "bg-blue-100 text-blue-700",
+  REJECTED: "bg-red-100 text-red-700",
+  COMPLETED: "bg-emerald-100 text-emerald-700",
+};
+
+const RESULT_STYLES: Record<"SUCCESS" | "FAILED", string> = {
+  SUCCESS: "bg-emerald-100 text-emerald-700",
+  FAILED: "bg-red-100 text-red-700",
+};
+
+export function TransferStatusBadge({
+  status,
+}: {
+  status?: TransferStatus | string | null;
+}) {
+  if (!status) return <span className="text-xs text-slate-400">-</span>;
+  const cls =
+    STATUS_STYLES[status as TransferStatus] || "bg-slate-100 text-slate-600";
+  return (
+    <Badge className={`border-0 text-xs font-medium ${cls}`}>{status}</Badge>
+  );
+}
+
+export function TransferResultBadge({ result }: { result?: TransferResult }) {
+  if (!result) return <span className="text-xs text-slate-400">-</span>;
+  const cls = RESULT_STYLES[result] || "bg-slate-100 text-slate-600";
+  return (
+    <Badge className={`border-0 text-xs font-medium ${cls}`}>{result}</Badge>
+  );
+}

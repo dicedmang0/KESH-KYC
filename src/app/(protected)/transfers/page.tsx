@@ -2,41 +2,27 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { apiFetch, getRoleFromToken } from '@/lib/api';
+import { getRoleFromToken } from '@/lib/api';
+import {
+  getTransfers,
+  formatTransferAmount,
+  transferReference,
+  formatDateTime,
+  type TransferListRow,
+} from '@/lib/transfers';
 import { useAuth } from '@/app/providers';
 import { Pagination } from '@/components/pagination';
-
-type TransferRow = {
-  id: number;
-  amount: string; // dari pg NUMERIC biasanya balik string
-  currency: string;
-  beneficiary_bank_name: string;
-  beneficiary_account_number: string;
-  beneficiary_account_name: string;
-  status: 'DRAFT'|'SUBMITTED'|'APPROVED'|'REJECTED'|'COMPLETED';
-  result: 'SUCCESS'|'FAILED'|null;
-  created_at: string;
-  submitted_at: string | null;
-  approved_at: string | null;
-};
-
-function formatIDR(v: string) {
-  const n = Number(v);
-  if (Number.isNaN(n)) return v;
-  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(n);
-}
+import { TransferStatusBadge, TransferResultBadge } from '@/components/transfer-badges';
 
 export default function TransfersPage() {
   const { token } = useAuth();
   const role = getRoleFromToken(token);
   const [status, setStatus] = useState<string>('');
-  const [rows, setRows] = useState<TransferRow[]>([]);
+  const [rows, setRows] = useState<TransferListRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-
-  const q = useMemo(() => (status ? `?status=${encodeURIComponent(status)}` : ''), [status]);
 
   // reset page when status filter changes
   useEffect(() => { setPage(1); }, [status]);
@@ -47,7 +33,7 @@ export default function TransfersPage() {
       setLoading(true);
       setErr('');
       try {
-        const data = await apiFetch<TransferRow[]>(`/transfers${q}`);
+        const data = await getTransfers(status || undefined);
         if (alive) setRows(data);
       } catch (e: unknown) {
         if (alive) setErr(e instanceof Error ? e.message : 'Gagal load transfers');
@@ -56,9 +42,12 @@ export default function TransfersPage() {
       }
     })();
     return () => { alive = false; };
-  }, [q]);
+  }, [status]);
 
-  const pagedRows = rows.slice((page - 1) * pageSize, page * pageSize);
+  const pagedRows = useMemo(
+    () => rows.slice((page - 1) * pageSize, page * pageSize),
+    [rows, page, pageSize],
+  );
 
   return (
     <div className="p-6 space-y-4">
@@ -98,11 +87,13 @@ export default function TransfersPage() {
 
       <div className="rounded-2xl border overflow-hidden">
         <div className="grid grid-cols-12 gap-2 bg-muted/40 px-4 py-3 text-xs font-medium">
-          <div className="col-span-1">ID</div>
-          <div className="col-span-2">Status</div>
-          <div className="col-span-3">Beneficiary</div>
-          <div className="col-span-3">Bank / Rek</div>
+          <div className="col-span-2">Reference</div>
+          <div className="col-span-2">Beneficiary</div>
+          <div className="col-span-2">Bank</div>
           <div className="col-span-2">Amount</div>
+          <div className="col-span-1">Status</div>
+          <div className="col-span-1">Result</div>
+          <div className="col-span-1">Created</div>
           <div className="col-span-1 text-right">Action</div>
         </div>
 
@@ -112,20 +103,25 @@ export default function TransfersPage() {
           <div className="p-4 text-sm text-muted-foreground">Belum ada data.</div>
         ) : (
           pagedRows.map((r) => (
-            <div key={r.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm border-t">
-              <div className="col-span-1 font-medium">#{r.id}</div>
+            <div key={r.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm border-t items-center">
               <div className="col-span-2">
-                <div className="font-medium">{r.status}</div>
-                {r.result ? <div className="text-xs text-muted-foreground">{r.result}</div> : null}
+                <div className="font-medium font-mono text-xs break-all">{transferReference(r)}</div>
+                <div className="text-xs text-muted-foreground">#{r.id}</div>
               </div>
-              <div className="col-span-3">
+              <div className="col-span-2">
                 <div className="font-medium">{r.beneficiary_account_name}</div>
                 <div className="text-xs text-muted-foreground">{r.beneficiary_account_number}</div>
               </div>
-              <div className="col-span-3">
+              <div className="col-span-2">
                 <div className="font-medium">{r.beneficiary_bank_name}</div>
+                {r.beneficiary_bank_code && (
+                  <div className="text-xs text-muted-foreground">{r.beneficiary_bank_code}</div>
+                )}
               </div>
-              <div className="col-span-2 font-medium">{formatIDR(r.amount)}</div>
+              <div className="col-span-2 font-medium">{formatTransferAmount(r)}</div>
+              <div className="col-span-1"><TransferStatusBadge status={r.status} /></div>
+              <div className="col-span-1"><TransferResultBadge result={r.result} /></div>
+              <div className="col-span-1 text-xs text-muted-foreground">{formatDateTime(r.created_at)}</div>
               <div className="col-span-1 text-right">
                 <Link className="text-sm text-kesh-700 hover:underline font-medium" href={`/transfers/${r.id}`}>
                   Open

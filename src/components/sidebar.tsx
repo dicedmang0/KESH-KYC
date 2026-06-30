@@ -46,7 +46,7 @@ export default function Sidebar() {
     SystemAdmin:        ['/dashboard', '/users', '/kyc', '/transfers', '/reports', '/settings'],
     BranchAdmin:        ['/dashboard', '/users', '/kyc', '/reports'],
     ComplianceLead:     ['/dashboard', '/users', '/kyc', '/reports'],
-    ComplianceReviewer: ['/dashboard', '/users', '/kyc', '/reports'],
+    FrontDesk:          ['/dashboard', '/users', '/kyc', '/reports'],
     Auditor:            ['/dashboard', '/users', '/kyc', '/reports'],
     FinanceStaff:       ['/dashboard', '/transfers', '/reports'],
     FinanceManager:     ['/dashboard', '/transfers', '/reports'],
