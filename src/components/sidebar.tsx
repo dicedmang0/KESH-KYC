@@ -12,6 +12,7 @@ import {
   Menu,
   LogOut,
   ArrowLeftRight,
+  ClipboardList,
   X,
 } from 'lucide-react';
 import { useAuth } from '@/app/providers';
@@ -32,6 +33,7 @@ const allItems: Item[] = [
   { href: '/users',     label: 'Manajemen Pengguna',  icon: Users         },
   { href: '/kyc',       label: 'Verifikasi KYC/KYB',  icon: ShieldCheck   },
   { href: '/transfers', label: 'Pencatatan Transfer',  icon: ArrowLeftRight},
+  { href: '/watchlist', label: 'Daftar Pengawasan',    icon: ClipboardList },
   { href: '/reports',   label: 'Laporan',              icon: FileBarChart  },
   { href: '/settings',  label: 'Pengaturan',           icon: Settings      },
 ];
@@ -43,9 +45,9 @@ export default function Sidebar() {
   const role = getRoleFromToken(token);
 
   const ROLE_MENU: Record<string, string[]> = {
-    SystemAdmin:        ['/dashboard', '/users', '/kyc', '/transfers', '/reports', '/settings'],
+    SystemAdmin:        ['/dashboard', '/users', '/kyc', '/transfers', '/watchlist', '/reports', '/settings'],
     BranchAdmin:        ['/dashboard', '/users', '/kyc', '/reports'],
-    ComplianceLead:     ['/dashboard', '/users', '/kyc', '/reports'],
+    ComplianceLead:     ['/dashboard', '/users', '/kyc', '/watchlist', '/reports'],
     FrontDesk:          ['/dashboard', '/users', '/kyc', '/reports'],
     Auditor:            ['/dashboard', '/users', '/kyc', '/reports'],
     FinanceStaff:       ['/dashboard', '/transfers', '/reports'],

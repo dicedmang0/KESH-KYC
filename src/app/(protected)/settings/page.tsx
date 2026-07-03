@@ -1,7 +1,6 @@
 'use client';
 
 import AdminManagementCard from '@/components/AdminManagementCard';
-import WatchlistUploadCard from '@/components/WatchlistUploadCard';
 
 export default function SettingsPage() {
   return (
@@ -15,7 +14,6 @@ export default function SettingsPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <AdminManagementCard />
-        <WatchlistUploadCard />
       </div>
     </div>
   );
