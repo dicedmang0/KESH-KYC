@@ -42,6 +42,16 @@ type Submission = {
 type WatchlistItem = {
   id?: number | string | null;
   list_type?: string | null;
+  // new history fields
+  source_list?: string | null;
+  uploaded_at?: string | null;
+  uploaded_by?: string | null;
+  total?: number | null;
+  success?: number | null;
+  error_count?: number | null;
+  status?: string | null;
+  original_filename?: string | null;
+  // legacy fields (kept as fallback)
   list_source?: string | null;
   created_at?: string | null;
   created_by?: string | null;
@@ -346,7 +356,7 @@ function ReportsPageInner() {
   }, [submissions, typeFilter, statusFilter, fromDate, toDate]);
 
   const filteredWatchlist = useMemo(
-    () => watchlist.filter((row) => inDateRange(row.created_at, fromDate, toDate)),
+    () => watchlist.filter((row) => inDateRange(row.uploaded_at ?? row.created_at, fromDate, toDate)),
     [watchlist, fromDate, toDate]
   );
 
@@ -731,7 +741,7 @@ function ReportsPageInner() {
                   {filteredWatchlist.slice((wlPage - 1) * wlPageSize, wlPage * wlPageSize).map((row, i) => (
                     <TableRow key={String(row.id ?? i)}>
                       <TableCell className="text-sm text-slate-600">
-                        {fmtDate(row.created_at)}
+                        {fmtDate(row.uploaded_at ?? row.created_at)}
                       </TableCell>
                       <TableCell>
                         {row.list_type ? (
@@ -743,10 +753,12 @@ function ReportsPageInner() {
                         )}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {row.list_source ?? row.filename ?? "-"}
+                        {row.source_list ?? row.list_source ?? row.original_filename ?? row.filename ?? "-"}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {row.count != null
+                        {row.total != null
+                          ? `${row.success ?? 0}/${row.total}`
+                          : row.count != null
                           ? row.count
                           : row.total_rows != null
                           ? `${row.total_rows} rows`
@@ -758,7 +770,7 @@ function ReportsPageInner() {
                               .join(" / ") || "-"}
                       </TableCell>
                       <TableCell className="text-sm text-slate-600">
-                        {row.created_by ?? row.actor_id ?? "-"}
+                        {row.uploaded_by ?? row.created_by ?? row.actor_id ?? "-"}
                       </TableCell>
                     </TableRow>
                   ))}

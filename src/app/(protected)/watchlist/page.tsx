@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import WatchlistUploadCard from '@/components/WatchlistUploadCard';
+import WatchlistEntries from '@/components/WatchlistEntries';
 import { useAuth } from '@/app/providers';
 import { getRoleFromToken } from '@/lib/api';
 
@@ -9,6 +11,7 @@ const ALLOWED_ROLES = ['ComplianceLead', 'SystemAdmin'];
 export default function WatchlistPage() {
   const { token } = useAuth();
   const role = getRoleFromToken(token);
+  const [entriesRefreshKey, setEntriesRefreshKey] = useState(0);
 
   if (!role || !ALLOWED_ROLES.includes(role)) {
     return (
@@ -33,8 +36,10 @@ export default function WatchlistPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <WatchlistUploadCard />
+        <WatchlistUploadCard onUploaded={() => setEntriesRefreshKey((k) => k + 1)} />
       </div>
+
+      <WatchlistEntries refreshKey={entriesRefreshKey} />
     </div>
   );
 }

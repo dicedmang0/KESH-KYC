@@ -1,28 +1,70 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { apiUpload, apiFetch } from '@/lib/api';
+import { apiUpload } from '@/lib/api';
+import {
+  getWatchlistHistory,
+  UPLOAD_STATUS_LABEL,
+  type ListType,
+  type UploadStatus,
+  type WatchlistHistoryItem,
+} from '@/lib/watchlist';
 
-type ListType = 'PEP' | 'DTTOT' | 'PPPSPM';
 type OverwriteStrategy = 'merge' | 'replace';
 
-type WatchlistHistoryItem = {
-  id: number;
-  list_type: ListType;
-  list_source: string;
-  created_at: string;
-  created_by: string; // bisa sesuaikan jika ingin username/email
-  count: number;
+type RowError = { row: number | string; message: string };
+
+type UploadResponse = {
+  status?: UploadStatus;
+  ok?: boolean;
+  total?: number;
+  success?: number;
+  error_count?: number;
+  errors?: string;
+  row_errors?: RowError[];
+  count?: number; // legacy field
 };
 
-export default function WatchlistUploadCard() {
+type UploadResult = {
+  status: UploadStatus;
+  message: string;
+  rowErrors: RowError[];
+  errorsText: string | null;
+};
+
+function formatJumlah(h: WatchlistHistoryItem): string {
+  if (h.total == null) return '-';
+  const base = `${h.success ?? 0}/${h.total}`;
+  return h.error_count > 0
+    ? `${base} berhasil, ${h.error_count} gagal`
+    : base;
+}
+
+function HistoryStatusBadge({ status }: { status?: UploadStatus | string | null }) {
+  const cls =
+    status === 'SUCCESS'
+      ? 'bg-emerald-100 text-emerald-700'
+      : status === 'PARTIAL'
+      ? 'bg-amber-100 text-amber-700'
+      : status === 'FAILED'
+      ? 'bg-red-100 text-red-700'
+      : 'bg-neutral-100 text-neutral-600';
+  const label = (status && UPLOAD_STATUS_LABEL[status]) || status || '-';
+  return (
+    <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () => void }) {
   const [listType, setListType] = useState<ListType>('PEP');
   const [listSource, setListSource] = useState('BNPT'); 
   const [strategy, setStrategy] = useState<OverwriteStrategy>('merge');
   const [file, setFile] = useState<File | null>(null);
 
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [result, setResult] = useState<UploadResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const [history, setHistory] = useState<WatchlistHistoryItem[]>([]);
@@ -31,7 +73,7 @@ export default function WatchlistUploadCard() {
   async function loadHistory() {
     setLoadingHistory(true);
     try {
-      const data = await apiFetch<WatchlistHistoryItem[]>('/watchlist/history?limit=20');
+      const data = await getWatchlistHistory(20);
       setHistory(data);
     } catch (e: unknown) {
       console.error('Gagal load history:', e);
@@ -44,9 +86,46 @@ export default function WatchlistUploadCard() {
     loadHistory();
   }, []);
 
+  function buildResult(res: UploadResponse): UploadResult {
+    const total = Number(res.total ?? 0);
+    const success = Number(res.success ?? res.count ?? 0);
+    const errorCount = Number(res.error_count ?? 0);
+    const rowErrors = Array.isArray(res.row_errors) ? res.row_errors : [];
+    const errorsText =
+      typeof res.errors === 'string' && res.errors.trim() ? res.errors.trim() : null;
+
+    const isFailed =
+      res.status === 'FAILED' || res.ok === false || success === 0;
+
+    if (isFailed) {
+      return {
+        status: 'FAILED',
+        message: 'Upload gagal. Tidak ada baris yang berhasil diproses.',
+        rowErrors,
+        errorsText,
+      };
+    }
+
+    if (res.status === 'PARTIAL') {
+      return {
+        status: 'PARTIAL',
+        message: `Upload selesai sebagian. ${success} dari ${total} baris berhasil diproses, ${errorCount} baris gagal.`,
+        rowErrors,
+        errorsText,
+      };
+    }
+
+    return {
+      status: 'SUCCESS',
+      message: `Upload ${listType} (${listSource}) berhasil. ${success} dari ${total} baris berhasil diproses.`,
+      rowErrors,
+      errorsText,
+    };
+  }
+
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
-    setMsg(null);
+    setResult(null);
     setErr(null);
 
     if (!file) {
@@ -62,11 +141,13 @@ export default function WatchlistUploadCard() {
 
     setLoading(true);
     try {
-      const res = await apiUpload('/watchlist/upload', form);
-      const processedCount = Number((res as Record<string, unknown>)?.count ?? 0);
-      setMsg(`Upload ${listType} (${listSource}) berhasil. ${processedCount} baris berhasil diproses.`);
+      const res = (await apiUpload('/watchlist/upload', form)) as UploadResponse;
+      const built = buildResult(res);
+      setResult(built);
       setFile(null);
       await loadHistory(); // reload history setelah upload
+      // beri tahu halaman agar refresh data entries (SUCCESS / PARTIAL)
+      if (built.status !== 'FAILED') onUploaded?.();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Gagal upload watchlist');
     } finally {
@@ -124,10 +205,42 @@ export default function WatchlistUploadCard() {
             accept=".xlsx,.xls,.csv"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
+          <p className="text-[11px] text-neutral-500">
+            Pastikan Jenis list yang dipilih sesuai dengan Watchlist_Type pada file.
+            Untuk file campuran, pisahkan upload per jenis list: PEP, DTTOT, atau PPPSPM.
+          </p>
         </div>
 
         {err && <div className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
-        {msg && <div className="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{msg}</div>}
+
+        {result && (
+          <div
+            className={
+              result.status === 'SUCCESS'
+                ? 'rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700 space-y-1'
+                : result.status === 'PARTIAL'
+                ? 'rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 space-y-1'
+                : 'rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 space-y-1'
+            }
+          >
+            <p>{result.message}</p>
+
+            {result.rowErrors.length > 0 ? (
+              <ul className="list-disc pl-4 space-y-0.5">
+                {result.rowErrors.slice(0, 5).map((re, i) => (
+                  <li key={i}>{`Baris ${re.row}: ${re.message}`}</li>
+                ))}
+                {result.rowErrors.length > 5 && (
+                  <li className="list-none pl-0">
+                    dan {result.rowErrors.length - 5} error lainnya
+                  </li>
+                )}
+              </ul>
+            ) : (
+              result.errorsText && <p>{result.errorsText}</p>
+            )}
+          </div>
+        )}
 
         <button
           type="submit"
@@ -156,6 +269,7 @@ export default function WatchlistUploadCard() {
                   <th className="border px-2 py-1 text-left">Diunggah Pada</th>
                   <th className="border px-2 py-1 text-left">Diunggah Oleh</th>
                   <th className="border px-2 py-1 text-left">Jumlah</th>
+                  <th className="border px-2 py-1 text-left">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -163,10 +277,15 @@ export default function WatchlistUploadCard() {
                   <tr key={h.id}>
                     <td className="border px-2 py-1">{h.id}</td>
                     <td className="border px-2 py-1">{h.list_type}</td>
-                    <td className="border px-2 py-1">{h.list_source}</td>
-                    <td className="border px-2 py-1">{new Date(h.created_at).toLocaleString('id-ID')}</td>
-                    <td className="border px-2 py-1">{h.created_by}</td>
-                    <td className="border px-2 py-1">{h.count}</td>
+                    <td className="border px-2 py-1">{h.source_list}</td>
+                    <td className="border px-2 py-1">
+                      {h.uploaded_at ? new Date(h.uploaded_at).toLocaleString('id-ID') : '-'}
+                    </td>
+                    <td className="border px-2 py-1">{h.uploaded_by ?? '-'}</td>
+                    <td className="border px-2 py-1">{formatJumlah(h)}</td>
+                    <td className="border px-2 py-1">
+                      <HistoryStatusBadge status={h.status} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
