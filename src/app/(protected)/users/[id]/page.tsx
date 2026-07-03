@@ -370,22 +370,22 @@ export default function UserDetailPage() {
           <h1 className="text-xl font-semibold">{displayName || `Application #${app.id ?? id}`}</h1>
           <div className="mt-1 flex items-center gap-2">
             <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[app.status] ?? 'bg-slate-100 text-slate-700'}`}>
-              {app.status}
+              {{ DRAFT: 'Draft', SUBMITTED: 'Diajukan', IN_REVIEW: 'Dalam Review', APPROVED: 'Disetujui', REJECTED: 'Ditolak' }[app.status] ?? app.status}
             </span>
-            <span className="text-xs text-slate-500">{app.type}</span>
+            <span className="text-xs text-slate-500">{{ INDIVIDUAL: 'Individu', BUSINESS: 'Perusahaan' }[app.type] ?? app.type}</span>
             {risk?.risk_level && (
               <span className={`rounded px-2 py-0.5 text-xs font-medium ${
                 risk.risk_level === 'HIGH' ? 'bg-red-100 text-red-700' :
                 risk.risk_level === 'MEDIUM' ? 'bg-amber-100 text-amber-700' :
                 'bg-emerald-100 text-emerald-700'
               }`}>
-                Risk: {risk.risk_level}{risk.risk_score != null ? ` (${risk.risk_score})` : ''}
+                Risiko: {risk.risk_level}{risk.risk_score != null ? ` (${risk.risk_score})` : ''}
               </span>
             )}
           </div>
         </div>
         <button onClick={() => router.back()} className="text-sm text-slate-500 hover:text-slate-700 underline transition-colors">
-          Back
+          Kembali
         </button>
       </div>
 
@@ -406,7 +406,7 @@ export default function UserDetailPage() {
             disabled={actionLoading}
             className="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
           >
-            Precheck
+            Pra-Pemeriksaan
           </button>
 
           {canSubmit && (
@@ -415,7 +415,7 @@ export default function UserDetailPage() {
               disabled={actionLoading}
               className="rounded-md bg-amber-600 px-3 py-1.5 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
             >
-              Submit
+              Ajukan
             </button>
           )}
 
@@ -426,14 +426,14 @@ export default function UserDetailPage() {
                 disabled={actionLoading}
                 className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
               >
-                Approve
+                Setujui
               </button>
               <button
                 onClick={() => { setShowRejectInput(true); setActionErr(''); }}
                 disabled={actionLoading}
                 className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50"
               >
-                Reject…
+                Tolak…
               </button>
             </>
           )}
@@ -456,7 +456,7 @@ export default function UserDetailPage() {
               disabled={actionLoading}
               className="rounded-md bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
             >
-              Konfirmasi Reject
+              Konfirmasi Penolakan
             </button>
             <button
               onClick={() => { setShowRejectInput(false); setRejectReason(''); setActionErr(''); }}
@@ -559,11 +559,11 @@ export default function UserDetailPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs text-slate-500">
-                    <th className="pb-2 pr-3">Factor</th>
-                    <th className="pb-2 pr-3">Score</th>
-                    <th className="pb-2 pr-3">Severity</th>
-                    <th className="pb-2 pr-3">Source</th>
-                    <th className="pb-2">Details</th>
+                    <th className="pb-2 pr-3">Faktor</th>
+                    <th className="pb-2 pr-3">Skor</th>
+                    <th className="pb-2 pr-3">Tingkat</th>
+                    <th className="pb-2 pr-3">Sumber</th>
+                    <th className="pb-2">Detail</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -605,7 +605,7 @@ export default function UserDetailPage() {
               </table>
             </div>
           ) : (
-            <p className="text-sm text-slate-400">No risk factors recorded.</p>
+            <p className="text-sm text-slate-400">Belum ada faktor risiko tercatat.</p>
           )}
         </div>
       ) : app.status === 'DRAFT' ? (
@@ -705,7 +705,7 @@ export default function UserDetailPage() {
                 disabled={docUploading || !docFile}
                 className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
               >
-                {docUploading ? 'Uploading…' : 'Upload'}
+                {docUploading ? 'Mengunggah…' : 'Unggah'}
               </button>
             </div>
           </form>
@@ -723,7 +723,7 @@ export default function UserDetailPage() {
                 onClick={() => setPartyOpen((v) => !v)}
                 className="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50"
               >
-                {partyOpen ? 'Batal' : '+ Add Party'}
+                {partyOpen ? 'Batal' : '+ Tambah Pihak'}
               </button>
             )}
           </div>
@@ -889,7 +889,7 @@ export default function UserDetailPage() {
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Screening</p>
           {screening.status && (
             <p className="text-sm">
-              <span className="font-medium">Status:</span> {screening.status}
+              <span className="font-medium">Status:</span> {{ DRAFT: 'Draft', SUBMITTED: 'Diajukan', IN_REVIEW: 'Dalam Review', APPROVED: 'Disetujui', REJECTED: 'Ditolak', CLEAN: 'Bersih', HIT: 'Terdeteksi' }[screening.status ?? ''] ?? screening.status}
             </p>
           )}
           {screening.checked_at && (

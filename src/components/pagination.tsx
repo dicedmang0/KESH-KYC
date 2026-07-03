@@ -30,7 +30,7 @@ export function Pagination({
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 mt-3">
       <div className="flex items-center gap-3">
         <span className="text-xs text-slate-500">
-          Showing {from}–{to} of {total}
+          Menampilkan {from}–{to} dari {total}
         </span>
         <select
           value={pageSize}
@@ -40,28 +40,28 @@ export function Pagination({
         >
           {pageSizeOptions.map((n) => (
             <option key={n} value={n}>
-              {n} / page
+              {n} / halaman
             </option>
           ))}
         </select>
       </div>
       <div className="flex items-center gap-2">
         <span className="text-xs text-slate-500">
-          Page {page} of {totalPages}
+          Halaman {page} dari {totalPages}
         </span>
         <button
           disabled={disabled || page <= 1}
           onClick={() => onPageChange(Math.max(1, page - 1))}
           className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-50 hover:border-kesh-700/40 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <ChevronLeft className="h-3.5 w-3.5" /> Prev
+          <ChevronLeft className="h-3.5 w-3.5" /> Sebelumnya
         </button>
         <button
           disabled={disabled || page >= totalPages}
           onClick={() => onPageChange(Math.min(totalPages, page + 1))}
           className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-50 hover:border-kesh-700/40 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Next <ChevronRight className="h-3.5 w-3.5" />
+          Berikutnya <ChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

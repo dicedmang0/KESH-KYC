@@ -28,12 +28,12 @@ type Item = {
 };
 
 const allItems: Item[] = [
-  { href: '/dashboard', label: 'Dashboard',       icon: BarChart3     },
-  { href: '/users',     label: 'User Management', icon: Users         },
-  { href: '/kyc',       label: 'KYC Verification',icon: ShieldCheck   },
-  { href: '/transfers', label: 'Transfers',        icon: ArrowLeftRight},
-  { href: '/reports',   label: 'Reports',          icon: FileBarChart  },
-  { href: '/settings',  label: 'Settings',         icon: Settings      },
+  { href: '/dashboard', label: 'Dasbor',              icon: BarChart3     },
+  { href: '/users',     label: 'Manajemen Pengguna',  icon: Users         },
+  { href: '/kyc',       label: 'Verifikasi KYC/KYB',  icon: ShieldCheck   },
+  { href: '/transfers', label: 'Pencatatan Transfer',  icon: ArrowLeftRight},
+  { href: '/reports',   label: 'Laporan',              icon: FileBarChart  },
+  { href: '/settings',  label: 'Pengaturan',           icon: Settings      },
 ];
 
 export default function Sidebar() {
@@ -101,7 +101,7 @@ export default function Sidebar() {
             </div>
             <div>
               <p className="text-sm font-bold text-white leading-tight">KESH Admin</p>
-              <p className="text-xs text-white/45 leading-tight">KYC Portal</p>
+              <p className="text-xs text-white/45 leading-tight">Portal KYC</p>
             </div>
           </div>
         </div>
@@ -137,7 +137,7 @@ export default function Sidebar() {
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/55 hover:bg-white/8 hover:text-white transition-colors"
             >
               <LogOut className="h-4 w-4 shrink-0" />
-              <span>Logout</span>
+              <span>Keluar</span>
             </button>
           )}
           <p className="mt-2 px-3 text-[10px] text-white/25">

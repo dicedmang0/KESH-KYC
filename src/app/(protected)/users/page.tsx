@@ -57,8 +57,25 @@ const STATUS_OPTIONS: (Status | "ALL")[] = [
   "REJECTED",
 ];
 
+const STATUS_LABELS: Record<Status | "ALL", string> = {
+  ALL: "Semua",
+  DRAFT: "Draft",
+  SUBMITTED: "Diajukan",
+  IN_REVIEW: "Dalam Review",
+  APPROVED: "Disetujui",
+  REJECTED: "Ditolak",
+};
+
+const STATUS_DISPLAY: Record<Status, string> = {
+  DRAFT: "Draft",
+  SUBMITTED: "Diajukan",
+  IN_REVIEW: "Dalam Review",
+  APPROVED: "Disetujui",
+  REJECTED: "Ditolak",
+};
+
 function StatusBadge({ s }: { s: Status }) {
-  const map: Record<Status, string> = {
+  const colorMap: Record<Status, string> = {
     DRAFT: "bg-slate-100 text-slate-700",
     SUBMITTED: "bg-amber-100 text-amber-700",
     IN_REVIEW: "bg-blue-100 text-blue-700",
@@ -66,8 +83,8 @@ function StatusBadge({ s }: { s: Status }) {
     REJECTED: "bg-red-100 text-red-700",
   };
   return (
-    <Badge className={`border-0 text-xs font-medium ${map[s]}`}>
-      {s.replace("_", " ")}
+    <Badge className={`border-0 text-xs font-medium ${colorMap[s]}`}>
+      {STATUS_DISPLAY[s]}
     </Badge>
   );
 }
@@ -90,7 +107,6 @@ function UsersPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  // URL-state
   const [kind, setKind] = useState<Kind>(
     (sp.get("type") as Kind) || "INDIVIDUAL"
   );
@@ -114,7 +130,6 @@ function UsersPageInner() {
     if (!token) router.replace("/login");
   }, [token, router]);
 
-  // fetch
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -130,7 +145,7 @@ function UsersPageInner() {
         const res = await apiFetch<ApiRes>(`/kyc/registrants?${p.toString()}`);
         setData(res);
       } catch (e: unknown) {
-        setErr(e instanceof Error ? e.message : "Failed to load users");
+        setErr(e instanceof Error ? e.message : "Gagal memuat pengguna");
       } finally {
         setLoading(false);
       }
@@ -141,7 +156,7 @@ function UsersPageInner() {
     if (!iso) return "-";
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "-";
-    return d.toLocaleDateString("en-US", {
+    return d.toLocaleDateString("id-ID", {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -153,33 +168,32 @@ function UsersPageInner() {
       {/* Header + Add */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">User Management</h1>
+          <h1 className="text-xl font-semibold">Manajemen Pengguna</h1>
           <p className="text-xs text-slate-500">
-            Manage and monitor all registered users
+            Kelola dan pantau semua pengguna terdaftar
           </p>
         </div>
 
         <div className="flex gap-2">
-          {/* Add New dropdown sederhana */}
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => router.push("/applications/new?type=individual")}
               className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-sm shadow-sm hover:bg-slate-50 active:scale-[0.99]"
-              title="Add Individual (KYC)"
+              title="Tambah Individu (KYC)"
             >
               <Plus className="h-4 w-4" />
-              Add Individual
+              Tambah Individu
             </button>
 
             <button
               type="button"
               onClick={() => router.push("/applications/new?type=business")}
               className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-sm shadow-sm hover:bg-slate-50 active:scale-[0.99]"
-              title="Add Business (KYB)"
+              title="Tambah Perusahaan (KYB)"
             >
               <Plus className="h-4 w-4" />
-              Add Business
+              Tambah Perusahaan
             </button>
           </div>
         </div>
@@ -203,7 +217,7 @@ function UsersPageInner() {
                       : "text-slate-700 hover:bg-slate-50"
                   }`}
                 >
-                  Individuals
+                  Individu
                 </button>
                 <button
                   onClick={() => {
@@ -216,7 +230,7 @@ function UsersPageInner() {
                       : "text-slate-700 hover:bg-slate-50"
                   }`}
                 >
-                  Businesses
+                  Perusahaan
                 </button>
               </div>
 
@@ -229,8 +243,8 @@ function UsersPageInner() {
                   }}
                   placeholder={
                     kind === "INDIVIDUAL"
-                      ? "Search name, email, or phone..."
-                      : "Search legal/trade name, NIB, NPWP..."
+                      ? "Cari nama, email, atau telepon..."
+                      : "Cari nama legal/dagang, NIB, NPWP..."
                   }
                   className="w-[320px] rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200"
                 />
@@ -251,7 +265,7 @@ function UsersPageInner() {
               >
                 {STATUS_OPTIONS.map((s) => (
                   <option key={s} value={s}>
-                    {s}
+                    {STATUS_LABELS[s]}
                   </option>
                 ))}
               </select>
@@ -263,7 +277,7 @@ function UsersPageInner() {
       {/* List */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">All Users</CardTitle>
+          <CardTitle className="text-base">Semua Pengguna</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
           {err && (
@@ -279,25 +293,25 @@ function UsersPageInner() {
               ))}
             </div>
           ) : data.items.length === 0 ? (
-            <p className="py-6 text-center text-sm text-slate-500">No data.</p>
+            <p className="py-6 text-center text-sm text-slate-500">Belum ada data.</p>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>
-                      {kind === "INDIVIDUAL" ? "Full Name" : "Legal Name"}
+                      {kind === "INDIVIDUAL" ? "Nama Lengkap" : "Nama Legal"}
                     </TableHead>
                     <TableHead>
                       {kind === "INDIVIDUAL" ? "Email" : "NIB / NPWP"}
                     </TableHead>
                     <TableHead>
-                      {kind === "INDIVIDUAL" ? "Phone Number" : "—"}
+                      {kind === "INDIVIDUAL" ? "Nomor Telepon" : "—"}
                     </TableHead>
-                    <TableHead>Registration Date</TableHead>
-                    <TableHead>Verification Status</TableHead>
-                    <TableHead>Risk</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>Tanggal Daftar</TableHead>
+                    <TableHead>Status Verifikasi</TableHead>
+                    <TableHead>Risiko</TableHead>
+                    <TableHead>Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -305,7 +319,7 @@ function UsersPageInner() {
                     <TableRow key={row.application_id}>
                       <TableCell className="font-medium">
                         {row.display_name ||
-                          (kind === "INDIVIDUAL" ? "Individual" : "Business")}
+                          (kind === "INDIVIDUAL" ? "Individu" : "Perusahaan")}
                       </TableCell>
                       <TableCell className="text-slate-700">
                         {kind === "INDIVIDUAL"
@@ -330,7 +344,7 @@ function UsersPageInner() {
                           }
                           className="text-kesh-700 hover:underline text-xs font-medium"
                         >
-                          View
+                          Lihat
                         </button>
                       </TableCell>
                     </TableRow>
@@ -357,7 +371,7 @@ function UsersPageInner() {
 
 export default function UsersPage() {
   return (
-    <Suspense fallback={<p className="p-6 text-sm text-slate-500">Loading…</p>}>
+    <Suspense fallback={<p className="p-6 text-sm text-slate-500">Memuat…</p>}>
       <UsersPageInner />
     </Suspense>
   );

@@ -95,7 +95,7 @@ function resolveSubName(row: Submission): string {
     row.display_name ||
     row.full_name ||
     row.legal_name ||
-    (row.type === "BUSINESS" ? "Business" : "Individual")
+    (row.type === "BUSINESS" ? "Perusahaan" : "Individu")
   );
 }
 
@@ -103,7 +103,7 @@ function fmtDate(iso?: string | null): string {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleDateString("en-US", {
+  return d.toLocaleDateString("id-ID", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -143,8 +143,17 @@ function inDateRange(
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
+const STATUS_DISPLAY_MAP: Record<string, string> = {
+  DRAFT: "Draft",
+  SUBMITTED: "Diajukan",
+  IN_REVIEW: "Dalam Review",
+  APPROVED: "Disetujui",
+  REJECTED: "Ditolak",
+  COMPLETED: "Selesai",
+};
+
 function StatusBadge({ s }: { s?: string | null }) {
-  const map: Record<string, string> = {
+  const colorMap: Record<string, string> = {
     DRAFT: "bg-slate-100 text-slate-700",
     SUBMITTED: "bg-amber-100 text-amber-700",
     IN_REVIEW: "bg-blue-100 text-blue-700",
@@ -152,10 +161,11 @@ function StatusBadge({ s }: { s?: string | null }) {
     REJECTED: "bg-red-100 text-red-700",
     COMPLETED: "bg-purple-100 text-purple-700",
   };
-  const cls = (s && map[s]) || "bg-slate-100 text-slate-600";
+  const cls = (s && colorMap[s]) || "bg-slate-100 text-slate-600";
+  const label = (s && STATUS_DISPLAY_MAP[s]) || s?.replace("_", " ") || "-";
   return (
     <Badge className={`border-0 text-xs font-medium ${cls}`}>
-      {s?.replace("_", " ") ?? "-"}
+      {label}
     </Badge>
   );
 }
@@ -262,14 +272,14 @@ function ReportsPageInner() {
         const msg =
           sumRes.reason instanceof Error
             ? sumRes.reason.message
-            : "Failed to load summary";
+            : "Gagal memuat ringkasan";
         if (msg.includes("401")) {
           router.replace("/login");
           return;
         }
         setErrSummary(
           msg.includes("403")
-            ? "Access denied — you don't have permission to view this summary."
+            ? "Akses ditolak — Anda tidak memiliki izin untuk melihat ringkasan ini."
             : msg
         );
       }
@@ -282,14 +292,14 @@ function ReportsPageInner() {
         const msg =
           subRes.reason instanceof Error
             ? subRes.reason.message
-            : "Failed to load submissions";
+            : "Gagal memuat pengajuan";
         if (msg.includes("401")) {
           router.replace("/login");
           return;
         }
         setErrSubs(
           msg.includes("403")
-            ? "Access denied — you don't have permission to view submissions."
+            ? "Akses ditolak — Anda tidak memiliki izin untuk melihat pengajuan."
             : msg
         );
       }
@@ -302,10 +312,10 @@ function ReportsPageInner() {
         const msg =
           wlRes.reason instanceof Error
             ? wlRes.reason.message
-            : "Failed to load watchlist history";
+            : "Gagal memuat riwayat watchlist";
         setErrWatchlist(
           msg.includes("403")
-            ? "Access denied — you don't have permission to view watchlist history."
+            ? "Akses ditolak — Anda tidak memiliki izin untuk melihat riwayat watchlist."
             : msg
         );
       }
@@ -371,9 +381,9 @@ function ReportsPageInner() {
         <div className="flex items-center gap-3">
           <FileBarChart className="h-6 w-6 text-slate-700" />
           <div>
-            <h1 className="text-xl font-semibold">Reports</h1>
+            <h1 className="text-xl font-semibold">Laporan</h1>
             <p className="text-xs text-slate-500">
-              KYC/KYB, risk, watchlist, and transfer operational summary
+              Ringkasan operasional KYC/KYB, risiko, watchlist, dan transfer
             </p>
           </div>
         </div>
@@ -382,19 +392,19 @@ function ReportsPageInner() {
         <div className="flex items-center gap-2">
           <button
             disabled
-            title="Coming soon"
+            title="Segera hadir"
             className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm opacity-40"
           >
             <Download className="h-4 w-4" />
-            Export CSV
+            Ekspor CSV
           </button>
           <button
             disabled
-            title="Coming soon"
+            title="Segera hadir"
             className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm opacity-40"
           >
             <Download className="h-4 w-4" />
-            Export PDF
+            Ekspor PDF
           </button>
         </div>
       </div>
@@ -405,7 +415,7 @@ function ReportsPageInner() {
           <div className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-slate-600">
-                From Date
+                Dari Tanggal
               </label>
               <input
                 type="date"
@@ -416,7 +426,7 @@ function ReportsPageInner() {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-slate-600">
-                To Date
+                Sampai Tanggal
               </label>
               <input
                 type="date"
@@ -426,7 +436,7 @@ function ReportsPageInner() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-600">Type</label>
+              <label className="text-xs font-medium text-slate-600">Tipe</label>
               <select
                 value={typeFilter}
                 onChange={(e) => {
@@ -437,7 +447,7 @@ function ReportsPageInner() {
               >
                 {(["ALL", "INDIVIDUAL", "BUSINESS"] as const).map((t) => (
                   <option key={t} value={t}>
-                    {t}
+                    {{ ALL: "Semua", INDIVIDUAL: "Individu", BUSINESS: "Perusahaan" }[t]}
                   </option>
                 ))}
               </select>
@@ -465,7 +475,7 @@ function ReportsPageInner() {
                   ] as const
                 ).map((s) => (
                   <option key={s} value={s}>
-                    {s}
+                    {{ ALL: "Semua", DRAFT: "Draft", SUBMITTED: "Diajukan", IN_REVIEW: "Dalam Review", APPROVED: "Disetujui", REJECTED: "Ditolak" }[s]}
                   </option>
                 ))}
               </select>
@@ -475,7 +485,7 @@ function ReportsPageInner() {
                 onClick={() => setRefreshKey((k) => k + 1)}
                 className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 transition-colors"
               >
-                Apply
+                Terapkan
               </button>
               <button
                 onClick={() => {
@@ -495,7 +505,7 @@ function ReportsPageInner() {
           </div>
           {hasActiveFilter && (
             <p className="mt-2 text-xs text-amber-700">
-              Date/type/status filters apply client-side on loaded data.
+              Filter tanggal/tipe/status diterapkan di sisi klien pada data yang dimuat.
             </p>
           )}
         </CardContent>
@@ -520,7 +530,7 @@ function ReportsPageInner() {
           <>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-slate-500">Total Applications</p>
+                <p className="text-xs text-slate-500">Total Aplikasi</p>
                 <p className="mt-1.5 text-2xl font-semibold">
                   {kpis.total.toLocaleString()}
                 </p>
@@ -528,7 +538,7 @@ function ReportsPageInner() {
             </Card>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-slate-500">Submitted</p>
+                <p className="text-xs text-slate-500">Diajukan</p>
                 <p className="mt-1.5 text-2xl font-semibold text-amber-700">
                   {kpis.submitted.toLocaleString()}
                 </p>
@@ -536,7 +546,7 @@ function ReportsPageInner() {
             </Card>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-slate-500">Approved</p>
+                <p className="text-xs text-slate-500">Disetujui</p>
                 <p className="mt-1.5 text-2xl font-semibold text-emerald-700">
                   {kpis.approved.toLocaleString()}
                 </p>
@@ -544,7 +554,7 @@ function ReportsPageInner() {
             </Card>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-slate-500">Rejected</p>
+                <p className="text-xs text-slate-500">Ditolak</p>
                 <p className="mt-1.5 text-2xl font-semibold text-red-700">
                   {kpis.rejected.toLocaleString()}
                 </p>
@@ -552,7 +562,7 @@ function ReportsPageInner() {
             </Card>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-slate-500">High Risk</p>
+                <p className="text-xs text-slate-500">Risiko Tinggi</p>
                 <p className="mt-1.5 text-2xl font-semibold text-red-600">
                   {kpis.highRisk.toLocaleString()}
                 </p>
@@ -560,7 +570,7 @@ function ReportsPageInner() {
             </Card>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-slate-500">Watchlist Uploads</p>
+                <p className="text-xs text-slate-500">Upload Watchlist</p>
                 <p className="mt-1.5 text-2xl font-semibold">
                   {loadingWatchlist ? "—" : watchlist.length.toLocaleString()}
                 </p>
@@ -568,7 +578,7 @@ function ReportsPageInner() {
             </Card>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-slate-500">Transfers</p>
+                <p className="text-xs text-slate-500">Transfer</p>
                 <p className="mt-1.5 text-2xl font-semibold">
                   {loadingTransfers
                     ? "—"
@@ -585,9 +595,9 @@ function ReportsPageInner() {
       {/* ── Table A: KYC/KYB Submissions ───────────────────────────────────── */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base">KYC / KYB Submissions</CardTitle>
+          <CardTitle className="text-base">Pengajuan KYC / KYB</CardTitle>
           <span className="text-xs text-slate-400">
-            {filteredSubs.length} records
+            {filteredSubs.length} data
           </span>
         </CardHeader>
         <CardContent className="pt-0">
@@ -596,7 +606,7 @@ function ReportsPageInner() {
             <SectionSkeleton />
           ) : !errSubs && filteredSubs.length === 0 ? (
             <p className="py-6 text-center text-sm text-slate-500">
-              No submissions match current filters.
+              Tidak ada pengajuan yang cocok dengan filter saat ini.
             </p>
           ) : !errSubs ? (
             <>
@@ -605,13 +615,13 @@ function ReportsPageInner() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>ID</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Type</TableHead>
+                      <TableHead>Nama</TableHead>
+                      <TableHead>Tipe</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Risk Level</TableHead>
-                      <TableHead>Score</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Action</TableHead>
+                      <TableHead>Level Risiko</TableHead>
+                      <TableHead>Skor</TableHead>
+                      <TableHead>Tanggal</TableHead>
+                      <TableHead>Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -638,7 +648,7 @@ function ReportsPageInner() {
                                   : "bg-sky-100 text-sky-700"
                               }`}
                             >
-                              {row.type ?? "-"}
+                              {row.type ? ({ INDIVIDUAL: "Individu", BUSINESS: "Perusahaan" }[row.type] ?? row.type) : "-"}
                             </span>
                           </TableCell>
                           <TableCell>
@@ -663,7 +673,7 @@ function ReportsPageInner() {
                                 onClick={() => router.push(`/users/${id}`)}
                                 className="text-xs text-kesh-700 hover:underline font-medium"
                               >
-                                View
+                                Lihat
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400">-</span>
@@ -691,9 +701,9 @@ function ReportsPageInner() {
       {/* ── Table B: Watchlist Upload History ──────────────────────────────── */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base">Watchlist Upload History</CardTitle>
+          <CardTitle className="text-base">Riwayat Upload Watchlist</CardTitle>
           <span className="text-xs text-slate-400">
-            {filteredWatchlist.length} records
+            {filteredWatchlist.length} data
           </span>
         </CardHeader>
         <CardContent className="pt-0">
@@ -702,7 +712,7 @@ function ReportsPageInner() {
             <SectionSkeleton />
           ) : !errWatchlist && filteredWatchlist.length === 0 ? (
             <p className="py-6 text-center text-sm text-slate-500">
-              No watchlist uploads found.
+              Belum ada upload watchlist ditemukan.
             </p>
           ) : !errWatchlist ? (
             <>
@@ -710,11 +720,11 @@ function ReportsPageInner() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>List Type</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Count / Rows</TableHead>
-                    <TableHead>Uploaded By</TableHead>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Jenis List</TableHead>
+                    <TableHead>Sumber</TableHead>
+                    <TableHead>Jumlah / Baris</TableHead>
+                    <TableHead>Diunggah Oleh</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -771,10 +781,10 @@ function ReportsPageInner() {
       {/* ── Table C: Transfer Summary ───────────────────────────────────────── */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base">Transfer Summary</CardTitle>
+          <CardTitle className="text-base">Ringkasan Transfer</CardTitle>
           {!transferAccessDenied && !loadingTransfers && (
             <span className="text-xs text-slate-400">
-              {filteredTransfers.length} records
+              {filteredTransfers.length} data
             </span>
           )}
         </CardHeader>
@@ -784,15 +794,15 @@ function ReportsPageInner() {
           ) : transferAccessDenied ? (
             <div className="flex flex-col items-center gap-1 py-8 text-center">
               <p className="text-sm font-medium text-slate-500">
-                No access to transfer report
+                Tidak ada akses ke laporan transfer
               </p>
               <p className="text-xs text-slate-400">
-                Transfer data is only visible to Finance roles.
+                Data transfer hanya tersedia untuk peran Finance.
               </p>
             </div>
           ) : filteredTransfers.length === 0 ? (
             <p className="py-6 text-center text-sm text-slate-500">
-              No transfers found.
+              Belum ada transfer ditemukan.
             </p>
           ) : (
             <>
@@ -801,12 +811,12 @@ function ReportsPageInner() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>ID</TableHead>
-                      <TableHead>Sender App ID</TableHead>
-                      <TableHead>Amount</TableHead>
+                      <TableHead>ID Aplikasi Pengirim</TableHead>
+                      <TableHead>Nominal</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Created By</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Action</TableHead>
+                      <TableHead>Dibuat Oleh</TableHead>
+                      <TableHead>Tanggal</TableHead>
+                      <TableHead>Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -842,7 +852,7 @@ function ReportsPageInner() {
                                 }
                                 className="text-xs text-kesh-700 hover:underline font-medium"
                               >
-                                View
+                                Lihat
                               </button>
                             ) : (
                               <span className="text-xs text-slate-400">-</span>
@@ -873,7 +883,7 @@ function ReportsPageInner() {
 export default function ReportsPage() {
   return (
     <Suspense
-      fallback={<p className="p-6 text-sm text-slate-500">Loading…</p>}
+      fallback={<p className="p-6 text-sm text-slate-500">Memuat…</p>}
     >
       <ReportsPageInner />
     </Suspense>

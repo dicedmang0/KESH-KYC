@@ -59,6 +59,28 @@ const STATUS_TABS: (AppStatus | "ALL")[] = [
   "REJECTED",
 ];
 
+const STATUS_TAB_LABELS: Record<AppStatus | "ALL", string> = {
+  ALL: "Semua",
+  DRAFT: "Draft",
+  SUBMITTED: "Diajukan",
+  IN_REVIEW: "Dalam Review",
+  APPROVED: "Disetujui",
+  REJECTED: "Ditolak",
+};
+
+const STATUS_DISPLAY: Record<string, string> = {
+  DRAFT: "Draft",
+  SUBMITTED: "Diajukan",
+  IN_REVIEW: "Dalam Review",
+  APPROVED: "Disetujui",
+  REJECTED: "Ditolak",
+};
+
+const TYPE_DISPLAY: Record<string, string> = {
+  INDIVIDUAL: "Individu",
+  BUSINESS: "Perusahaan",
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function resolveId(row: Submission): string {
@@ -72,7 +94,7 @@ function resolveName(row: Submission): string {
     row.full_name ||
     row.legal_name ||
     row.trade_name ||
-    (row.type === "BUSINESS" ? "Business" : "Individual")
+    (row.type === "BUSINESS" ? "Perusahaan" : "Individu")
   );
 }
 
@@ -80,7 +102,7 @@ function fmtDate(iso?: string | null): string {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleDateString("en-US", {
+  return d.toLocaleDateString("id-ID", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -95,17 +117,18 @@ function normalizeRes(raw: ApiRes): { items: Submission[]; total: number } {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function StatusBadge({ s }: { s?: AppStatus | string | null }) {
-  const map: Record<string, string> = {
+  const colorMap: Record<string, string> = {
     DRAFT: "bg-slate-100 text-slate-700",
     SUBMITTED: "bg-amber-100 text-amber-700",
     IN_REVIEW: "bg-blue-100 text-blue-700",
     APPROVED: "bg-emerald-100 text-emerald-700",
     REJECTED: "bg-red-100 text-red-700",
   };
-  const cls = (s && map[s]) || "bg-slate-100 text-slate-600";
+  const cls = (s && colorMap[s]) || "bg-slate-100 text-slate-600";
+  const label = (s && STATUS_DISPLAY[s]) || s || "-";
   return (
     <Badge className={`border-0 text-xs font-medium ${cls}`}>
-      {s?.replace("_", " ") ?? "-"}
+      {label}
     </Badge>
   );
 }
@@ -150,7 +173,7 @@ function KycPageInner() {
 
   useEffect(() => {
     if (!token) router.replace("/login");
-  }, [token, router]); // router is stable from useRouter
+  }, [token, router]);
 
   useEffect(() => {
     if (!token) return;
@@ -158,7 +181,6 @@ function KycPageInner() {
       setLoading(true);
       setErr(null);
       try {
-        // Try /kyc/submissions first; it may return paginated or array
         const params = new URLSearchParams();
         if (activeTab !== "ALL") params.set("status", activeTab);
         if (q) params.set("q", q);
@@ -171,7 +193,7 @@ function KycPageInner() {
         setAllItems(items);
         setTotal(t);
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Failed to load KYC submissions";
+        const msg = e instanceof Error ? e.message : "Gagal memuat pengajuan KYC";
         if (msg.includes("401")) {
           router.replace("/login");
           return;
@@ -187,10 +209,9 @@ function KycPageInner() {
     })();
   }, [token, activeTab, q, page, pageSize, router]);
 
-  // Client-side filter: status fallback + text search on top of server results
+  // Client-side filter
   const filtered = useMemo(() => {
     let result = allItems;
-    // fallback: server may not filter by status — ensure client always filters correctly
     if (activeTab !== "ALL") {
       result = result.filter(
         (row) => String(row.status ?? "").toUpperCase() === activeTab
@@ -210,13 +231,13 @@ function KycPageInner() {
     return (
       <div className="flex flex-col items-center gap-3 py-20 text-slate-500">
         <ShieldOff className="h-10 w-10 text-slate-300" />
-        <p className="text-base font-medium text-slate-700">Access Denied</p>
-        <p className="text-sm">You don&apos;t have permission to view KYC Verification.</p>
+        <p className="text-base font-medium text-slate-700">Akses Ditolak</p>
+        <p className="text-sm">Anda tidak memiliki izin untuk melihat Verifikasi KYC/KYB.</p>
         <button
           onClick={() => router.push("/dashboard")}
           className="mt-1 text-sm text-amber-700 hover:underline"
         >
-          Go to Dashboard
+          Ke Dasbor
         </button>
       </div>
     );
@@ -229,9 +250,9 @@ function KycPageInner() {
         <div className="flex items-center gap-3">
           <ShieldCheck className="h-6 w-6 text-slate-700" />
           <div>
-            <h1 className="text-xl font-semibold">KYC Verification</h1>
+            <h1 className="text-xl font-semibold">Verifikasi KYC/KYB</h1>
             <p className="text-xs text-slate-500">
-              Review and action all KYC / KYB submissions
+              Tinjau dan proses semua pengajuan KYC/KYB
             </p>
           </div>
         </div>
@@ -253,7 +274,7 @@ function KycPageInner() {
                       : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
                   }`}
                 >
-                  {tab === "ALL" ? "All" : tab.replace("_", " ")}
+                  {STATUS_TAB_LABELS[tab]}
                 </button>
               ))}
             </div>
@@ -263,7 +284,7 @@ function KycPageInner() {
               <input
                 value={q}
                 onChange={(e) => { setQ(e.target.value); setPage(1); }}
-                placeholder="Search by name, email, or ID…"
+                placeholder="Cari berdasarkan nama, email, atau ID…"
                 className="w-[280px] rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-200"
               />
               {total > 0 && (
@@ -279,7 +300,7 @@ function KycPageInner() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Submissions</CardTitle>
+          <CardTitle className="text-base">Daftar Pengajuan</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
           {err && (
@@ -297,13 +318,13 @@ function KycPageInner() {
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-slate-500">
               <ShieldCheck className="h-8 w-8 text-slate-300" />
-              <p className="text-sm">No submissions found.</p>
+              <p className="text-sm">Belum ada pengajuan ditemukan.</p>
               {(activeTab !== "ALL" || q) && (
                 <button
                   onClick={() => { setActiveTab("ALL"); setQ(""); setPage(1); }}
                   className="text-xs text-kesh-700 hover:underline font-medium"
                 >
-                  Clear filters
+                  Bersihkan filter
                 </button>
               )}
             </div>
@@ -313,12 +334,12 @@ function KycPageInner() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
+                    <TableHead>Nama</TableHead>
+                    <TableHead>Tipe</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Risk</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Action</TableHead>
+                    <TableHead>Risiko</TableHead>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -343,7 +364,7 @@ function KycPageInner() {
                               ? "bg-purple-100 text-purple-700"
                               : "bg-sky-100 text-sky-700"
                           }`}>
-                            {row.type ?? "-"}
+                            {row.type ? (TYPE_DISPLAY[row.type] || row.type) : "-"}
                           </span>
                         </TableCell>
                         <TableCell>
@@ -361,7 +382,7 @@ function KycPageInner() {
                               onClick={() => router.push(`/users/${id}`)}
                               className="text-kesh-700 hover:underline text-xs font-medium"
                             >
-                              View
+                              Lihat
                             </button>
                           ) : (
                             <span className="text-xs text-slate-400">-</span>
@@ -392,7 +413,7 @@ function KycPageInner() {
 
 export default function KycPage() {
   return (
-    <Suspense fallback={<p className="p-6 text-sm text-slate-500">Loading…</p>}>
+    <Suspense fallback={<p className="p-6 text-sm text-slate-500">Memuat…</p>}>
       <KycPageInner />
     </Suspense>
   );

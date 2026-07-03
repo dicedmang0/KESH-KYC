@@ -40,7 +40,7 @@ function NewApplicationPageInner() {
   const [i_phone, setIPhone] = useState("");
   const [i_email, setIEmail] = useState("");
   const [i_gender, setIGender] = useState<"M" | "F" | "O">("M");
-  const [i_occupation, setIOccupation] = useState(""); // <-- tambah ini
+  const [i_occupation, setIOccupation] = useState("");
   const [i_pep, setIPep] = useState(false);
 
   // files
@@ -84,7 +84,7 @@ function NewApplicationPageInner() {
       );
 
       const appId = created?.id ?? created?.application_id;
-      if (!appId) throw new Error("Application ID not returned");
+      if (!appId) throw new Error("ID aplikasi tidak ditemukan dalam respons");
 
       if (i_signature) await uploadDoc(appId, i_signature, "SIGNATURE");
       if (i_iddoc) await uploadDoc(appId, i_iddoc, i_identity_type);
@@ -101,10 +101,10 @@ function NewApplicationPageInner() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">
-          {kind === "INDIVIDUAL" ? "KYC Data Input" : "KYB Data Input"}
+          {kind === "INDIVIDUAL" ? "Input Data KYC" : "Input Data KYB"}
         </h1>
         <p className="text-xs text-slate-500">
-          Manual entry for customer verification
+          Entri manual untuk verifikasi nasabah
         </p>
       </div>
 
@@ -119,7 +119,7 @@ function NewApplicationPageInner() {
             <CardContent className="space-y-4 p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="grid gap-1">
-                  <span className="text-sm font-medium">Full Name *</span>
+                  <span className="text-sm font-medium">Nama Lengkap *</span>
                   <input
                     className="rounded-md border px-3 py-2 text-sm"
                     value={i_full_name}
@@ -129,7 +129,7 @@ function NewApplicationPageInner() {
                 </label>
 
                 <label className="grid gap-1">
-                  <span className="text-sm font-medium">Identity Type *</span>
+                  <span className="text-sm font-medium">Jenis Identitas *</span>
                   <select
                     className="rounded-md border px-3 py-2 text-sm"
                     value={i_identity_type}
@@ -146,10 +146,10 @@ function NewApplicationPageInner() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="grid gap-1">
-                  <span className="text-sm font-medium">Identity Number *</span>
+                  <span className="text-sm font-medium">Nomor Identitas *</span>
                   <input
                     className="rounded-md border px-3 py-2 text-sm"
-                    placeholder="KTP / SIM / Passport number"
+                    placeholder="Nomor KTP / SIM / Paspor"
                     value={i_nik}
                     onChange={(e) => setINik(e.target.value)}
                     required
@@ -161,7 +161,7 @@ function NewApplicationPageInner() {
 
               <label className="grid gap-1">
                 <span className="text-sm font-medium">
-                  Address (as per ID document) *
+                  Alamat (sesuai dokumen identitas) *
                 </span>
                 <textarea
                   className="rounded-md border px-3 py-2 text-sm"
@@ -174,7 +174,7 @@ function NewApplicationPageInner() {
 
               <label className="grid gap-1">
                 <span className="text-sm font-medium">
-                  Additional Address (optional)
+                  Alamat Tambahan (opsional)
                 </span>
                 <input
                   className="rounded-md border px-3 py-2 text-sm"
@@ -185,7 +185,7 @@ function NewApplicationPageInner() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="grid gap-1">
-                  <span className="text-sm font-medium">Place of Birth *</span>
+                  <span className="text-sm font-medium">Tempat Lahir *</span>
                   <input
                     className="rounded-md border px-3 py-2 text-sm"
                     value={i_pob}
@@ -194,7 +194,7 @@ function NewApplicationPageInner() {
                   />
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-sm font-medium">Date of Birth *</span>
+                  <span className="text-sm font-medium">Tanggal Lahir *</span>
                   <input
                     type="date"
                     className="rounded-md border px-3 py-2 text-sm"
@@ -207,7 +207,7 @@ function NewApplicationPageInner() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="grid gap-1">
-                  <span className="text-sm font-medium">Nationality *</span>
+                  <span className="text-sm font-medium">Kewarganegaraan *</span>
                   <input
                     className="rounded-md border px-3 py-2 text-sm"
                     value={i_nationality}
@@ -216,7 +216,7 @@ function NewApplicationPageInner() {
                   />
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-sm font-medium">Phone Number *</span>
+                  <span className="text-sm font-medium">Nomor Telepon *</span>
                   <input
                     className="rounded-md border px-3 py-2 text-sm"
                     placeholder="+62"
@@ -238,33 +238,33 @@ function NewApplicationPageInner() {
                   />
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-sm font-medium">Occupation *</span>
+                  <span className="text-sm font-medium">Pekerjaan *</span>
                   <input
                     className="rounded-md border px-3 py-2 text-sm"
                     value={i_occupation}
                     onChange={(e) => setIOccupation(e.target.value)}
                     required
-                    placeholder="e.g. Software Engineer"
+                    placeholder="mis. Software Engineer"
                   />
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-sm font-medium">Gender *</span>
+                  <span className="text-sm font-medium">Jenis Kelamin *</span>
                   <select
                     className="rounded-md border px-3 py-2 text-sm"
                     value={i_gender}
                     onChange={(e) => setIGender(e.target.value as "M" | "F" | "O")}
                     required
                   >
-                    <option value="M">Male</option>
-                    <option value="F">Female</option>
-                    <option value="O">Other</option>
+                    <option value="M">Laki-laki</option>
+                    <option value="F">Perempuan</option>
+                    <option value="O">Lainnya</option>
                   </select>
                 </label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-3">
                 <label className="grid gap-1">
-                  <span className="text-sm font-medium">City *</span>
+                  <span className="text-sm font-medium">Kota *</span>
                   <input
                     className="rounded-md border px-3 py-2 text-sm"
                     value={i_city}
@@ -273,7 +273,7 @@ function NewApplicationPageInner() {
                   />
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-sm font-medium">Province *</span>
+                  <span className="text-sm font-medium">Provinsi *</span>
                   <input
                     className="rounded-md border px-3 py-2 text-sm"
                     value={i_province}
@@ -282,7 +282,7 @@ function NewApplicationPageInner() {
                   />
                 </label>
                 <label className="grid gap-1">
-                  <span className="text-sm font-medium">Postal Code *</span>
+                  <span className="text-sm font-medium">Kode Pos *</span>
                   <input
                     className="rounded-md border px-3 py-2 text-sm"
                     value={i_postal}
@@ -304,7 +304,7 @@ function NewApplicationPageInner() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-md border border-dashed p-4">
                   <div className="text-sm font-medium mb-2">
-                    Signature Upload (Optional)
+                    Unggah Tanda Tangan (Opsional)
                   </div>
                   <input
                     type="file"
@@ -312,12 +312,12 @@ function NewApplicationPageInner() {
                     onChange={(e) => setISignature(e.target.files?.[0] || null)}
                   />
                   <p className="mt-1 text-xs text-slate-500">
-                    PNG, JPG, PDF up to 2 MB
+                    PNG, JPG, PDF maks. 2 MB
                   </p>
                 </div>
                 <div className="rounded-md border border-dashed p-4">
                   <div className="text-sm font-medium mb-2">
-                    Upload Identity Document *
+                    Unggah Dokumen Identitas *
                   </div>
                   <input
                     required
@@ -326,7 +326,7 @@ function NewApplicationPageInner() {
                     onChange={(e) => setIIddoc(e.target.files?.[0] || null)}
                   />
                   <p className="mt-1 text-xs text-slate-500">
-                    KTP / SIM / Passport — PDF, JPG, PNG up to 5 MB
+                    KTP / SIM / Paspor — PDF, JPG, PNG maks. 5 MB
                   </p>
                 </div>
               </div>
@@ -343,7 +343,7 @@ function NewApplicationPageInner() {
               disabled={loading}
               className="inline-flex items-center rounded-md bg-kesh-700 px-4 py-2 text-sm font-medium text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
             >
-              {loading ? "Saving..." : "Save KYC Data"}
+              {loading ? "Menyimpan..." : "Simpan Data KYC"}
             </button>
           </div>
         )}
@@ -354,7 +354,7 @@ function NewApplicationPageInner() {
 
 export default function NewApplicationPage() {
   return (
-    <Suspense fallback={<p className="p-6 text-sm text-slate-500">Loading…</p>}>
+    <Suspense fallback={<p className="p-6 text-sm text-slate-500">Memuat…</p>}>
       <NewApplicationPageInner />
     </Suspense>
   );

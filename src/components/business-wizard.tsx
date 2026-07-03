@@ -44,10 +44,10 @@ type Step = 1 | 2 | 3 | 4;
 
 function Stepper({ step }: { step: Step }) {
   const items = [
-    { n: 1, label: "Company" },
-    { n: 2, label: "Parties" },
-    { n: 3, label: "Documents" },
-    { n: 4, label: "Review" },
+    { n: 1, label: "Perusahaan" },
+    { n: 2, label: "Pihak" },
+    { n: 3, label: "Dokumen" },
+    { n: 4, label: "Tinjauan" },
   ];
   return (
     <div className="flex items-center gap-3">
@@ -141,7 +141,7 @@ export default function BusinessWizard() {
       setAppId(id);
       setStep(2);
     } catch (e: unknown) {
-      setErrCompany(e instanceof Error ? e.message : "Gagal menyimpan company info");
+      setErrCompany(e instanceof Error ? e.message : "Gagal menyimpan informasi perusahaan");
     } finally {
       setSaving(false);
     }
@@ -212,7 +212,7 @@ export default function BusinessWizard() {
       setPEmail("");
       await fetchParties();
     } catch (e: unknown) {
-      setErrParties(e instanceof Error ? e.message : "Gagal menambahkan party");
+      setErrParties(e instanceof Error ? e.message : "Gagal menambahkan pihak");
     } finally {
       setSaving(false);
     }
@@ -227,7 +227,7 @@ export default function BusinessWizard() {
       });
       await fetchParties();
     } catch (e: unknown) {
-      setErrParties(e instanceof Error ? e.message : "Gagal menghapus party");
+      setErrParties(e instanceof Error ? e.message : "Gagal menghapus pihak");
     }
   }
 
@@ -245,7 +245,7 @@ export default function BusinessWizard() {
   const [aktaFile, setAkta] = useState<File | null>(null);
   const [nibFile, setNibFile] = useState<File | null>(null);
   const [npwpFile, setNpwpFile] = useState<File | null>(null);
-  const [arIdFile, setArIdFile] = useState<File | null>(null); // KTP/Paspor kuasa
+  const [arIdFile, setArIdFile] = useState<File | null>(null);
 
   async function uploadDoc(file: File, docType: string) {
     if (!appId || !file) return;
@@ -254,7 +254,6 @@ export default function BusinessWizard() {
     form.append("file", file);
     form.append("doc_type", docType);
 
-    // baseURL + auth sudah di-handle apiUpload
     await apiUpload(`/applications/${appId}/documents/upload`, form, true);
   }
 
@@ -293,7 +292,6 @@ export default function BusinessWizard() {
     setErrDocs(null);
     setSubmitting(true);
     try {
-      // pre-validate: minimal 1 pengurus (DIRECTOR/COMMISSIONER), 1 BO, 1 AUTHORIZED_REP
       const roles = new Set(parties.map((p) => p.role));
       const hasAny =
         roles.has("DIRECTOR") ||
@@ -306,11 +304,10 @@ export default function BusinessWizard() {
         );
 
       await apiFetch(`/applications/${appId}/submit`, { method: "PATCH" });
-      setSubmitOK("Submitted. Screening & risk otomatis dijalankan.");
+      setSubmitOK("Diajukan. Screening & risk otomatis dijalankan.");
       router.push(`/users/${String(appId)}`);
     } catch (e: unknown) {
-      // tampilkan di banner step-4 (pakai errDocs biar hanya muncul di sini)
-      setErrDocs(e instanceof Error ? e.message : "Submit gagal");
+      setErrDocs(e instanceof Error ? e.message : "Pengajuan gagal");
     } finally {
       setSubmitting(false);
     }
@@ -322,7 +319,7 @@ export default function BusinessWizard() {
         <Stepper step={step} />
         {appId && (
           <div className="text-xs text-slate-500">
-            Application ID: <b>{appId}</b>
+            ID Aplikasi: <b>{appId}</b>
           </div>
         )}
       </div>
@@ -358,12 +355,12 @@ export default function BusinessWizard() {
       {step === 1 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Company Information</CardTitle>
+            <CardTitle className="text-base">Informasi Perusahaan</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <label className="grid gap-1">
-                <span className="text-sm font-medium">Legal Name *</span>
+                <span className="text-sm font-medium">Nama Legal *</span>
                 <input
                   className="rounded-md border px-3 py-2 text-sm"
                   value={legal_name}
@@ -371,7 +368,7 @@ export default function BusinessWizard() {
                 />
               </label>
               <label className="grid gap-1">
-                <span className="text-sm font-medium">Legal Form *</span>
+                <span className="text-sm font-medium">Bentuk Badan *</span>
                 <select
                   className="rounded-md border px-3 py-2 text-sm"
                   value={legal_form}
@@ -393,7 +390,7 @@ export default function BusinessWizard() {
             <div className="grid gap-4 md:grid-cols-3">
               <label className="grid gap-1">
                 <span className="text-sm font-medium">
-                  Incorporation Place *
+                  Tempat Pendirian *
                 </span>
                 <input
                   className="rounded-md border px-3 py-2 text-sm"
@@ -403,7 +400,7 @@ export default function BusinessWizard() {
               </label>
               <label className="grid gap-1">
                 <span className="text-sm font-medium">
-                  Incorporation Date *
+                  Tanggal Pendirian *
                 </span>
                 <input
                   type="date"
@@ -413,7 +410,7 @@ export default function BusinessWizard() {
                 />
               </label>
               <label className="grid gap-1">
-                <span className="text-sm font-medium">License Number *</span>
+                <span className="text-sm font-medium">Nomor Lisensi *</span>
                 <input
                   className="rounded-md border px-3 py-2 text-sm"
                   value={business_license_number}
@@ -440,7 +437,7 @@ export default function BusinessWizard() {
                 />
               </label>
               <label className="grid gap-1">
-                <span className="text-sm font-medium">Phone *</span>
+                <span className="text-sm font-medium">Telepon *</span>
                 <input
                   className="rounded-md border px-3 py-2 text-sm"
                   value={phone}
@@ -451,7 +448,7 @@ export default function BusinessWizard() {
 
             <div className="grid gap-4 md:grid-cols-3">
               <label className="grid gap-1">
-                <span className="text-sm font-medium">KBLI (optional)</span>
+                <span className="text-sm font-medium">KBLI (opsional)</span>
                 <input
                   className="rounded-md border px-3 py-2 text-sm"
                   value={industry_code}
@@ -459,7 +456,7 @@ export default function BusinessWizard() {
                 />
               </label>
               <label className="grid gap-1 md:col-span-2">
-                <span className="text-sm font-medium">Business Activity *</span>
+                <span className="text-sm font-medium">Kegiatan Usaha *</span>
                 <input
                   className="rounded-md border px-3 py-2 text-sm"
                   value={business_activity}
@@ -469,7 +466,7 @@ export default function BusinessWizard() {
             </div>
 
             <label className="grid gap-1">
-              <span className="text-sm font-medium">Registered Address *</span>
+              <span className="text-sm font-medium">Alamat Terdaftar *</span>
               <textarea
                 className="rounded-md border px-3 py-2 text-sm"
                 rows={2}
@@ -480,7 +477,7 @@ export default function BusinessWizard() {
 
             <div className="grid gap-4 md:grid-cols-3">
               <label className="grid gap-1">
-                <span className="text-sm font-medium">City *</span>
+                <span className="text-sm font-medium">Kota *</span>
                 <input
                   className="rounded-md border px-3 py-2 text-sm"
                   value={city}
@@ -488,7 +485,7 @@ export default function BusinessWizard() {
                 />
               </label>
               <label className="grid gap-1">
-                <span className="text-sm font-medium">Province *</span>
+                <span className="text-sm font-medium">Provinsi *</span>
                 <input
                   className="rounded-md border px-3 py-2 text-sm"
                   value={province}
@@ -496,7 +493,7 @@ export default function BusinessWizard() {
                 />
               </label>
               <label className="grid gap-1">
-                <span className="text-sm font-medium">Postal Code *</span>
+                <span className="text-sm font-medium">Kode Pos *</span>
                 <input
                   className="rounded-md border px-3 py-2 text-sm"
                   value={postal_code}
@@ -512,7 +509,7 @@ export default function BusinessWizard() {
                 onClick={saveCompany}
                 className="rounded-md bg-kesh-700 px-4 py-2 text-sm font-medium text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
               >
-                {saving ? "Saving..." : "Save & Continue"}
+                {saving ? "Menyimpan..." : "Simpan & Lanjut"}
               </button>
             </div>
           </CardContent>
@@ -524,14 +521,14 @@ export default function BusinessWizard() {
         <Card onKeyDown={preventEnter}>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">
-              Parties (Directors, BO, Authorized Rep)
+              Pihak (Direksi, BO, Perwakilan Resmi)
             </CardTitle>
             <button
               type="button"
               onClick={() => setAddOpen(true)}
               className="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50"
             >
-              + Add Party
+              + Tambah Pihak
             </button>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -554,7 +551,7 @@ export default function BusinessWizard() {
                     </select>
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-sm font-medium">Full Name</span>
+                    <span className="text-sm font-medium">Nama Lengkap</span>
                     <input
                       className="rounded-md border px-3 py-2 text-sm"
                       value={p_full_name}
@@ -562,7 +559,7 @@ export default function BusinessWizard() {
                     />
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-sm font-medium">Identity Type</span>
+                    <span className="text-sm font-medium">Jenis Identitas</span>
                     <select
                       className="rounded-md border px-3 py-2 text-sm"
                       value={p_id_type}
@@ -575,7 +572,7 @@ export default function BusinessWizard() {
                     </select>
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-sm font-medium">Identity Number</span>
+                    <span className="text-sm font-medium">Nomor Identitas</span>
                     <input
                       className="rounded-md border px-3 py-2 text-sm"
                       value={p_id_number}
@@ -583,7 +580,7 @@ export default function BusinessWizard() {
                     />
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-sm font-medium">DOB</span>
+                    <span className="text-sm font-medium">Tgl Lahir</span>
                     <input
                       type="date"
                       className="rounded-md border px-3 py-2 text-sm"
@@ -592,7 +589,7 @@ export default function BusinessWizard() {
                     />
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-sm font-medium">Nationality</span>
+                    <span className="text-sm font-medium">Kewarganegaraan</span>
                     <input
                       className="rounded-md border px-3 py-2 text-sm"
                       value={p_nationality}
@@ -600,7 +597,7 @@ export default function BusinessWizard() {
                     />
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-sm font-medium">Phone</span>
+                    <span className="text-sm font-medium">Telepon</span>
                     <input
                       className="rounded-md border px-3 py-2 text-sm"
                       value={p_phone}
@@ -623,7 +620,7 @@ export default function BusinessWizard() {
                     className="rounded-md border px-3 py-1.5 text-sm"
                     onClick={() => setAddOpen(false)}
                   >
-                    Cancel
+                    Batal
                   </button>
                   <button
                     type="button"
@@ -631,7 +628,7 @@ export default function BusinessWizard() {
                     onClick={addParty}
                     disabled={saving}
                   >
-                    {saving ? "Saving..." : "Add"}
+                    {saving ? "Menyimpan..." : "Tambah"}
                   </button>
                 </div>
               </div>
@@ -654,12 +651,12 @@ export default function BusinessWizard() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Full Name</TableHead>
+                    <TableHead>Nama Lengkap</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>ID</TableHead>
-                    <TableHead>DOB</TableHead>
-                    <TableHead>Nationality</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>Tgl Lahir</TableHead>
+                    <TableHead>Kewarganegaraan</TableHead>
+                    <TableHead className="text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -669,7 +666,7 @@ export default function BusinessWizard() {
                         colSpan={6}
                         className="py-6 text-center text-sm text-slate-500"
                       >
-                        No parties yet.
+                        Belum ada pihak.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -684,7 +681,7 @@ export default function BusinessWizard() {
                         </TableCell>
                         <TableCell>
                           {p.dob
-                            ? new Date(p.dob).toLocaleDateString("en-US")
+                            ? new Date(p.dob).toLocaleDateString("id-ID")
                             : "—"}
                         </TableCell>
                         <TableCell>{p.nationality || "—"}</TableCell>
@@ -694,7 +691,7 @@ export default function BusinessWizard() {
                             className="rounded-md border px-2 py-1 text-sm hover:bg-slate-50"
                             onClick={() => removeParty(p.id)}
                           >
-                            Remove
+                            Hapus
                           </button>
                         </TableCell>
                       </TableRow>
@@ -710,7 +707,7 @@ export default function BusinessWizard() {
                 onClick={() => setStep(1)}
                 className="rounded-md border px-3 py-1.5 text-sm"
               >
-                Back
+                Kembali
               </button>
               <button
                 type="button"
@@ -723,7 +720,7 @@ export default function BusinessWizard() {
                 }
                 className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               >
-                Continue
+                Lanjut
               </button>
             </div>
           </CardContent>
@@ -735,7 +732,7 @@ export default function BusinessWizard() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              Upload Required Documents
+              Unggah Dokumen Wajib
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -766,7 +763,7 @@ export default function BusinessWizard() {
               </div>
               <div className="rounded-md border border-dashed p-4">
                 <div className="mb-2 text-sm font-medium">
-                  ID Authorized Rep (KTP/Paspor) *
+                  ID Perwakilan Resmi (KTP/Paspor) *
                 </div>
                 <input
                   type="file"
@@ -782,7 +779,7 @@ export default function BusinessWizard() {
                 onClick={() => setStep(2)}
                 className="rounded-md border px-3 py-1.5 text-sm"
               >
-                Back
+                Kembali
               </button>
               <button
                 type="button"
@@ -790,7 +787,7 @@ export default function BusinessWizard() {
                 onClick={saveDocumentsThenNext}
                 className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
               >
-                {saving ? "Uploading..." : "Save & Continue"}
+                {saving ? "Mengunggah..." : "Simpan & Lanjut"}
               </button>
             </div>
           </CardContent>
@@ -801,7 +798,7 @@ export default function BusinessWizard() {
       {step === 4 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Review & Submit</CardTitle>
+            <CardTitle className="text-base">Tinjauan & Ajukan</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
@@ -829,7 +826,7 @@ export default function BusinessWizard() {
                 onClick={() => setStep(3)}
                 className="rounded-md border px-3 py-1.5 text-sm"
               >
-                Back
+                Kembali
               </button>
               <button
                 type="button"
@@ -837,7 +834,7 @@ export default function BusinessWizard() {
                 disabled={submitting}
                 className="rounded-md bg-kesh-700 px-4 py-2 text-sm font-medium text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
               >
-                {submitting ? "Submitting..." : "Submit Application"}
+                {submitting ? "Mengajukan..." : "Ajukan Aplikasi"}
               </button>
             </div>
           </CardContent>

@@ -31,7 +31,7 @@ export default function LoginPage() {
       try { await apiFetch('/auth/me'); } catch {}
       router.replace('/dashboard');
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Login failed');
+      setErr(e instanceof Error ? e.message : 'Login gagal');
     } finally {
       setLoading(false);
     }
@@ -87,7 +87,7 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full rounded-lg bg-kesh-700 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-kesh-600 disabled:opacity-60"
             >
-              {loading ? 'Signing in…' : 'Masuk'}
+              {loading ? 'Sedang masuk…' : 'Masuk'}
             </button>
           </form>
         </div>

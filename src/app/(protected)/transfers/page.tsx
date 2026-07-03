@@ -36,7 +36,7 @@ export default function TransfersPage() {
         const data = await getTransfers(status || undefined);
         if (alive) setRows(data);
       } catch (e: unknown) {
-        if (alive) setErr(e instanceof Error ? e.message : 'Gagal load transfers');
+        if (alive) setErr(e instanceof Error ? e.message : 'Gagal memuat transfer');
       } finally {
         if (alive) setLoading(false);
       }
@@ -53,8 +53,8 @@ export default function TransfersPage() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Transfers</h1>
-          <p className="text-sm text-muted-foreground">Pencatatan transfer to bank (manual)</p>
+          <h1 className="text-xl font-semibold">Pencatatan Transfer</h1>
+          <p className="text-sm text-muted-foreground">Pencatatan transfer ke bank (manual)</p>
         </div>
 
         {role === 'FinanceStaff' && (
@@ -62,7 +62,7 @@ export default function TransfersPage() {
             href="/transfers/new"
             className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 transition-colors"
           >
-            + New Transfer
+            + Transfer Baru
           </Link>
         )}
       </div>
@@ -74,7 +74,7 @@ export default function TransfersPage() {
           value={status}
           onChange={(e) => setStatus(e.target.value)}
         >
-          <option value="">All</option>
+          <option value="">Semua</option>
           <option value="DRAFT">DRAFT</option>
           <option value="SUBMITTED">SUBMITTED</option>
           <option value="APPROVED">APPROVED</option>
@@ -87,18 +87,18 @@ export default function TransfersPage() {
 
       <div className="rounded-2xl border overflow-hidden">
         <div className="grid grid-cols-12 gap-2 bg-muted/40 px-4 py-3 text-xs font-medium">
-          <div className="col-span-2">Reference</div>
-          <div className="col-span-2">Beneficiary</div>
+          <div className="col-span-2">Referensi</div>
+          <div className="col-span-2">Penerima</div>
           <div className="col-span-2">Bank</div>
-          <div className="col-span-2">Amount</div>
+          <div className="col-span-2">Nominal</div>
           <div className="col-span-1">Status</div>
-          <div className="col-span-1">Result</div>
-          <div className="col-span-1">Created</div>
-          <div className="col-span-1 text-right">Action</div>
+          <div className="col-span-1">Hasil</div>
+          <div className="col-span-1">Dibuat</div>
+          <div className="col-span-1 text-right">Aksi</div>
         </div>
 
         {loading ? (
-          <div className="p-4 text-sm text-muted-foreground">Loading…</div>
+          <div className="p-4 text-sm text-muted-foreground">Memuat…</div>
         ) : rows.length === 0 ? (
           <div className="p-4 text-sm text-muted-foreground">Belum ada data.</div>
         ) : (
@@ -124,7 +124,7 @@ export default function TransfersPage() {
               <div className="col-span-1 text-xs text-muted-foreground">{formatDateTime(r.created_at)}</div>
               <div className="col-span-1 text-right">
                 <Link className="text-sm text-kesh-700 hover:underline font-medium" href={`/transfers/${r.id}`}>
-                  Open
+                  Buka
                 </Link>
               </div>
             </div>

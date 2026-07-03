@@ -24,6 +24,16 @@ const INTERNAL_ROLES = [
   'FinanceManager',
 ];
 
+const ROLE_LABELS: Record<string, string> = {
+  SystemAdmin:    'Admin Sistem',
+  BranchAdmin:    'Admin Cabang',
+  FrontDesk:      'Front Desk',
+  ComplianceLead: 'Lead Compliance',
+  Auditor:        'Auditor',
+  FinanceStaff:   'Staff Finance',
+  FinanceManager: 'Manager Finance',
+};
+
 export default function AdminManagementCard() {
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,7 +57,7 @@ export default function AdminManagementCard() {
       const data = await apiFetch<AdminUser[]>('/users/admins');
       setAdmins(data);
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Gagal load admin users');
+      setErr(e instanceof Error ? e.message : 'Gagal memuat pengguna admin');
     } finally {
       setLoading(false);
     }
@@ -102,7 +112,7 @@ export default function AdminManagementCard() {
       });
       await loadAdmins();
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Gagal update admin');
+      setErr(e instanceof Error ? e.message : 'Gagal memperbarui admin');
     } finally {
       setSaving(false);
     }
@@ -158,7 +168,7 @@ export default function AdminManagementCard() {
               >
                 {INTERNAL_ROLES.map((r) => (
                   <option key={r} value={r}>
-                    {r}
+                    {ROLE_LABELS[r] ?? r}
                   </option>
                 ))}
               </select>
@@ -203,17 +213,17 @@ export default function AdminManagementCard() {
         <div className="flex items-center justify-between px-4 py-3 border-b bg-neutral-50">
           <h2 className="text-sm font-medium">Daftar Admin</h2>
           {loading && (
-            <span className="text-xs text-neutral-500">Loading…</span>
+            <span className="text-xs text-neutral-500">Memuat…</span>
           )}
         </div>
 
         <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs font-medium text-neutral-500 bg-neutral-50">
           <div className="col-span-1">ID</div>
-          <div className="col-span-3">User</div>
+          <div className="col-span-3">Pengguna</div>
           <div className="col-span-2">Role</div>
-          <div className="col-span-2">Branch</div>
+          <div className="col-span-2">Cabang</div>
           <div className="col-span-2">Status</div>
-          <div className="col-span-2 text-right">Action</div>
+          <div className="col-span-2 text-right">Aksi</div>
         </div>
 
         {admins.length === 0 ? (
@@ -241,7 +251,7 @@ export default function AdminManagementCard() {
                 >
                   {INTERNAL_ROLES.map((r) => (
                     <option key={r} value={r}>
-                      {r}
+                      {ROLE_LABELS[r] ?? r}
                     </option>
                   ))}
                 </select>
@@ -270,7 +280,7 @@ export default function AdminManagementCard() {
                     updateAdmin(u.id, { is_active: !u.is_active })
                   }
                 >
-                  {u.is_active ? 'Active' : 'Inactive'}
+                  {u.is_active ? 'Aktif' : 'Tidak Aktif'}
                 </button>
               </div>
               <div className="col-span-2 text-right text-xs text-neutral-500">

@@ -83,31 +83,31 @@ export default function NewTransferPage() {
 
   async function submit() {
     if (!senderApplicationId) {
-      setErr('Silakan pilih sender terlebih dahulu.');
+      setErr('Silakan pilih pengirim terlebih dahulu.');
       return;
     }
 
     // ── Validation ──────────────────────────────────────────────────────
     const amount = Number(form.amount);
     if (!(amount > 0)) {
-      setErr('Amount harus lebih dari 0.');
+      setErr('Nominal harus lebih dari 0.');
       return;
     }
     const currency = (form.currency || 'IDR').trim().toUpperCase();
     if (currency.length !== 3) {
-      setErr('Currency harus 3 huruf (contoh: IDR).');
+      setErr('Mata uang harus 3 huruf (contoh: IDR).');
       return;
     }
     if (!clean(form.beneficiaryBankName)) {
-      setErr('Beneficiary bank wajib diisi.');
+      setErr('Bank penerima wajib diisi.');
       return;
     }
     if (!clean(form.beneficiaryAccountNumber)) {
-      setErr('Beneficiary account number wajib diisi.');
+      setErr('Nomor rekening penerima wajib diisi.');
       return;
     }
     if (!clean(form.beneficiaryAccountName)) {
-      setErr('Beneficiary account name wajib diisi.');
+      setErr('Nama rekening penerima wajib diisi.');
       return;
     }
 
@@ -122,7 +122,7 @@ export default function NewTransferPage() {
         }
         additionalInfo = parsed as Record<string, unknown>;
       } catch {
-        setErr('Additional info harus berupa JSON object yang valid.');
+        setErr('Info tambahan harus berupa JSON object yang valid.');
         return;
       }
     }
@@ -161,25 +161,24 @@ export default function NewTransferPage() {
       const created = await createTransfer(body);
       router.push(`/transfers/${created.id}`);
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Gagal create transfer');
+      setErr(e instanceof Error ? e.message : 'Gagal membuat transfer');
     } finally {
       setLoading(false);
     }
   }
 
-  // token !== null means auth has loaded; null = still hydrating (show nothing yet)
   if (token !== null && role !== 'FinanceStaff') {
     return (
       <div className="p-6 max-w-2xl">
         <div className="flex flex-col items-center gap-3 py-16 text-slate-500">
           <ShieldOff className="h-10 w-10 text-slate-300" />
-          <p className="text-base font-medium text-slate-700">Access Denied</p>
-          <p className="text-sm">Only FinanceStaff can create transfers.</p>
+          <p className="text-base font-medium text-slate-700">Akses Ditolak</p>
+          <p className="text-sm">Hanya Staff Finance yang dapat membuat transfer.</p>
           <button
             onClick={() => router.push('/transfers')}
             className="mt-1 text-sm text-kesh-700 hover:underline"
           >
-            Go to Transfers
+            Ke Pencatatan Transfer
           </button>
         </div>
       </div>
@@ -189,7 +188,7 @@ export default function NewTransferPage() {
   return (
     <div className="p-6 max-w-2xl space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">New Transfer</h1>
+        <h1 className="text-xl font-semibold">Transfer Baru</h1>
         <p className="text-sm text-muted-foreground">Buat draft transfer</p>
       </div>
 
@@ -202,7 +201,7 @@ export default function NewTransferPage() {
       <div className="rounded-2xl border p-4 space-y-3">
         {/* Sender dropdown */}
         <div>
-          <label className="text-xs text-muted-foreground">Sender (KYC/KYB Approved)</label>
+          <label className="text-xs text-muted-foreground">Pengirim (KYC/KYB Disetujui)</label>
           {approvedApps.length === 0 ? (
             <p className="mt-1 text-xs text-slate-400">Belum ada aplikasi berstatus APPROVED.</p>
           ) : (
@@ -222,7 +221,7 @@ export default function NewTransferPage() {
 
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-1">
-            <label className="text-xs text-muted-foreground">Amount</label>
+            <label className="text-xs text-muted-foreground">Nominal</label>
             <input
               type="number"
               min={1}
@@ -232,7 +231,7 @@ export default function NewTransferPage() {
             />
           </div>
           <div className="col-span-1">
-            <label className="text-xs text-muted-foreground">Currency</label>
+            <label className="text-xs text-muted-foreground">Mata Uang</label>
             <input
               maxLength={3}
               className="mt-1 w-full border rounded-lg px-3 py-2 text-sm uppercase"
@@ -242,7 +241,7 @@ export default function NewTransferPage() {
             />
           </div>
           <div className="col-span-1">
-            <label className="text-xs text-muted-foreground">Requested date (optional)</label>
+            <label className="text-xs text-muted-foreground">Tanggal Diminta (opsional)</label>
             <input
               type="date"
               className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
@@ -254,7 +253,7 @@ export default function NewTransferPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground">Beneficiary bank</label>
+            <label className="text-xs text-muted-foreground">Bank Penerima</label>
             <input
               className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
               value={form.beneficiaryBankName}
@@ -263,7 +262,7 @@ export default function NewTransferPage() {
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Beneficiary bank code (optional)</label>
+            <label className="text-xs text-muted-foreground">Kode Bank Penerima (opsional)</label>
             <input
               className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
               value={form.beneficiaryBankCode}
@@ -275,7 +274,7 @@ export default function NewTransferPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground">Account number</label>
+            <label className="text-xs text-muted-foreground">Nomor Rekening</label>
             <input
               className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
               value={form.beneficiaryAccountNumber}
@@ -283,7 +282,7 @@ export default function NewTransferPage() {
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Account name</label>
+            <label className="text-xs text-muted-foreground">Nama Rekening</label>
             <input
               className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
               value={form.beneficiaryAccountName}
@@ -293,7 +292,7 @@ export default function NewTransferPage() {
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground">Description / remark (optional)</label>
+          <label className="text-xs text-muted-foreground">Keterangan (opsional)</label>
           <input
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={form.description}
@@ -310,25 +309,25 @@ export default function NewTransferPage() {
           onClick={() => setShowMeta((v) => !v)}
           className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium"
         >
-          <span>SNAP / Transfer Metadata (optional)</span>
+          <span>Metadata SNAP / Transfer (opsional)</span>
           {showMeta ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>
 
         {showMeta && (
           <div className="border-t p-4 space-y-3">
             <div>
-              <label className="text-xs text-muted-foreground">Partner reference no</label>
+              <label className="text-xs text-muted-foreground">Nomor Referensi Partner</label>
               <input
                 className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                 value={meta.partner_reference_no}
                 onChange={(e) => setMeta((s) => ({ ...s, partner_reference_no: e.target.value }))}
               />
-              <p className="mt-1 text-xs text-slate-400">Leave blank to auto-generate.</p>
+              <p className="mt-1 text-xs text-slate-400">Kosongkan untuk dibuat otomatis.</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground">Source account no</label>
+                <label className="text-xs text-muted-foreground">Nomor Rekening Sumber</label>
                 <input
                   className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                   value={meta.source_account_no}
@@ -336,7 +335,7 @@ export default function NewTransferPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Source account name</label>
+                <label className="text-xs text-muted-foreground">Nama Rekening Sumber</label>
                 <input
                   className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                   value={meta.source_account_name}
@@ -344,7 +343,7 @@ export default function NewTransferPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Source bank code</label>
+                <label className="text-xs text-muted-foreground">Kode Bank Sumber</label>
                 <input
                   className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                   value={meta.source_bank_code}
@@ -352,7 +351,7 @@ export default function NewTransferPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Source bank name</label>
+                <label className="text-xs text-muted-foreground">Nama Bank Sumber</label>
                 <input
                   className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                   value={meta.source_bank_name}
@@ -362,7 +361,7 @@ export default function NewTransferPage() {
             </div>
 
             <div>
-              <label className="text-xs text-muted-foreground">Beneficiary address</label>
+              <label className="text-xs text-muted-foreground">Alamat Penerima</label>
               <input
                 className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                 value={meta.beneficiary_address}
@@ -372,7 +371,7 @@ export default function NewTransferPage() {
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground">Beneficiary email</label>
+                <label className="text-xs text-muted-foreground">Email Penerima</label>
                 <input
                   type="email"
                   className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
@@ -381,7 +380,7 @@ export default function NewTransferPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Residence (2 chars)</label>
+                <label className="text-xs text-muted-foreground">Kode Domisili (2 karakter)</label>
                 <input
                   maxLength={2}
                   className="mt-1 w-full border rounded-lg px-3 py-2 text-sm uppercase"
@@ -391,7 +390,7 @@ export default function NewTransferPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Customer type (2 chars)</label>
+                <label className="text-xs text-muted-foreground">Tipe Nasabah (2 karakter)</label>
                 <input
                   maxLength={2}
                   className="mt-1 w-full border rounded-lg px-3 py-2 text-sm uppercase"
@@ -404,7 +403,7 @@ export default function NewTransferPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground">Transfer method</label>
+                <label className="text-xs text-muted-foreground">Metode Transfer</label>
                 <input
                   className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                   value={meta.transfer_method}
@@ -413,7 +412,7 @@ export default function NewTransferPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Transfer channel</label>
+                <label className="text-xs text-muted-foreground">Kanal Transfer</label>
                 <input
                   className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                   value={meta.transfer_channel}
@@ -422,7 +421,7 @@ export default function NewTransferPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Transaction date</label>
+                <label className="text-xs text-muted-foreground">Tanggal Transaksi</label>
                 <input
                   type="date"
                   className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
@@ -431,7 +430,7 @@ export default function NewTransferPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Requested execution date</label>
+                <label className="text-xs text-muted-foreground">Tanggal Eksekusi Diminta</label>
                 <input
                   type="date"
                   className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
@@ -442,7 +441,7 @@ export default function NewTransferPage() {
             </div>
 
             <div>
-              <label className="text-xs text-muted-foreground">Additional info (JSON object, optional)</label>
+              <label className="text-xs text-muted-foreground">Info Tambahan (JSON object, opsional)</label>
               <textarea
                 rows={4}
                 className="mt-1 w-full border rounded-lg px-3 py-2 text-sm font-mono"
@@ -460,7 +459,7 @@ export default function NewTransferPage() {
         disabled={loading || !senderApplicationId}
         className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-60 transition-colors"
       >
-        {loading ? 'Saving…' : 'Create Draft'}
+        {loading ? 'Menyimpan…' : 'Buat Draft'}
       </button>
     </div>
   );

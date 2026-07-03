@@ -55,7 +55,7 @@ function JsonBlock({ label, value }: { label: string; value?: unknown }) {
         className="text-xs font-medium text-kesh-700 hover:underline"
         disabled={!hasValue}
       >
-        {label} {hasValue ? (open ? '▾' : '▸') : '(empty)'}
+        {label} {hasValue ? (open ? '▾' : '▸') : '(kosong)'}
       </button>
       {open && hasValue && (
         <pre className="mt-2 max-h-80 overflow-auto rounded-lg bg-neutral-50 border p-3 text-xs">
@@ -117,7 +117,7 @@ export default function TransferDetailPage() {
     try {
       setRow(await getTransfer(id));
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Gagal load detail transfer');
+      setErr(e instanceof Error ? e.message : 'Gagal memuat detail transfer');
     } finally {
       setLoading(false);
     }
@@ -129,9 +129,9 @@ export default function TransferDetailPage() {
   }, [id]);
 
   function handleActionError(e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Action gagal';
+    const msg = e instanceof Error ? e.message : 'Aksi gagal';
     setActionErr(
-      msg.includes('403') ? "You don't have permission to perform this action." : msg,
+      msg.includes('403') ? 'Anda tidak memiliki izin untuk melakukan aksi ini.' : msg,
     );
   }
 
@@ -152,7 +152,7 @@ export default function TransferDetailPage() {
   async function doDecide(decision: 'APPROVE' | 'REJECT') {
     if (!id) return;
     if (decision === 'REJECT' && !rejectReason.trim()) {
-      setActionErr('Reject reason is recommended — please provide one.');
+      setActionErr('Alasan penolakan disarankan — harap isi alasan.');
       return;
     }
     setActionLoading(true);
@@ -178,7 +178,7 @@ export default function TransferDetailPage() {
     if (!id) return;
     const f = resultForm;
     if (f.result === 'FAILED' && !f.failed_reason.trim()) {
-      setActionErr('Failed reason is recommended when result is FAILED.');
+      setActionErr('Alasan kegagalan disarankan ketika hasil adalah FAILED.');
       return;
     }
     let providerResponse: Record<string, unknown> | undefined;
@@ -191,7 +191,7 @@ export default function TransferDetailPage() {
         }
         providerResponse = parsed as Record<string, unknown>;
       } catch {
-        setActionErr('Provider response must be a valid JSON object.');
+        setActionErr('Respons provider harus berupa JSON object yang valid.');
         return;
       }
     }
@@ -230,7 +230,7 @@ export default function TransferDetailPage() {
     try {
       setSnap(await getTransferSnapPreview(id));
     } catch (e: unknown) {
-      setSnapErr(e instanceof Error ? e.message : 'Gagal load SNAP preview');
+      setSnapErr(e instanceof Error ? e.message : 'Gagal memuat pratinjau SNAP');
     } finally {
       setSnapLoading(false);
     }
@@ -246,12 +246,12 @@ export default function TransferDetailPage() {
     return (
       <div className="p-6">
         <h1 className="text-xl font-semibold">Transfer</h1>
-        <p className="text-sm text-neutral-500">Invalid transfer ID.</p>
+        <p className="text-sm text-neutral-500">ID transfer tidak valid.</p>
         <button
           className="mt-4 text-sm text-kesh-700 hover:underline"
           onClick={() => router.push('/transfers')}
         >
-          Back
+          Kembali
         </button>
       </div>
     );
@@ -272,7 +272,7 @@ export default function TransferDetailPage() {
           className="text-sm text-kesh-700 hover:underline"
           onClick={() => router.push('/transfers')}
         >
-          Back
+          Kembali
         </button>
       </div>
 
@@ -282,102 +282,102 @@ export default function TransferDetailPage() {
         </div>
       )}
 
-      {loading && <div className="text-sm text-neutral-500">Loading detail…</div>}
+      {loading && <div className="text-sm text-neutral-500">Memuat detail…</div>}
 
       {row && (
         <>
           {/* 1. Summary */}
-          <SectionCard title="Summary">
+          <SectionCard title="Ringkasan">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <Field label="Partner reference no" value={row.partner_reference_no} />
+              <Field label="Nomor Referensi Partner" value={row.partner_reference_no} />
               <Field label="Status" value={<TransferStatusBadge status={row.status} />} />
-              <Field label="Result" value={<TransferResultBadge result={row.result} />} />
-              <Field label="Amount" value={formatTransferAmount(row)} />
-              <Field label="Transfer method" value={row.transfer_method} />
-              <Field label="Transfer channel" value={row.transfer_channel} />
-              <Field label="Created at" value={formatDateTime(row.created_at)} />
+              <Field label="Hasil" value={<TransferResultBadge result={row.result} />} />
+              <Field label="Nominal" value={formatTransferAmount(row)} />
+              <Field label="Metode Transfer" value={row.transfer_method} />
+              <Field label="Kanal Transfer" value={row.transfer_channel} />
+              <Field label="Dibuat Pada" value={formatDateTime(row.created_at)} />
             </div>
           </SectionCard>
 
           {/* 2. Sender / Source */}
-          <SectionCard title="Sender / Source">
+          <SectionCard title="Pengirim / Sumber">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <Field label="Sender application ID" value={row.sender_application_id} />
-              <Field label="Source account no" value={row.source_account_no} />
-              <Field label="Source account name" value={row.source_account_name} />
-              <Field label="Source bank code" value={row.source_bank_code} />
-              <Field label="Source bank name" value={row.source_bank_name} />
+              <Field label="ID Aplikasi Pengirim" value={row.sender_application_id} />
+              <Field label="Nomor Rekening Sumber" value={row.source_account_no} />
+              <Field label="Nama Rekening Sumber" value={row.source_account_name} />
+              <Field label="Kode Bank Sumber" value={row.source_bank_code} />
+              <Field label="Nama Bank Sumber" value={row.source_bank_name} />
             </div>
           </SectionCard>
 
           {/* 3. Beneficiary */}
-          <SectionCard title="Beneficiary">
+          <SectionCard title="Penerima">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <Field label="Account name" value={row.beneficiary_account_name} />
-              <Field label="Account number" value={row.beneficiary_account_number} />
-              <Field label="Bank code" value={row.beneficiary_bank_code} />
-              <Field label="Bank name" value={row.beneficiary_bank_name} />
-              <Field label="Address" value={row.beneficiary_address} />
+              <Field label="Nama Rekening" value={row.beneficiary_account_name} />
+              <Field label="Nomor Rekening" value={row.beneficiary_account_number} />
+              <Field label="Kode Bank" value={row.beneficiary_bank_code} />
+              <Field label="Nama Bank" value={row.beneficiary_bank_name} />
+              <Field label="Alamat" value={row.beneficiary_address} />
               <Field label="Email" value={row.beneficiary_email} />
-              <Field label="Residence" value={row.beneficiary_customer_residence} />
-              <Field label="Customer type" value={row.beneficiary_customer_type} />
+              <Field label="Domisili" value={row.beneficiary_customer_residence} />
+              <Field label="Tipe Nasabah" value={row.beneficiary_customer_type} />
             </div>
           </SectionCard>
 
           {/* 4. Timeline / Audit Trail */}
-          <SectionCard title="Timeline / Audit Trail">
+          <SectionCard title="Timeline / Jejak Audit">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <Field label="Created by" value={row.created_by} />
-              <Field label="Submitted by" value={row.submitted_by} />
-              <Field label="Submitted at" value={formatDateTime(row.submitted_at)} />
-              <Field label="Approved by" value={row.approved_by} />
-              <Field label="Approved at" value={formatDateTime(row.approved_at)} />
-              <Field label="Rejected by" value={row.rejected_by} />
-              <Field label="Rejected at" value={formatDateTime(row.rejected_at)} />
-              <Field label="Result updated by" value={row.result_updated_by} />
-              <Field label="Result updated at" value={formatDateTime(row.result_updated_at)} />
-              <Field label="Completed at" value={formatDateTime(row.completed_at)} />
-              <Field label="Failed at" value={formatDateTime(row.failed_at)} />
+              <Field label="Dibuat Oleh" value={row.created_by} />
+              <Field label="Diajukan Oleh" value={row.submitted_by} />
+              <Field label="Diajukan Pada" value={formatDateTime(row.submitted_at)} />
+              <Field label="Disetujui Oleh" value={row.approved_by} />
+              <Field label="Disetujui Pada" value={formatDateTime(row.approved_at)} />
+              <Field label="Ditolak Oleh" value={row.rejected_by} />
+              <Field label="Ditolak Pada" value={formatDateTime(row.rejected_at)} />
+              <Field label="Hasil Diperbarui Oleh" value={row.result_updated_by} />
+              <Field label="Hasil Diperbarui Pada" value={formatDateTime(row.result_updated_at)} />
+              <Field label="Selesai Pada" value={formatDateTime(row.completed_at)} />
+              <Field label="Gagal Pada" value={formatDateTime(row.failed_at)} />
             </div>
           </SectionCard>
 
           {/* 5. Decision Notes */}
-          <SectionCard title="Decision Notes">
+          <SectionCard title="Catatan Keputusan">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Field label="Decision notes" value={row.decision_notes} />
-              <Field label="Reject reason" value={row.reject_reason} />
+              <Field label="Catatan Keputusan" value={row.decision_notes} />
+              <Field label="Alasan Penolakan" value={row.reject_reason} />
             </div>
           </SectionCard>
 
           {/* 6. Result / Provider */}
-          <SectionCard title="Result / Provider">
+          <SectionCard title="Hasil / Provider">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <Field label="Result reference no" value={row.result_reference_no} />
-              <Field label="Bank reference no" value={row.bank_reference_no} />
-              <Field label="External reference no" value={row.external_reference_no} />
-              <Field label="Provider reference no" value={row.provider_reference_no} />
-              <Field label="Provider response code" value={row.provider_response_code} />
-              <Field label="Provider response message" value={row.provider_response_message} />
-              <Field label="Latest transaction status" value={row.latest_transaction_status} />
-              <Field label="Transaction status desc" value={row.transaction_status_desc} />
-              <Field label="Failed reason" value={row.failed_reason} />
-              <Field label="Result attachment URI" value={row.result_attachment_uri} />
-              <Field label="Result notes" value={row.result_notes} />
+              <Field label="Nomor Referensi Hasil" value={row.result_reference_no} />
+              <Field label="Nomor Referensi Bank" value={row.bank_reference_no} />
+              <Field label="Nomor Referensi Eksternal" value={row.external_reference_no} />
+              <Field label="Nomor Referensi Provider" value={row.provider_reference_no} />
+              <Field label="Kode Respons Provider" value={row.provider_response_code} />
+              <Field label="Pesan Respons Provider" value={row.provider_response_message} />
+              <Field label="Status Transaksi Terkini" value={row.latest_transaction_status} />
+              <Field label="Deskripsi Status Transaksi" value={row.transaction_status_desc} />
+              <Field label="Alasan Kegagalan" value={row.failed_reason} />
+              <Field label="URI Lampiran Hasil" value={row.result_attachment_uri} />
+              <Field label="Catatan Hasil" value={row.result_notes} />
             </div>
           </SectionCard>
 
           {/* 7. Additional Info / Provider JSON */}
-          <SectionCard title="Additional Info / Provider JSON">
+          <SectionCard title="Info Tambahan / JSON Provider">
             <div className="space-y-2">
-              <JsonBlock label="Additional info" value={row.additional_info} />
-              <JsonBlock label="Provider request" value={row.provider_request} />
-              <JsonBlock label="Provider response" value={row.provider_response} />
+              <JsonBlock label="Info Tambahan" value={row.additional_info} />
+              <JsonBlock label="Request Provider" value={row.provider_request} />
+              <JsonBlock label="Respons Provider" value={row.provider_response} />
             </div>
           </SectionCard>
 
           {/* Actions */}
           {hasAnyAction && (
-            <SectionCard title="Actions">
+            <SectionCard title="Aksi">
               <div className="flex flex-wrap gap-2">
                 {canSubmit && (
                   <button
@@ -385,7 +385,7 @@ export default function TransferDetailPage() {
                     disabled={actionLoading}
                     onClick={doSubmit}
                   >
-                    Submit
+                    Ajukan
                   </button>
                 )}
                 {canDecide && (
@@ -395,14 +395,14 @@ export default function TransferDetailPage() {
                       disabled={actionLoading}
                       onClick={() => { setPanel(panel === 'approve' ? 'none' : 'approve'); setActionErr(''); }}
                     >
-                      Approve
+                      Setujui
                     </button>
                     <button
                       className="rounded-lg bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
                       disabled={actionLoading}
                       onClick={() => { setPanel(panel === 'reject' ? 'none' : 'reject'); setActionErr(''); }}
                     >
-                      Reject
+                      Tolak
                     </button>
                   </>
                 )}
@@ -412,7 +412,7 @@ export default function TransferDetailPage() {
                     disabled={actionLoading}
                     onClick={() => { setPanel(panel === 'result' ? 'none' : 'result'); setActionErr(''); }}
                   >
-                    Set Result
+                    Tetapkan Hasil
                   </button>
                 )}
               </div>
@@ -421,7 +421,7 @@ export default function TransferDetailPage() {
               {canDecide && panel === 'approve' && (
                 <div className="rounded-lg border p-3 space-y-2">
                   <div>
-                    <label className="text-xs text-muted-foreground">Decision notes (optional)</label>
+                    <label className="text-xs text-muted-foreground">Catatan keputusan (opsional)</label>
                     <textarea
                       rows={3}
                       className={inputCls}
@@ -434,7 +434,7 @@ export default function TransferDetailPage() {
                     disabled={actionLoading}
                     onClick={() => doDecide('APPROVE')}
                   >
-                    {actionLoading ? 'Saving…' : 'Confirm Approve'}
+                    {actionLoading ? 'Menyimpan…' : 'Konfirmasi Setujui'}
                   </button>
                 </div>
               )}
@@ -443,7 +443,7 @@ export default function TransferDetailPage() {
               {canDecide && panel === 'reject' && (
                 <div className="rounded-lg border p-3 space-y-2">
                   <div>
-                    <label className="text-xs text-muted-foreground">Reject reason (recommended)</label>
+                    <label className="text-xs text-muted-foreground">Alasan penolakan (disarankan)</label>
                     <input
                       className={inputCls}
                       value={rejectReason}
@@ -451,7 +451,7 @@ export default function TransferDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground">Decision notes (optional)</label>
+                    <label className="text-xs text-muted-foreground">Catatan keputusan (opsional)</label>
                     <textarea
                       rows={3}
                       className={inputCls}
@@ -464,7 +464,7 @@ export default function TransferDetailPage() {
                     disabled={actionLoading}
                     onClick={() => doDecide('REJECT')}
                   >
-                    {actionLoading ? 'Saving…' : 'Confirm Reject'}
+                    {actionLoading ? 'Menyimpan…' : 'Konfirmasi Tolak'}
                   </button>
                 </div>
               )}
@@ -473,7 +473,7 @@ export default function TransferDetailPage() {
               {canSetResult && panel === 'result' && (
                 <div className="rounded-lg border p-3 space-y-3">
                   <div>
-                    <label className="text-xs text-muted-foreground">Result</label>
+                    <label className="text-xs text-muted-foreground">Hasil</label>
                     <select
                       className={inputCls}
                       value={resultForm.result}
@@ -486,7 +486,7 @@ export default function TransferDetailPage() {
 
                   {resultForm.result === 'FAILED' && (
                     <div>
-                      <label className="text-xs text-muted-foreground">Failed reason (recommended)</label>
+                      <label className="text-xs text-muted-foreground">Alasan kegagalan (disarankan)</label>
                       <input
                         className={inputCls}
                         value={resultForm.failed_reason}
@@ -496,7 +496,7 @@ export default function TransferDetailPage() {
                   )}
 
                   <div>
-                    <label className="text-xs text-muted-foreground">Result notes</label>
+                    <label className="text-xs text-muted-foreground">Catatan hasil</label>
                     <textarea
                       rows={2}
                       className={inputCls}
@@ -507,15 +507,15 @@ export default function TransferDetailPage() {
 
                   <div className="grid grid-cols-2 gap-3">
                     {([
-                      ['result_reference_no', 'Result reference no'],
-                      ['bank_reference_no', 'Bank reference no'],
-                      ['external_reference_no', 'External reference no'],
-                      ['provider_reference_no', 'Provider reference no'],
-                      ['provider_response_code', 'Provider response code'],
-                      ['provider_response_message', 'Provider response message'],
-                      ['latest_transaction_status', 'Latest transaction status'],
-                      ['transaction_status_desc', 'Transaction status desc'],
-                      ['result_attachment_uri', 'Result attachment URI'],
+                      ['result_reference_no', 'Nomor Referensi Hasil'],
+                      ['bank_reference_no', 'Nomor Referensi Bank'],
+                      ['external_reference_no', 'Nomor Referensi Eksternal'],
+                      ['provider_reference_no', 'Nomor Referensi Provider'],
+                      ['provider_response_code', 'Kode Respons Provider'],
+                      ['provider_response_message', 'Pesan Respons Provider'],
+                      ['latest_transaction_status', 'Status Transaksi Terkini'],
+                      ['transaction_status_desc', 'Deskripsi Status Transaksi'],
+                      ['result_attachment_uri', 'URI Lampiran Hasil'],
                     ] as const).map(([key, label]) => (
                       <div key={key}>
                         <label className="text-xs text-muted-foreground">{label}</label>
@@ -529,7 +529,7 @@ export default function TransferDetailPage() {
                   </div>
 
                   <div>
-                    <label className="text-xs text-muted-foreground">Provider response (JSON object, optional)</label>
+                    <label className="text-xs text-muted-foreground">Respons provider (JSON object, opsional)</label>
                     <textarea
                       rows={4}
                       className={`${inputCls} font-mono`}
@@ -544,7 +544,7 @@ export default function TransferDetailPage() {
                     disabled={actionLoading}
                     onClick={doResult}
                   >
-                    {actionLoading ? 'Saving…' : 'Submit Result'}
+                    {actionLoading ? 'Menyimpan…' : 'Kirim Hasil'}
                   </button>
                 </div>
               )}
@@ -559,21 +559,21 @@ export default function TransferDetailPage() {
 
           {!hasAnyAction && (
             <p className="text-xs text-slate-500 italic">
-              Read-only view — no actions available for your role or current status.
+              Tampilan hanya baca — tidak ada aksi yang tersedia untuk peran atau status Anda saat ini.
             </p>
           )}
 
           {/* SNAP Preview — available to all roles */}
-          <SectionCard title="SNAP Preview">
+          <SectionCard title="Pratinjau SNAP">
             <p className="text-xs text-slate-500">
-              Preview only — no bank/API call is executed.
+              Pratinjau saja — tidak ada panggilan ke bank/API.
             </p>
             <button
               className="rounded-lg border px-3 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
               disabled={snapLoading}
               onClick={loadSnap}
             >
-              {snapLoading ? 'Loading…' : snap ? 'Refresh SNAP Preview' : 'Load SNAP Preview'}
+              {snapLoading ? 'Memuat…' : snap ? 'Perbarui Pratinjau SNAP' : 'Muat Pratinjau SNAP'}
             </button>
             {snapErr && (
               <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">

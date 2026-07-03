@@ -73,7 +73,7 @@ export default function DashboardPage() {
     if (!iso) return "-";
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "-";
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return d.toLocaleDateString("id-ID", { month: "short", day: "numeric", year: "numeric" });
   };
 
   // Map status BE -> status FE
@@ -116,7 +116,7 @@ export default function DashboardPage() {
         // recent submissions
         const recent = (be?.recent ?? []).map<KycSubmission>((r) => ({
           id: String(r.id),
-          userName: r.full_name || (r.type === "INDIVIDUAL" ? "Individual" : "Business"),
+          userName: r.full_name || (r.type === "INDIVIDUAL" ? "Individu" : "Perusahaan"),
           email: r.email || "-",
           idType: r.id_type || (r.type === "INDIVIDUAL" ? "KTP/PASPOR" : "NPWP/NIB"),
           submissionDate: r.submitted_at || r.created_at || new Date().toISOString(),
@@ -125,7 +125,7 @@ export default function DashboardPage() {
         setSubmissions(recent);
         setLoadingSubs(false);
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Failed to load dashboard");
+        setError(e instanceof Error ? e.message : "Gagal memuat dasbor");
         setLoadingSummary(false);
         setLoadingSubs(false);
       }
@@ -134,12 +134,12 @@ export default function DashboardPage() {
 
   const renderStatusBadge = (status: KycStatus) => {
     if (status === "PENDING") {
-      return <Badge className="border-0 bg-amber-100 text-xs font-medium text-amber-700">Pending</Badge>;
+      return <Badge className="border-0 bg-amber-100 text-xs font-medium text-amber-700">Menunggu</Badge>;
     }
     if (status === "VERIFIED") {
-      return <Badge className="border-0 bg-emerald-100 text-xs font-medium text-emerald-700">Verified</Badge>;
+      return <Badge className="border-0 bg-emerald-100 text-xs font-medium text-emerald-700">Terverifikasi</Badge>;
     }
-    return <Badge className="border-0 bg-red-100 text-xs font-medium text-red-700">Rejected</Badge>;
+    return <Badge className="border-0 bg-red-100 text-xs font-medium text-red-700">Ditolak</Badge>;
   };
 
   return (
@@ -147,15 +147,15 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex flex-col justify-between gap-2 rounded-xl bg-white border border-slate-200 p-4 shadow-sm sm:flex-row sm:items-center">
         <div>
-          <p className="text-xs text-slate-400">Dashboard Overview</p>
-          <p className="text-sm font-semibold text-slate-900">Welcome back, Administrator</p>
+          <p className="text-xs text-slate-400">Ringkasan Dasbor</p>
+          <p className="text-sm font-semibold text-slate-900">Selamat datang, Administrator</p>
         </div>
         <div className="text-right">
-          <p className="text-xs text-slate-400">Last updated</p>
+          <p className="text-xs text-slate-400">Diperbarui pada</p>
           <p className="text-xs font-medium text-slate-600">
             {summary?.lastUpdated
-              ? new Date(summary.lastUpdated).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) + " today"
-              : "a few seconds ago"}
+              ? new Date(summary.lastUpdated).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " hari ini"
+              : "beberapa detik lalu"}
           </p>
         </div>
       </div>
@@ -178,41 +178,41 @@ export default function DashboardPage() {
           <>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-slate-500">Total Registered Users</p>
+                <p className="text-xs text-slate-500">Total Pengguna Terdaftar</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
-                  {summary.totalRegisteredUsers.toLocaleString("en-US")}
+                  {summary.totalRegisteredUsers.toLocaleString("id-ID")}
                 </p>
-                <p className="mt-1 text-xs text-emerald-600">+8.2% from last month</p>
+                <p className="mt-1 text-xs text-emerald-600">+8,2% dari bulan lalu</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-slate-500">Verified Users</p>
+                <p className="text-xs text-slate-500">Pengguna Terverifikasi</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
-                  {summary.verifiedUsers.toLocaleString("en-US")}
+                  {summary.verifiedUsers.toLocaleString("id-ID")}
                 </p>
-                <p className="mt-1 text-xs text-emerald-600">+5.4% from last month</p>
+                <p className="mt-1 text-xs text-emerald-600">+5,4% dari bulan lalu</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-slate-500">Pending Verification</p>
+                <p className="text-xs text-slate-500">Menunggu Verifikasi</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
-                  {summary.pendingVerification.toLocaleString("en-US")}
+                  {summary.pendingVerification.toLocaleString("id-ID")}
                 </p>
-                <p className="mt-1 text-xs text-amber-600">+12.1% from yesterday</p>
+                <p className="mt-1 text-xs text-amber-600">+12,1% dari kemarin</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-slate-500">Rejected KYC</p>
+                <p className="text-xs text-slate-500">KYC Ditolak</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
-                  {summary.rejectedKyc.toLocaleString("en-US")}
+                  {summary.rejectedKyc.toLocaleString("id-ID")}
                 </p>
-                <p className="mt-1 text-xs text-red-600">-2.3% from last month</p>
+                <p className="mt-1 text-xs text-red-600">-2,3% dari bulan lalu</p>
               </CardContent>
             </Card>
           </>
@@ -222,9 +222,9 @@ export default function DashboardPage() {
       {/* Recent KYC Submissions */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base font-semibold text-slate-900">Recent KYC Submissions</CardTitle>
+          <CardTitle className="text-base font-semibold text-slate-900">Pengajuan KYC Terbaru</CardTitle>
           <button onClick={() => router.push("/users")} className="text-xs font-medium text-kesh-700 hover:underline">
-            View All Submissions
+            Lihat Semua Pengajuan
           </button>
         </CardHeader>
         <CardContent className="pt-0">
@@ -233,16 +233,16 @@ export default function DashboardPage() {
               {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
             </div>
           ) : submissions.length === 0 ? (
-            <p className="py-6 text-center text-sm text-slate-500">Belum ada KYC submission.</p>
+            <p className="py-6 text-center text-sm text-slate-500">Belum ada pengajuan KYC.</p>
           ) : (
             <div className="overflow-x-auto pt-2">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>User Name</TableHead>
+                    <TableHead>Nama Pengguna</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>ID Type</TableHead>
-                    <TableHead>Submission Date</TableHead>
+                    <TableHead>Jenis ID</TableHead>
+                    <TableHead>Tanggal Pengajuan</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>

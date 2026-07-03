@@ -142,7 +142,7 @@ export default function WatchlistUploadCard() {
       <div className="mt-4">
         <h3 className="text-sm font-medium mb-2">Riwayat Upload</h3>
         {loadingHistory ? (
-          <p className="text-xs text-neutral-500">Loading...</p>
+          <p className="text-xs text-neutral-500">Memuat...</p>
         ) : history.length === 0 ? (
           <p className="text-xs text-neutral-500">Belum ada riwayat upload.</p>
         ) : (
@@ -151,11 +151,11 @@ export default function WatchlistUploadCard() {
               <thead className="bg-neutral-50">
                 <tr>
                   <th className="border px-2 py-1 text-left">ID</th>
-                  <th className="border px-2 py-1 text-left">List Type</th>
-                  <th className="border px-2 py-1 text-left">List Source</th>
-                  <th className="border px-2 py-1 text-left">Diupload pada</th>
-                  <th className="border px-2 py-1 text-left">Diupload oleh</th>
-                  <th className="border px-2 py-1 text-left">Count</th>
+                  <th className="border px-2 py-1 text-left">Jenis List</th>
+                  <th className="border px-2 py-1 text-left">Sumber List</th>
+                  <th className="border px-2 py-1 text-left">Diunggah Pada</th>
+                  <th className="border px-2 py-1 text-left">Diunggah Oleh</th>
+                  <th className="border px-2 py-1 text-left">Jumlah</th>
                 </tr>
               </thead>
               <tbody>
@@ -164,7 +164,7 @@ export default function WatchlistUploadCard() {
                     <td className="border px-2 py-1">{h.id}</td>
                     <td className="border px-2 py-1">{h.list_type}</td>
                     <td className="border px-2 py-1">{h.list_source}</td>
-                    <td className="border px-2 py-1">{new Date(h.created_at).toLocaleString()}</td>
+                    <td className="border px-2 py-1">{new Date(h.created_at).toLocaleString('id-ID')}</td>
                     <td className="border px-2 py-1">{h.created_by}</td>
                     <td className="border px-2 py-1">{h.count}</td>
                   </tr>
