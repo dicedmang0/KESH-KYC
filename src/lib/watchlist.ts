@@ -20,9 +20,38 @@ export type WatchlistHistoryItem = {
   error_message: string | null;
 };
 
-export async function getWatchlistHistory(limit = 20): Promise<WatchlistHistoryItem[]> {
-  const data = await apiFetch<WatchlistHistoryItem[]>(`/watchlist/history?limit=${limit}`);
-  return Array.isArray(data) ? data : [];
+export type WatchlistHistoryResponse = {
+  data: WatchlistHistoryItem[];
+  page: number;
+  limit: number;
+  total: number;
+};
+
+export type WatchlistHistoryParams = {
+  page?: number;
+  limit?: number;
+  list_type?: string;
+  source_list?: string;
+  status?: string;
+};
+
+export async function getWatchlistHistory(
+  params: WatchlistHistoryParams = {},
+): Promise<WatchlistHistoryResponse> {
+  const qs = new URLSearchParams();
+  qs.set('page', String(params.page ?? 1));
+  qs.set('limit', String(params.limit ?? 20));
+  if (params.list_type) qs.set('list_type', params.list_type);
+  if (params.source_list) qs.set('source_list', params.source_list);
+  if (params.status) qs.set('status', params.status);
+
+  const res = await apiFetch<WatchlistHistoryResponse>(`/watchlist/history?${qs.toString()}`);
+  return {
+    data: Array.isArray(res?.data) ? res.data : [],
+    page: Number(res?.page ?? params.page ?? 1),
+    limit: Number(res?.limit ?? params.limit ?? 20),
+    total: Number(res?.total ?? 0),
+  };
 }
 
 // ── Stored entries ─────────────────────────────────────────────────────────

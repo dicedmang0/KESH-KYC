@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { getWatchlistHistory } from "@/lib/watchlist";
 import { useAuth } from "@/app/providers";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -271,7 +272,7 @@ function ReportsPageInner() {
       const [sumRes, subRes, wlRes, txRes] = await Promise.allSettled([
         apiFetch<DashSummary>("/kyc/dashboard-summary"),
         apiFetch<SubApiRes>("/kyc/submissions?limit=200"),
-        apiFetch<WatchlistItem[]>("/watchlist/history?limit=50"),
+        getWatchlistHistory({ limit: 50 }),
         apiFetch<TransferRow[]>("/transfers?limit=200"),
       ]);
 
@@ -317,7 +318,7 @@ function ReportsPageInner() {
 
       // 3) Watchlist
       if (wlRes.status === "fulfilled") {
-        setWatchlist(Array.isArray(wlRes.value) ? wlRes.value : []);
+        setWatchlist(wlRes.value.data);
       } else {
         const msg =
           wlRes.reason instanceof Error

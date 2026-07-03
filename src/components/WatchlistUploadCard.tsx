@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiUpload } from '@/lib/api';
+import { Pagination } from '@/components/pagination';
 import {
   getWatchlistHistory,
   UPLOAD_STATUS_LABEL,
@@ -68,23 +69,28 @@ export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () =>
   const [err, setErr] = useState<string | null>(null);
 
   const [history, setHistory] = useState<WatchlistHistoryItem[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyLimit, setHistoryLimit] = useState(10);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  async function loadHistory() {
+  const loadHistory = useCallback(async () => {
     setLoadingHistory(true);
     try {
-      const data = await getWatchlistHistory(20);
-      setHistory(data);
+      const res = await getWatchlistHistory({ page: historyPage, limit: historyLimit });
+      setHistory(res.data);
+      setHistoryTotal(res.total);
     } catch (e: unknown) {
       console.error('Gagal load history:', e);
     } finally {
       setLoadingHistory(false);
     }
-  }
+  }, [historyPage, historyLimit]);
 
   useEffect(() => {
     loadHistory();
-  }, []);
+  }, [loadHistory, historyRefreshKey]);
 
   function buildResult(res: UploadResponse): UploadResult {
     const total = Number(res.total ?? 0);
@@ -145,7 +151,9 @@ export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () =>
       const built = buildResult(res);
       setResult(built);
       setFile(null);
-      await loadHistory(); // reload history setelah upload
+      // reset ke halaman 1 & reload riwayat setelah upload (SUCCESS/PARTIAL/FAILED)
+      setHistoryPage(1);
+      setHistoryRefreshKey((k) => k + 1);
       // beri tahu halaman agar refresh data entries (SUCCESS / PARTIAL)
       if (built.status !== 'FAILED') onUploaded?.();
     } catch (e: unknown) {
@@ -292,6 +300,16 @@ export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () =>
             </table>
           </div>
         )}
+
+        <Pagination
+          page={historyPage}
+          pageSize={historyLimit}
+          total={historyTotal}
+          onPageChange={setHistoryPage}
+          onPageSizeChange={(s) => { setHistoryLimit(s); setHistoryPage(1); }}
+          disabled={loadingHistory}
+          pageSizeOptions={[10]}
+        />
       </div>
     </div>
   );
