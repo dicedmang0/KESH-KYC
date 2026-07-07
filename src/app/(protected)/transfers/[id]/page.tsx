@@ -14,6 +14,7 @@ import {
   formatDateTime,
   type TransferDetail,
 } from '@/lib/transfers';
+import { evaluateTransfer } from '@/lib/monitoring';
 import { useAuth } from '@/app/providers';
 import { TransferStatusBadge, TransferResultBadge } from '@/components/transfer-badges';
 
@@ -109,6 +110,11 @@ export default function TransferDetailPage() {
   const [snap, setSnap] = useState<Record<string, unknown> | null>(null);
   const [snapLoading, setSnapLoading] = useState(false);
   const [snapErr, setSnapErr] = useState('');
+
+  // monitoring evaluation
+  const [evalLoading, setEvalLoading] = useState(false);
+  const [evalMsg, setEvalMsg] = useState('');
+  const [evalErr, setEvalErr] = useState('');
 
   async function reload() {
     if (!id) return;
@@ -241,6 +247,22 @@ export default function TransferDetailPage() {
   const canDecide = role === 'FinanceManager' && row?.status === 'SUBMITTED';
   const canSetResult = role === 'FinanceManager' && row?.status === 'APPROVED';
   const hasAnyAction = canSubmit || canDecide || canSetResult;
+  const canEvaluateMonitoring = role === 'ComplianceLead' || role === 'SystemAdmin';
+
+  async function doEvaluateMonitoring() {
+    if (!id) return;
+    setEvalLoading(true);
+    setEvalMsg('');
+    setEvalErr('');
+    try {
+      const res = await evaluateTransfer(id);
+      setEvalMsg(res?.message ?? 'Evaluasi monitoring berhasil dijalankan.');
+    } catch (e: unknown) {
+      setEvalErr(e instanceof Error ? e.message : 'Gagal menjalankan evaluasi monitoring');
+    } finally {
+      setEvalLoading(false);
+    }
+  }
 
   if (!id) {
     return (
@@ -561,6 +583,28 @@ export default function TransferDetailPage() {
             <p className="text-xs text-slate-500 italic">
               Tampilan hanya baca — tidak ada aksi yang tersedia untuk peran atau status Anda saat ini.
             </p>
+          )}
+
+          {/* Evaluasi Monitoring — ComplianceLead / SystemAdmin only */}
+          {canEvaluateMonitoring && (
+            <SectionCard title="Evaluasi Monitoring">
+              <p className="text-xs text-slate-500">
+                Jalankan evaluasi LTKT/LTKM secara manual untuk transfer ini.
+              </p>
+              <button
+                className="rounded-lg border px-3 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                disabled={evalLoading}
+                onClick={doEvaluateMonitoring}
+              >
+                {evalLoading ? 'Mengevaluasi…' : 'Evaluasi Monitoring'}
+              </button>
+              {evalErr && (
+                <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">{evalErr}</div>
+              )}
+              {evalMsg && (
+                <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700">{evalMsg}</div>
+              )}
+            </SectionCard>
           )}
 
           {/* SNAP Preview — available to all roles */}

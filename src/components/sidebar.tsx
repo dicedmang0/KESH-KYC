@@ -13,6 +13,7 @@ import {
   LogOut,
   ArrowLeftRight,
   ClipboardList,
+  AlertTriangle,
   X,
 } from 'lucide-react';
 import { useAuth } from '@/app/providers';
@@ -29,14 +30,20 @@ type Item = {
 };
 
 const allItems: Item[] = [
-  { href: '/dashboard', label: 'Dasbor',              icon: BarChart3     },
-  { href: '/users',     label: 'Manajemen Pengguna',  icon: Users         },
-  { href: '/kyc',       label: 'Verifikasi KYC/KYB',  icon: ShieldCheck   },
-  { href: '/transfers', label: 'Pencatatan Transfer',  icon: ArrowLeftRight},
-  { href: '/watchlist', label: 'Daftar Pengawasan',    icon: ClipboardList },
-  { href: '/reports',   label: 'Laporan',              icon: FileBarChart  },
-  { href: '/settings',  label: 'Pengaturan',           icon: Settings      },
+  { href: '/dashboard',  label: 'Dasbor',              icon: BarChart3      },
+  { href: '/users',      label: 'Manajemen Pengguna',  icon: Users          },
+  { href: '/kyc',        label: 'Verifikasi KYC/KYB',  icon: ShieldCheck    },
+  { href: '/transfers',  label: 'Pencatatan Transfer',  icon: ArrowLeftRight },
+  { href: '/watchlist',  label: 'Daftar Pengawasan',    icon: ClipboardList  },
+  { href: '/monitoring', label: 'Monitoring',           icon: AlertTriangle  },
+  { href: '/reports',    label: 'Laporan',              icon: FileBarChart   },
+  { href: '/settings',   label: 'Pengaturan',           icon: Settings       },
 ];
+
+// Director sees a different label for the monitoring menu entry.
+const ROLE_ITEM_LABEL: Record<string, Partial<Record<string, string>>> = {
+  Director: { '/monitoring': 'Monitoring Dirut' },
+};
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -45,11 +52,12 @@ export default function Sidebar() {
   const role = getRoleFromToken(token);
 
   const ROLE_MENU: Record<string, string[]> = {
-    SystemAdmin:        ['/dashboard', '/users', '/kyc', '/transfers', '/watchlist', '/reports', '/settings'],
+    SystemAdmin:        ['/dashboard', '/users', '/kyc', '/transfers', '/watchlist', '/monitoring', '/reports', '/settings'],
     BranchAdmin:        ['/dashboard', '/users', '/kyc', '/reports'],
-    ComplianceLead:     ['/dashboard', '/users', '/kyc', '/watchlist', '/reports'],
+    ComplianceLead:     ['/dashboard', '/users', '/kyc', '/watchlist', '/monitoring', '/reports'],
+    Director:           ['/dashboard', '/monitoring'],
     FrontDesk:          ['/dashboard', '/users', '/kyc', '/reports'],
-    Auditor:            ['/dashboard', '/users', '/kyc', '/reports'],
+    Auditor:            ['/dashboard', '/users', '/kyc', '/monitoring', '/reports'],
     FinanceStaff:       ['/dashboard', '/transfers', '/reports'],
     FinanceManager:     ['/dashboard', '/transfers', '/reports'],
   };
@@ -112,6 +120,7 @@ export default function Sidebar() {
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
           {visibleItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname?.startsWith(href + '/');
+            const displayLabel = ROLE_ITEM_LABEL[role ?? '']?.[href] ?? label;
             return (
               <Link
                 key={href}
@@ -125,7 +134,7 @@ export default function Sidebar() {
                 )}
               >
                 <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-white' : 'text-white/50')} />
-                <span>{label}</span>
+                <span>{displayLabel}</span>
               </Link>
             );
           })}

@@ -53,6 +53,20 @@ type Business = {
   cif_no?: string | null;
 };
 
+const RISK_FACTOR_LABELS: Record<string, string> = {
+  INDIVIDUAL_OCCUPATION_HIGH_RBA: 'Profil pekerjaan high risk berdasarkan RBA',
+  INDIVIDUAL_OCCUPATION_MEDIUM_RBA: 'Profil pekerjaan medium risk berdasarkan RBA',
+  INDIVIDUAL_OCCUPATION_LOW_RBA: 'Profil pekerjaan low risk berdasarkan RBA',
+  GEOGRAPHY_HIGH_RBA: 'Area geografis high risk berdasarkan RBA',
+  GEOGRAPHY_MEDIUM_RBA: 'Area geografis medium risk berdasarkan RBA',
+  GEOGRAPHY_LOW_RBA: 'Area geografis low risk berdasarkan RBA',
+};
+
+function getRiskFactorLabel(code?: string | null, backendLabel?: string | null): string {
+  if (code && RISK_FACTOR_LABELS[code]) return RISK_FACTOR_LABELS[code];
+  return backendLabel ?? code ?? '—';
+}
+
 type RiskFactor = {
   code?: string | null;
   label?: string | null;
@@ -60,6 +74,7 @@ type RiskFactor = {
   severity?: 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | string | null;
   source?: string | null;
   details?: string | null;
+  metadata?: { matched?: string | string[] | null; [key: string]: unknown } | null;
 };
 
 type Risk = {
@@ -665,9 +680,14 @@ export default function UserDetailPage() {
                     return (
                       <tr key={f.code ?? i} className="border-b last:border-0 align-top">
                         <td className="py-2 pr-3">
-                          <div className="font-medium text-slate-800">{f.label ?? f.code ?? '—'}</div>
-                          {f.code && f.label && (
+                          <div className="font-medium text-slate-800">{getRiskFactorLabel(f.code, f.label)}</div>
+                          {f.code && (
                             <div className="text-xs text-slate-400 font-mono">{f.code}</div>
+                          )}
+                          {f.metadata?.matched && (
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              Teridentifikasi: {Array.isArray(f.metadata.matched) ? f.metadata.matched.join(', ') : f.metadata.matched}
+                            </div>
                           )}
                         </td>
                         <td className="py-2 pr-3 font-medium text-slate-700">
