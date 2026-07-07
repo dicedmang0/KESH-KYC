@@ -31,6 +31,8 @@ type Person = {
   address_identity?: string | null;
   address_residential?: string | null;
   signature_uri?: string | null;
+  cif_no?: string | null;
+  cif_relationship_type?: string | null;
 };
 
 type Business = {
@@ -48,6 +50,7 @@ type Business = {
   phone?: string | null;
   industry_code?: string | null;
   business_activity?: string | null;
+  cif_no?: string | null;
 };
 
 type RiskFactor = {
@@ -102,6 +105,8 @@ type Party = {
   identity_number?: string | null;
   nationality?: string | null;
   dob?: string | null;
+  cif_no?: string | null;
+  cif_relationship_type?: string | null;
 };
 
 type ScreeningResult = {
@@ -119,6 +124,13 @@ type PrecheckResult = {
 
 function getErrMsg(e: unknown, fallback: string): string {
   return e instanceof Error ? e.message : fallback;
+}
+
+function getCifRelationshipLabel(value?: string | null): string {
+  if (value === 'OUR_CUSTOMER') return 'Our Customer';
+  if (value === 'BO') return 'Beneficial Owner';
+  if (value === 'WIC') return 'WIC';
+  return '—';
 }
 
 const STATUS_COLOR: Record<Status, string> = {
@@ -572,6 +584,8 @@ export default function UserDetailPage() {
           <Row label="Alamat Domisili" value={person?.address_residential} />
           <Row label="Pekerjaan" value={person?.occupation} />
           <Row label="Gender" value={person?.gender} />
+          <Row label="CIF Pengguna Jasa" value={person?.cif_no} />
+          <Row label="Parameter CIF" value={getCifRelationshipLabel(person?.cif_relationship_type)} />
         </div>
       ) : (
         <div className="rounded-xl border p-4 space-y-2">
@@ -590,6 +604,7 @@ export default function UserDetailPage() {
           <Row label="Provinsi" value={business?.province} />
           <Row label="Kode Pos" value={business?.postal_code} />
           <Row label="Telepon" value={business?.phone} />
+          <Row label="CIF Badan Hukum" value={business?.cif_no} />
         </div>
       )}
 
@@ -915,7 +930,9 @@ export default function UserDetailPage() {
                     <th className="py-1 pr-4">Nama</th>
                     <th className="py-1 pr-4">Role</th>
                     <th className="py-1 pr-4">Identitas</th>
-                    <th className="py-1">Kewarganegaraan</th>
+                    <th className="py-1 pr-4">Kewarganegaraan</th>
+                    <th className="py-1 pr-4">CIF</th>
+                    <th className="py-1">Parameter CIF</th>
                     {canSubmit && <th className="py-1" />}
                   </tr>
                 </thead>
@@ -929,7 +946,9 @@ export default function UserDetailPage() {
                           ? `${p.identity_type}: ${p.identity_number}`
                           : '—'}
                       </td>
-                      <td className="py-1.5">{p.nationality || '—'}</td>
+                      <td className="py-1.5 pr-4">{p.nationality || '—'}</td>
+                      <td className="py-1.5 pr-4 text-slate-600">{p.cif_no || '—'}</td>
+                      <td className="py-1.5">{getCifRelationshipLabel(p.cif_relationship_type)}</td>
                       {canSubmit && (
                         <td className="py-1.5 text-right">
                           <button

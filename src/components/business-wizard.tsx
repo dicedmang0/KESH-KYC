@@ -38,7 +38,16 @@ type PartyRow = {
   identity_number?: string | null;
   dob?: string | null;
   nationality?: string | null;
+  cif_no?: string | null;
+  cif_relationship_type?: string | null;
 };
+
+function getCifRelationshipLabel(value?: string | null): string {
+  if (value === 'OUR_CUSTOMER') return 'Our Customer';
+  if (value === 'BO') return 'Beneficial Owner';
+  if (value === 'WIC') return 'WIC';
+  return '—';
+}
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -656,6 +665,8 @@ export default function BusinessWizard() {
                     <TableHead>ID</TableHead>
                     <TableHead>Tgl Lahir</TableHead>
                     <TableHead>Kewarganegaraan</TableHead>
+                    <TableHead>CIF</TableHead>
+                    <TableHead>Parameter CIF</TableHead>
                     <TableHead className="text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -663,7 +674,7 @@ export default function BusinessWizard() {
                   {parties.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={8}
                         className="py-6 text-center text-sm text-slate-500"
                       >
                         Belum ada pihak.
@@ -685,6 +696,8 @@ export default function BusinessWizard() {
                             : "—"}
                         </TableCell>
                         <TableCell>{p.nationality || "—"}</TableCell>
+                        <TableCell>{p.cif_no || "—"}</TableCell>
+                        <TableCell>{getCifRelationshipLabel(p.cif_relationship_type)}</TableCell>
                         <TableCell className="text-right">
                           <button
                             type="button"
