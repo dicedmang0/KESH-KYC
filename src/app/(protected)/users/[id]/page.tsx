@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { apiFetch, apiUpload } from '@/lib/api';
+import { apiFetch, apiUpload, getRoleFromToken } from '@/lib/api';
+import EddForm, { DEFAULT_EDD, type EddFormData } from '@/components/EddForm';
 
 type Status = 'DRAFT' | 'SUBMITTED' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED';
 
@@ -12,6 +13,8 @@ type ApplicationDetail = {
   status: Status;
   created_at: string;
   submitted_at?: string | null;
+  edd_required?: boolean | null;
+  edd_completed?: boolean | null;
 };
 
 type Person = {
@@ -74,7 +77,13 @@ type Document = {
   created_at?: string | null;
 };
 
-// GET /applications/:id returns { application, person, business, documents, parties, risk }
+type EddRecord = {
+  data?: Partial<EddFormData> | null;
+  completed?: boolean | null;
+  [key: string]: unknown;
+};
+
+// GET /applications/:id returns { application, person, business, documents, parties, risk, edd }
 type DetailResponse = {
   application: ApplicationDetail;
   person?: Person | null;
@@ -82,6 +91,7 @@ type DetailResponse = {
   documents: Document[];
   parties: Party[];
   risk?: Risk | null;
+  edd?: EddRecord | null;
 };
 
 type Party = {
@@ -140,6 +150,11 @@ export default function UserDetailPage() {
   const [parties, setParties] = useState<Party[]>([]);
   const [screening, setScreening] = useState<ScreeningResult | null>(null);
   const [precheck, setPrecheck] = useState<PrecheckResult | null>(null);
+  const [eddData, setEddData] = useState<Partial<EddFormData>>({});
+  const [eddSaving, setEddSaving] = useState(false);
+  const [eddSaveError, setEddSaveError] = useState('');
+  const [eddSaveMsg, setEddSaveMsg] = useState('');
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -186,6 +201,14 @@ export default function UserDetailPage() {
       setDocs(resp.documents ?? []);
       setParties(resp.parties ?? []);
 
+      // Populate EDD from main response or dedicated endpoint
+      if (resp.edd?.data) {
+        setEddData(resp.edd.data);
+      } else if (appData.edd_required || resp.edd) {
+        const eddResp = await apiFetch<EddRecord>(`/applications/${id}/edd`).catch(() => null);
+        if (eddResp?.data) setEddData(eddResp.data);
+      }
+
       // Only fetch screening after submission — DRAFT hasn't run screening yet
       if (appData.status !== 'DRAFT') {
         const screeningData = await apiFetch<ScreeningResult>(`/applications/${id}/screening`).catch(() => null);
@@ -202,6 +225,30 @@ export default function UserDetailPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    setUserRole(getRoleFromToken(token));
+  }, []);
+
+  async function saveEdd(formData: EddFormData, complete: boolean) {
+    if (!id) return;
+    setEddSaving(true);
+    setEddSaveError('');
+    setEddSaveMsg('');
+    try {
+      await apiFetch(`/applications/${id}/edd`, {
+        method: 'PATCH',
+        body: { ...formData, complete },
+      });
+      setEddSaveMsg(complete ? 'EDD berhasil dilengkapi.' : 'Draft EDD berhasil disimpan.');
+      await load();
+    } catch (e: unknown) {
+      setEddSaveError(getErrMsg(e, complete ? 'Simpan EDD gagal' : 'Simpan draft EDD gagal'));
+    } finally {
+      setEddSaving(false);
+    }
+  }
 
   async function runPrecheck() {
     if (!id) return;
@@ -362,6 +409,15 @@ export default function UserDetailPage() {
   const canDecide = app.status === 'SUBMITTED' || app.status === 'IN_REVIEW';
   const displayName = app.type === 'INDIVIDUAL' ? person?.full_name : business?.legal_name;
 
+  const isHighRisk = risk?.risk_level === 'HIGH' || app.edd_required === true;
+  const eddRequired = app.edd_required ?? false;
+  const eddCompleted = app.edd_completed ?? false;
+  const approveBlocked = eddRequired && !eddCompleted;
+
+  const canEditEdd = ['SystemAdmin', 'ComplianceLead'].includes(userRole ?? '');
+  const canViewEdd = ['SystemAdmin', 'ComplianceLead', 'Auditor'].includes(userRole ?? '');
+  const showEddSection = isHighRisk || eddRequired || Object.keys(eddData).length > 0;
+
   return (
     <div className="space-y-5 p-6 max-w-3xl">
       {/* Header */}
@@ -388,6 +444,18 @@ export default function UserDetailPage() {
           Kembali
         </button>
       </div>
+
+      {/* HIGH RISK / EDD banner */}
+      {isHighRisk && !eddCompleted && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold">Application ini tergolong HIGH RISK dan memerlukan Enhanced Due Diligence (EDD) sebelum dapat disetujui.</p>
+        </div>
+      )}
+      {eddCompleted && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+          EDD lengkap
+        </div>
+      )}
 
       {/* Action feedback */}
       {actionMsg && (
@@ -421,13 +489,18 @@ export default function UserDetailPage() {
 
           {canDecide && (
             <>
-              <button
-                onClick={approve}
-                disabled={actionLoading}
-                className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
-              >
-                Setujui
-              </button>
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={approve}
+                  disabled={actionLoading || approveBlocked}
+                  className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Setujui
+                </button>
+                {approveBlocked && (
+                  <p className="text-xs text-amber-700">Approve hanya bisa dilakukan setelah EDD selesai.</p>
+                )}
+              </div>
               <button
                 onClick={() => { setShowRejectInput(true); setActionErr(''); }}
                 disabled={actionLoading}
@@ -873,6 +946,37 @@ export default function UserDetailPage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* EDD — Enhanced Due Diligence */}
+      {showEddSection && canViewEdd && (
+        <div className="rounded-xl border border-red-200 bg-red-50/30 p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Enhanced Due Diligence (EDD)</p>
+              {eddCompleted && (
+                <span className="mt-1 inline-block rounded bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">EDD Lengkap</span>
+              )}
+            </div>
+            {!canEditEdd && (
+              <span className="text-xs text-slate-500 italic">Hanya dapat dilihat</span>
+            )}
+          </div>
+
+          {eddSaveMsg && (
+            <div className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{eddSaveMsg}</div>
+          )}
+
+          <EddForm
+            initialData={{ ...DEFAULT_EDD, ...eddData }}
+            canEdit={canEditEdd}
+            eddCompleted={eddCompleted}
+            saving={eddSaving}
+            saveError={eddSaveError}
+            onSaveDraft={(data) => saveEdd(data, false)}
+            onComplete={(data) => saveEdd(data, true)}
+          />
         </div>
       )}
 
