@@ -48,7 +48,8 @@ function CaseTypeBadge({ type }: { type?: string | null }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const ALLOWED_ROLES = new Set(['SystemAdmin', 'ComplianceLead', 'Director', 'Auditor']);
+// Director is intentionally excluded — backend returns 403 for the reports endpoint.
+const ALLOWED_ROLES = new Set(['SystemAdmin', 'ComplianceLead', 'Auditor']);
 
 export default function MonitoringReportsPage() {
   const { token } = useAuth();
@@ -65,8 +66,10 @@ export default function MonitoringReportsPage() {
   const [error, setError] = useState('');
 
   const resetPage = () => setPage(1);
+  const allowed = ALLOWED_ROLES.has(role ?? '');
 
   useEffect(() => {
+    if (!allowed) return;
     let alive = true;
     setLoading(true);
     setError('');
@@ -89,9 +92,9 @@ export default function MonitoringReportsPage() {
       }
     })();
     return () => { alive = false; };
-  }, [page, limit, reportStatus, reportType]);
+  }, [page, limit, reportStatus, reportType, allowed]);
 
-  if (!ALLOWED_ROLES.has(role ?? '')) {
+  if (!allowed) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
         Anda tidak memiliki akses ke halaman ini.

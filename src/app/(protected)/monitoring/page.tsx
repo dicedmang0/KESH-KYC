@@ -87,6 +87,7 @@ const ALLOWED_ROLES = new Set(['SystemAdmin', 'ComplianceLead', 'Director', 'Aud
 export default function MonitoringPage() {
   const { token } = useAuth();
   const role = getRoleFromToken(token);
+  const isDirector = role === 'Director';
 
   // filters
   const [q, setQ] = useState('');
@@ -109,6 +110,16 @@ export default function MonitoringPage() {
 
   // fetch summary once on mount
   useEffect(() => {
+    // Director only ever sees PENDING_DIRECTOR_REVIEW cases — one card is enough.
+    if (isDirector) {
+      getMonitoringCases({ limit: 1, page: 1, status: 'PENDING_DIRECTOR_REVIEW' })
+        .then((dir) => {
+          setSummary({ total: 0, compliance: 0, director: dir.total, ready: 0, reported: 0 });
+        })
+        .catch(() => {})
+        .finally(() => setSummaryLoading(false));
+      return;
+    }
     Promise.all([
       getMonitoringCases({ limit: 1, page: 1 }),
       getMonitoringCases({ limit: 1, page: 1, status: 'UNDER_COMPLIANCE_REVIEW' }),
@@ -127,7 +138,7 @@ export default function MonitoringPage() {
       })
       .catch(() => {})
       .finally(() => setSummaryLoading(false));
-  }, []);
+  }, [isDirector]);
 
   useEffect(() => {
     let alive = true;
@@ -139,7 +150,8 @@ export default function MonitoringPage() {
           page, limit,
           q: q || undefined,
           case_type: caseType || undefined,
-          status: status || undefined,
+          // Director is scoped to PENDING_DIRECTOR_REVIEW (also enforced by backend).
+          status: isDirector ? 'PENDING_DIRECTOR_REVIEW' : (status || undefined),
           report_type: reportType || undefined,
           due_before: dueBefore || undefined,
         });
@@ -154,7 +166,7 @@ export default function MonitoringPage() {
       }
     })();
     return () => { alive = false; };
-  }, [page, limit, q, caseType, status, reportType, dueBefore]);
+  }, [page, limit, q, caseType, status, reportType, dueBefore, isDirector]);
 
   const resetPage = () => setPage(1);
 
@@ -171,25 +183,35 @@ export default function MonitoringPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Transaction Monitoring</h1>
-          <p className="text-sm text-slate-500">Pemantauan LTKT dan LTKM</p>
+          <h1 className="text-xl font-semibold">{isDirector ? 'Monitoring Dirut' : 'Transaction Monitoring'}</h1>
+          <p className="text-sm text-slate-500">
+            {isDirector ? 'Case yang menunggu review Direktur Utama' : 'Pemantauan LTKT dan LTKM'}
+          </p>
         </div>
-        <Link
-          href="/monitoring/reports"
-          className="rounded-lg border px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
-        >
-          Antrean Laporan →
-        </Link>
+        {!isDirector && (
+          <Link
+            href="/monitoring/reports"
+            className="rounded-lg border px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            Antrean Laporan →
+          </Link>
+        )}
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <SummaryCard label="Total Case" value={summary.total} loading={summaryLoading} />
-        <SummaryCard label="Menunggu Compliance" value={summary.compliance} loading={summaryLoading} />
-        <SummaryCard label="Menunggu Dirut" value={summary.director} loading={summaryLoading} />
-        <SummaryCard label="Siap Lapor" value={summary.ready} loading={summaryLoading} />
-        <SummaryCard label="Terlapor" value={summary.reported} loading={summaryLoading} />
-      </div>
+      {isDirector ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <SummaryCard label="Menunggu Review Dirut" value={summary.director} loading={summaryLoading} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <SummaryCard label="Total Case" value={summary.total} loading={summaryLoading} />
+          <SummaryCard label="Menunggu Compliance" value={summary.compliance} loading={summaryLoading} />
+          <SummaryCard label="Menunggu Dirut" value={summary.director} loading={summaryLoading} />
+          <SummaryCard label="Siap Lapor" value={summary.ready} loading={summaryLoading} />
+          <SummaryCard label="Terlapor" value={summary.reported} loading={summaryLoading} />
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-2">
@@ -216,19 +238,28 @@ export default function MonitoringPage() {
             <option value="BOTH">LTKT + LTKM</option>
           </select>
         </div>
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Status</label>
-          <select
-            value={status}
-            onChange={(e) => { setStatus(e.target.value); resetPage(); }}
-            className="rounded-lg border px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
-          >
-            <option value="">Semua Status</option>
-            {Object.entries(CASE_STATUS_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
-          </select>
-        </div>
+        {isDirector ? (
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Status</label>
+            <div className="rounded-lg border bg-slate-50 px-3 py-2 text-sm text-slate-500">
+              Menunggu Review Dirut
+            </div>
+          </div>
+        ) : (
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Status</label>
+            <select
+              value={status}
+              onChange={(e) => { setStatus(e.target.value); resetPage(); }}
+              className="rounded-lg border px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
+            >
+              <option value="">Semua Status</option>
+              {Object.entries(CASE_STATUS_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-xs text-slate-500 mb-1">Report Type</label>
           <select

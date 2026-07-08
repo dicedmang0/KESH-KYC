@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/app/providers';
 import { getRoleFromToken } from '@/lib/api';
 import {
@@ -18,6 +18,9 @@ import {
   formatDateTime,
   formatDate,
   formatReportStatus,
+  formatComplianceAction,
+  formatComplianceReviewer,
+  getComplianceReviewSummary,
   COMPLIANCE_ACTION_LABELS,
   DIRECTOR_DECISION_LABELS,
   REPORT_STATUS_LABELS,
@@ -107,6 +110,12 @@ const COMPLIANCE_ACTIONABLE_STATUSES = new Set([
   'NEED_CLARIFICATION',
 ]);
 
+// Actions that forward the case to the Director require compliance notes (backend-enforced).
+const COMPLIANCE_NOTES_REQUIRED_ACTIONS = new Set<ComplianceReviewAction>([
+  'ESCALATE_TO_DIRECTOR',
+  'RECOMMEND_REPORT',
+]);
+
 // Report update endpoint is only valid for these statuses (backend workflow:
 // Director APPROVED transitions case.status straight to READY_TO_REPORT).
 const REPORT_EDITABLE_STATUSES = new Set([
@@ -120,11 +129,13 @@ const ALLOWED_ROLES = new Set(['SystemAdmin', 'ComplianceLead', 'Director', 'Aud
 
 export default function MonitoringDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const rawId = params?.id;
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
 
   const { token } = useAuth();
   const role = getRoleFromToken(token);
+  const isDirector = role === 'Director';
 
   const [detail, setDetail] = useState<MonitoringCaseDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,6 +152,7 @@ export default function MonitoringDetailPage() {
   const [dirNotes, setDirNotes] = useState('');
   const [dirSubmitting, setDirSubmitting] = useState(false);
   const [dirError, setDirError] = useState('');
+  const [dirSuccess, setDirSuccess] = useState('');
 
   // Report tracking form
   const [repStatus, setRepStatus] = useState<MonitoringReportStatus>('READY_TO_SUBMIT');
@@ -178,6 +190,11 @@ export default function MonitoringDetailPage() {
 
   async function submitComplianceReview() {
     if (!id) return;
+    // ESCALATE_TO_DIRECTOR / RECOMMEND_REPORT must carry notes — validate before calling API.
+    if (COMPLIANCE_NOTES_REQUIRED_ACTIONS.has(compAction) && !compNotes.trim()) {
+      setCompError('Catatan compliance wajib diisi sebelum diteruskan ke Dirut.');
+      return;
+    }
     setCompSubmitting(true);
     setCompError('');
     try {
@@ -197,8 +214,14 @@ export default function MonitoringDetailPage() {
     setDirError('');
     try {
       const updated = await directorReview(id, { decision: dirDecision, notes: dirNotes });
-      setDetail(updated);
       setDirNotes('');
+      if (isDirector) {
+        // Case leaves PENDING_DIRECTOR_REVIEW → Director may no longer view it. Redirect back.
+        setDirSuccess('Keputusan tersimpan. Mengalihkan ke daftar monitoring…');
+        setTimeout(() => router.push('/monitoring'), 1200);
+      } else {
+        setDetail(updated);
+      }
     } catch (e: unknown) {
       setDirError(e instanceof Error ? e.message : 'Gagal menyimpan keputusan');
     } finally {
@@ -238,10 +261,15 @@ export default function MonitoringDetailPage() {
   }
 
   if (error) {
+    const forbidden = /403|forbidden/i.test(error);
+    // Director may only open PENDING_DIRECTOR_REVIEW cases; a 403 means it already moved on.
+    const message = isDirector && forbidden
+      ? 'Case ini sudah tidak menunggu review Dirut.'
+      : error;
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 p-6">
-        <p className="text-sm text-red-700">{error}</p>
-        <Link href="/monitoring" className="mt-3 inline-block text-sm text-kesh-700 hover:underline">← Kembali</Link>
+        <p className="text-sm text-red-700">{message}</p>
+        <Link href="/monitoring" className="mt-3 inline-block text-sm text-kesh-700 hover:underline">← Kembali ke Monitoring</Link>
       </div>
     );
   }
@@ -252,6 +280,10 @@ export default function MonitoringDetailPage() {
   const directorActionable = detail.status === 'PENDING_DIRECTOR_REVIEW';
   const reportEditable = REPORT_EDITABLE_STATUSES.has(detail.status ?? '');
   const availableCompActions = getComplianceActions(detail.case_type);
+  const compNotesRequired = COMPLIANCE_NOTES_REQUIRED_ACTIONS.has(compAction);
+
+  // Compliance review summary — shared helper reads nested object or flat columns.
+  const complianceSummary = getComplianceReviewSummary(detail);
 
   return (
     <div className="space-y-4">
@@ -396,25 +428,18 @@ export default function MonitoringDetailPage() {
 
       {/* ── 4. Compliance Review ────────────────────────────────────────── */}
       <Section title="Review Compliance">
-        {/* Show last recorded review */}
-        {detail.compliance_review?.action && (
-          <div className="rounded-lg border bg-slate-50 p-3 space-y-1 text-sm">
+        {/* Show last recorded review (nested object or flat columns) */}
+        {complianceSummary.hasAny && (
+          <div className="rounded-lg border bg-slate-50 p-3 space-y-2 text-sm">
             <p className="text-xs text-slate-500 font-medium">Review Terakhir</p>
-            <p>
-              <span className="text-slate-600">Aksi: </span>
-              <span className="font-medium text-slate-800">
-                {COMPLIANCE_ACTION_LABELS[detail.compliance_review.action] ?? detail.compliance_review.action}
-              </span>
-            </p>
-            {detail.compliance_review.notes && (
-              <p><span className="text-slate-600">Catatan: </span>{detail.compliance_review.notes}</p>
-            )}
-            {detail.compliance_review.reviewed_by && (
-              <p className="text-xs text-slate-400">
-                oleh {detail.compliance_review.reviewed_by}
-                {detail.compliance_review.reviewed_at && ` · ${formatDateTime(detail.compliance_review.reviewed_at)}`}
-              </p>
-            )}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Aksi Compliance" value={formatComplianceAction(complianceSummary.action)} />
+              <Field label="Direview Pada" value={complianceSummary.reviewedAt ? formatDateTime(complianceSummary.reviewedAt) : '-'} />
+              <Field label="Direview Oleh" value={formatComplianceReviewer(complianceSummary.reviewedBy)} />
+              <div className="sm:col-span-2">
+                <Field label="Catatan Compliance" value={complianceSummary.notes ?? '-'} />
+              </div>
+            </div>
           </div>
         )}
 
@@ -437,7 +462,9 @@ export default function MonitoringDetailPage() {
               </div>
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Catatan <span className="text-red-500">*</span></label>
+              <label className="block text-xs text-slate-500 mb-1">
+                Catatan {compNotesRequired && <span className="text-red-500">*</span>}
+              </label>
               <textarea
                 value={compNotes}
                 onChange={(e) => setCompNotes(e.target.value)}
@@ -445,12 +472,17 @@ export default function MonitoringDetailPage() {
                 placeholder="Catatan review compliance…"
                 className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-kesh-700 focus:ring-1 focus:ring-kesh-700/20"
               />
+              {compNotesRequired && !compNotes.trim() && (
+                <p className="mt-1 text-xs text-amber-600">
+                  Catatan compliance wajib diisi sebelum diteruskan ke Dirut.
+                </p>
+              )}
             </div>
             {compError && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{compError}</div>
             )}
             <button
-              disabled={compSubmitting || !compNotes.trim()}
+              disabled={compSubmitting || (compNotesRequired && !compNotes.trim())}
               onClick={submitComplianceReview}
               className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-50 transition-colors"
             >
@@ -460,7 +492,7 @@ export default function MonitoringDetailPage() {
         ) : canComplianceReview && !complianceActionable ? (
           <p className="text-xs text-slate-400 italic">Status saat ini tidak memerlukan review compliance.</p>
         ) : (
-          !detail.compliance_review?.action && (
+          !complianceSummary.hasAny && (
             <p className="text-xs text-slate-400 italic">Belum ada review compliance.</p>
           )
         )}
@@ -519,8 +551,11 @@ export default function MonitoringDetailPage() {
             {dirError && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{dirError}</div>
             )}
+            {dirSuccess && (
+              <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700">{dirSuccess}</div>
+            )}
             <button
-              disabled={dirSubmitting || !dirNotes.trim()}
+              disabled={dirSubmitting || !dirNotes.trim() || !!dirSuccess}
               onClick={submitDirectorReview}
               className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-50 transition-colors"
             >
@@ -537,7 +572,8 @@ export default function MonitoringDetailPage() {
       </Section>
 
       {/* ── 6. Report Tracking ──────────────────────────────────────────── */}
-      {(reportEditable || detail.report_status) && (
+      {/* Director has no report-tracking responsibility — hide entirely. */}
+      {!isDirector && (reportEditable || detail.report_status) && (
         <Section title="Tracking Laporan Regulasi">
           {canEditReport && reportEditable ? (
             <div className="space-y-3">

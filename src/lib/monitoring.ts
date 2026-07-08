@@ -91,10 +91,24 @@ export type DirectorReviewEntry = {
   reviewed_at?: string | null;
 };
 
+export type ComplianceReviewSummary = {
+  action: string | null;
+  notes: string | null;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  hasAny: boolean;
+};
+
 export type MonitoringCaseDetail = MonitoringCase & {
   triggers?: MonitoringTrigger[] | null;
   compliance_review?: ComplianceReviewEntry | null;
   director_review?: DirectorReviewEntry | null;
+  // Backend may also surface compliance review as flat columns — kept optional
+  // so the UI can read from either the nested object or these top-level fields.
+  compliance_action?: string | null;
+  compliance_notes?: string | null;
+  compliance_reviewed_by?: string | null;
+  compliance_reviewed_at?: string | null;
   report_status?: MonitoringReportStatus | null;
   report_reference_no?: string | null;
   report_file_uri?: string | null;
@@ -270,7 +284,7 @@ export const TRIGGER_LABELS: Record<string, string> = {
 };
 
 export const COMPLIANCE_ACTION_LABELS: Record<string, string> = {
-  CLOSE_FALSE_POSITIVE: 'Tutup – False Positive',
+  CLOSE_FALSE_POSITIVE: 'Tutup sebagai False Positive',
   NEED_CLARIFICATION: 'Butuh Klarifikasi',
   ESCALATE_TO_DIRECTOR: 'Eskalasi ke Direktur Utama',
   RECOMMEND_REPORT: 'Rekomendasikan Laporan',
@@ -285,6 +299,36 @@ export const DIRECTOR_DECISION_LABELS: Record<string, string> = {
 
 export function formatCaseStatus(status?: string | null): string {
   return (status && CASE_STATUS_LABELS[status]) || status || '—';
+}
+
+export function formatComplianceAction(action?: string | null): string {
+  return (action && COMPLIANCE_ACTION_LABELS[action]) || action || '-';
+}
+
+/** Backend may only send a numeric user id — label it so it isn't mistaken for something else. */
+export function formatComplianceReviewer(reviewedBy?: string | null): string {
+  if (reviewedBy === null || reviewedBy === undefined || reviewedBy === '') return '-';
+  const s = String(reviewedBy);
+  return /^\d+$/.test(s) ? `User ID: ${s}` : s;
+}
+
+/**
+ * Reads the compliance review from either the nested `compliance_review` object
+ * or the flat `compliance_*` columns. Shared by the Review Compliance and
+ * Review Direktur Utama sections so both stay in sync.
+ */
+export function getComplianceReviewSummary(caseDetail: MonitoringCaseDetail): ComplianceReviewSummary {
+  const action = caseDetail.compliance_review?.action ?? caseDetail.compliance_action ?? null;
+  const notes = caseDetail.compliance_review?.notes ?? caseDetail.compliance_notes ?? null;
+  const reviewedAt = caseDetail.compliance_review?.reviewed_at ?? caseDetail.compliance_reviewed_at ?? null;
+  const reviewedBy = caseDetail.compliance_review?.reviewed_by ?? caseDetail.compliance_reviewed_by ?? null;
+  return {
+    action,
+    notes,
+    reviewedAt,
+    reviewedBy,
+    hasAny: !!(action || notes || reviewedAt || reviewedBy),
+  };
 }
 
 export function formatReportStatus(status?: string | null): string {
