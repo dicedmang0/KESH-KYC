@@ -373,6 +373,30 @@ export default function UserDetailPage() {
     }
   }
 
+  async function viewDocument(docId: number | string) {
+    if (!id) return;
+    setDocErr('');
+    // Open a placeholder tab synchronously so it isn't blocked as a popup
+    // once we navigate it after the async signed-URL fetch resolves.
+    const win = window.open('', '_blank');
+    if (win) win.opener = null;
+    try {
+      const resp = await apiFetch<{ signed_url?: string; expires_in?: number }>(
+        `/applications/${id}/documents/${docId}/url`
+      );
+      if (resp?.signed_url) {
+        if (win) win.location.href = resp.signed_url;
+        else window.open(resp.signed_url, '_blank', 'noopener,noreferrer');
+      } else {
+        win?.close();
+        setDocErr('URL dokumen tidak tersedia');
+      }
+    } catch (e: unknown) {
+      win?.close();
+      setDocErr(getErrMsg(e, 'Gagal membuka dokumen'));
+    }
+  }
+
   async function deleteDocument(docId: number | string) {
     if (!id) return;
     setDocErr('');
@@ -567,8 +591,15 @@ export default function UserDetailPage() {
           </div>
         )}
 
+        {/* Approved application notice */}
+        {app.status === 'APPROVED' && (
+          <div className="rounded-md p-3 text-sm bg-emerald-50 text-emerald-800">
+            <p className="font-medium">Aplikasi telah disetujui.</p>
+          </div>
+        )}
+
         {/* Precheck result */}
-        {precheck && (
+        {precheck && app.status !== 'APPROVED' && (
           <div className={`rounded-md p-3 text-sm ${precheck.ready === false ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800'}`}>
             {precheck.ready === false ? (
               <>
@@ -743,26 +774,41 @@ export default function UserDetailPage() {
         ) : (
           <ul className="space-y-1.5">
             {docs.map((d) => {
-              const fileUrl = d.file_uri ?? d.file_url;
               const filename = d.extracted_json?.original_name ?? d.original_name;
+              // Documents are not separately reviewed — the label only reflects
+              // whether the file was successfully uploaded.
+              const uploaded = !!(d.file_uri ?? d.file_url);
+              const statusLabel =
+                d.status === 'UPLOADED' ? 'Berhasil Terupload' :
+                d.status === 'FAILED' ? 'Gagal Upload' :
+                d.status === 'REJECTED' ? 'Perlu Upload Ulang' :
+                d.status === 'APPROVED' ? 'Berhasil Terupload' :
+                d.status === 'PENDING' ? (uploaded ? 'Berhasil Terupload' : 'Belum Terupload') :
+                d.status ? d.status :
+                (uploaded ? 'Berhasil Terupload' : 'Belum Terupload');
+              const failedLike = d.status === 'FAILED' || d.status === 'REJECTED';
+              const uploadedLike =
+                d.status === 'UPLOADED' || d.status === 'APPROVED' ||
+                (d.status === 'PENDING' && uploaded) ||
+                (!d.status && uploaded);
               const statusCls =
-                d.status === 'VERIFIED' ? 'bg-emerald-100 text-emerald-700' :
-                d.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
+                uploadedLike ? 'bg-emerald-100 text-emerald-700' :
+                failedLike ? 'bg-red-100 text-red-700' :
                 'bg-slate-100 text-slate-600';
               return (
                 <li key={String(d.id)} className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-medium text-slate-700">{d.doc_type}</span>
-                  {d.status && (
-                    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>
-                      {d.status}
-                    </span>
-                  )}
+                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>
+                    {statusLabel}
+                  </span>
                   {filename && <span className="text-slate-500">— {filename}</span>}
-                  {fileUrl && (
-                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-kesh-700 underline text-xs hover:text-kesh-600">
-                      Lihat
-                    </a>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => viewDocument(d.id)}
+                    className="text-kesh-700 underline text-xs hover:text-kesh-600"
+                  >
+                    Lihat
+                  </button>
                   {canSubmit && (
                     <button
                       onClick={() => deleteDocument(d.id)}
