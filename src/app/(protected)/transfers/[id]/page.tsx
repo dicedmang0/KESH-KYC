@@ -15,6 +15,7 @@ import {
   type TransferDetail,
 } from '@/lib/transfers';
 import { evaluateTransfer } from '@/lib/monitoring';
+import { formatCif } from '@/lib/utils';
 import { useAuth } from '@/app/providers';
 import { TransferStatusBadge, TransferResultBadge } from '@/components/transfer-badges';
 
@@ -324,12 +325,19 @@ export default function TransferDetailPage() {
           {/* 2. Sender / Source */}
           <SectionCard title="Pengirim / Sumber">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <Field label="ID Aplikasi Pengirim" value={row.sender_application_id} />
+              <Field label="Nama Pengirim" value={row.sender_name} />
+              <Field label="CIF Pengirim" value={row.sender_cif_no ? formatCif(row.sender_cif_no) : undefined} />
+              <Field label="Tipe Pengirim" value={row.sender_type} />
+              <Field label="Sumber Dana" value={row.source_of_funds} />
+              <Field label="Tujuan Transaksi" value={row.transaction_purpose} />
               <Field label="Nomor Rekening Sumber" value={row.source_account_no} />
               <Field label="Nama Rekening Sumber" value={row.source_account_name} />
               <Field label="Kode Bank Sumber" value={row.source_bank_code} />
               <Field label="Nama Bank Sumber" value={row.source_bank_name} />
             </div>
+            {row.sender_application_id != null && (
+              <p className="text-xs text-neutral-400">Application ID #{row.sender_application_id}</p>
+            )}
           </SectionCard>
 
           {/* 3. Beneficiary */}

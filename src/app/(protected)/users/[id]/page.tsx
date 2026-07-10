@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { apiFetch, apiUpload, getRoleFromToken } from '@/lib/api';
+import { formatCif } from '@/lib/utils';
 import EddForm, { DEFAULT_EDD, type EddFormData } from '@/components/EddForm';
 
 type Status = 'DRAFT' | 'SUBMITTED' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED';
@@ -630,7 +631,7 @@ export default function UserDetailPage() {
           <Row label="Alamat Domisili" value={person?.address_residential} />
           <Row label="Pekerjaan" value={person?.occupation} />
           <Row label="Gender" value={person?.gender} />
-          <Row label="CIF Pengguna Jasa" value={person?.cif_no} />
+          <Row label="CIF Pengguna Jasa" value={formatCif(person?.cif_no)} />
           <Row label="Parameter CIF" value={getCifRelationshipLabel(person?.cif_relationship_type)} />
         </div>
       ) : (
@@ -650,7 +651,7 @@ export default function UserDetailPage() {
           <Row label="Provinsi" value={business?.province} />
           <Row label="Kode Pos" value={business?.postal_code} />
           <Row label="Telepon" value={business?.phone} />
-          <Row label="CIF Badan Hukum" value={business?.cif_no} />
+          <Row label="CIF Badan Hukum" value={formatCif(business?.cif_no)} />
         </div>
       )}
 
@@ -1013,7 +1014,7 @@ export default function UserDetailPage() {
                           : '—'}
                       </td>
                       <td className="py-1.5 pr-4">{p.nationality || '—'}</td>
-                      <td className="py-1.5 pr-4 text-slate-600">{p.cif_no || '—'}</td>
+                      <td className="py-1.5 pr-4 text-slate-600">{formatCif(p.cif_no)}</td>
                       <td className="py-1.5">{getCifRelationshipLabel(p.cif_relationship_type)}</td>
                       {canSubmit && (
                         <td className="py-1.5 text-right">

@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { getWatchlistHistory } from "@/lib/watchlist";
+import { formatCif } from "@/lib/utils";
 import { useAuth } from "@/app/providers";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,6 +68,9 @@ type WatchlistItem = {
 type TransferRow = {
   id?: number | string | null;
   sender_application_id?: number | string | null;
+  sender_name?: string | null;
+  sender_cif_no?: string | null;
+  sender_type?: string | null;
   amount?: string | number | null;
   currency?: string | null;
   status?: string | null;
@@ -824,7 +828,7 @@ function ReportsPageInner() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>ID</TableHead>
-                      <TableHead>ID Aplikasi Pengirim</TableHead>
+                      <TableHead>Pengirim</TableHead>
                       <TableHead>Nominal</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Dibuat Oleh</TableHead>
@@ -841,9 +845,13 @@ function ReportsPageInner() {
                             {id ? `#${id}` : "-"}
                           </TableCell>
                           <TableCell className="text-sm">
-                            {row.sender_application_id != null
-                              ? String(row.sender_application_id)
-                              : "-"}
+                            <div className="font-medium">{row.sender_name ?? "-"}</div>
+                            {row.sender_cif_no && (
+                              <div className="font-mono text-xs text-slate-500">{formatCif(row.sender_cif_no)}</div>
+                            )}
+                            {row.sender_application_id != null && (
+                              <div className="text-xs text-slate-400">App #{row.sender_application_id}</div>
+                            )}
                           </TableCell>
                           <TableCell className="text-sm font-medium">
                             {fmtIDR(row.amount)}

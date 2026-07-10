@@ -21,6 +21,10 @@ export type TransferListRow = {
   partner_reference_no: string | null;
   reference_no: string | null;
   sender_application_id: number | string | null;
+  // Enriched sender fields (backend now joins the sender application/CIF).
+  sender_name?: string | null;
+  sender_cif_no?: string | null;
+  sender_type?: string | null;
   amount: string; // pg NUMERIC → string
   currency: string;
   amount_value: string | null;
@@ -45,6 +49,11 @@ export type TransferListRow = {
 export type TransferDetail = TransferListRow & {
   branch_id?: number | null;
   description?: string | null;
+
+  // Transfer metadata (migration 0030)
+  source_of_funds?: string | null;
+  transaction_purpose?: string | null;
+
   requested_transfer_at?: string | null;
   attachment_uri?: string | null;
 
@@ -107,6 +116,10 @@ export type CreateTransferBody = {
   requestedTransferAt?: string;
   sender_application_id: number;
 
+  // Transfer metadata (migration 0030)
+  source_of_funds?: string;
+  transaction_purpose?: string;
+
   // SNAP / transfer metadata (optional, snake_case → maps 1:1 to DB)
   partner_reference_no?: string;
   source_account_no?: string;
@@ -145,6 +158,69 @@ export type SetTransferResultBody = {
   failed_reason?: string;
   provider_response?: Record<string, unknown>;
 };
+
+// ── Sender search / bank list ────────────────────────────────────────────────
+
+/** Amount limits enforced by the backend (validated client-side too). */
+export const TRANSFER_MIN_AMOUNT = 10000;
+export const TRANSFER_MAX_AMOUNT = 500000000;
+
+export type SenderSearchItem = {
+  application_id: number | string;
+  display_name?: string | null;
+  cif_no?: string | null;
+  application_type?: string | null;
+  status?: string | null;
+};
+
+export type TransferBank = {
+  code?: string | null;
+  name?: string | null;
+};
+
+/** GET /transfers/senders/search — searchable sender picker source. */
+export async function searchSenders(q: string, page = 1, limit = 10): Promise<SenderSearchItem[]> {
+  const query = buildTransferQuery({ q, page, limit });
+  const res = await apiFetch<
+    SenderSearchItem[] | { data?: SenderSearchItem[]; items?: SenderSearchItem[] }
+  >(`/transfers/senders/search${query}`);
+  if (Array.isArray(res)) return res;
+  return res.data ?? res.items ?? [];
+}
+
+/** GET /transfers/banks — dropdown source for Bank Penerima. */
+export async function getTransferBanks(): Promise<TransferBank[]> {
+  const res = await apiFetch<
+    TransferBank[] | { data?: TransferBank[]; banks?: TransferBank[] }
+  >(`/transfers/banks`);
+  if (Array.isArray(res)) return res;
+  return res.data ?? res.banks ?? [];
+}
+
+/** Fallback bank list used when GET /transfers/banks fails. */
+export const FALLBACK_BANKS: TransferBank[] = [
+  { code: 'BCA', name: 'Bank Central Asia' },
+  { code: 'MANDIRI', name: 'Bank Mandiri' },
+  { code: 'BRI', name: 'Bank Rakyat Indonesia' },
+  { code: 'BNI', name: 'Bank Negara Indonesia' },
+  { code: 'CIMB', name: 'CIMB Niaga' },
+  { code: 'DANAMON', name: 'Bank Danamon' },
+  { code: 'PERMATA', name: 'Bank Permata' },
+  { code: 'BTN', name: 'Bank Tabungan Negara' },
+  { code: 'BSI', name: 'Bank Syariah Indonesia' },
+  { code: 'MAYBANK', name: 'Maybank Indonesia' },
+  { code: 'OCBC', name: 'OCBC Indonesia' },
+  { code: 'PANIN', name: 'Panin Bank' },
+  { code: 'NOBU', name: 'Bank Nobu' },
+];
+
+function buildTransferQuery(params: Record<string, string | number | undefined | null>): string {
+  const q = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .join('&');
+  return q ? `?${q}` : '';
+}
 
 // ── API functions ────────────────────────────────────────────────────────────
 

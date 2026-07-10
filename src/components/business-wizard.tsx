@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { formatCif } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -696,7 +697,7 @@ export default function BusinessWizard() {
                             : "—"}
                         </TableCell>
                         <TableCell>{p.nationality || "—"}</TableCell>
-                        <TableCell>{p.cif_no || "—"}</TableCell>
+                        <TableCell>{formatCif(p.cif_no)}</TableCell>
                         <TableCell>{getCifRelationshipLabel(p.cif_relationship_type)}</TableCell>
                         <TableCell className="text-right">
                           <button

@@ -1,27 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { apiFetch, getRoleFromToken } from '@/lib/api';
-import { createTransfer, type CreateTransferBody } from '@/lib/transfers';
+import { useEffect, useRef, useState } from 'react';
+import { getRoleFromToken } from '@/lib/api';
+import {
+  createTransfer,
+  searchSenders,
+  getTransferBanks,
+  FALLBACK_BANKS,
+  TRANSFER_MIN_AMOUNT,
+  TRANSFER_MAX_AMOUNT,
+  type CreateTransferBody,
+  type SenderSearchItem,
+  type TransferBank,
+} from '@/lib/transfers';
+import { formatCif } from '@/lib/utils';
 import { useAuth } from '@/app/providers';
 import { useRouter } from 'next/navigation';
 import { ShieldOff, ChevronDown, ChevronRight } from 'lucide-react';
-
-type ApprovedApp = {
-  id: number | string;
-  type: 'INDIVIDUAL' | 'BUSINESS';
-  status: string;
-  display_name?: string | null;
-  full_name?: string | null;
-  legal_name?: string | null;
-  email?: string | null;
-  phone?: string | null;
-};
-
-type ApiRes = {
-  items?: ApprovedApp[];
-  total?: number;
-};
 
 /** Trim and convert empty strings to undefined so we never send empty fields. */
 function clean(v: string): string | undefined {
@@ -35,9 +30,18 @@ export default function NewTransferPage() {
   const role = getRoleFromToken(token);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
-  const [approvedApps, setApprovedApps] = useState<ApprovedApp[]>([]);
-  const [senderApplicationId, setSenderApplicationId] = useState<string>('');
   const [showMeta, setShowMeta] = useState(false);
+
+  // ── Sender picker (searchable) ──────────────────────────────────────────────
+  const [senderQuery, setSenderQuery] = useState('');
+  const [senderResults, setSenderResults] = useState<SenderSearchItem[]>([]);
+  const [senderSearching, setSenderSearching] = useState(false);
+  const [selectedSender, setSelectedSender] = useState<SenderSearchItem | null>(null);
+  const senderSeq = useRef(0);
+
+  // ── Bank penerima dropdown ──────────────────────────────────────────────────
+  const [banks, setBanks] = useState<TransferBank[]>(FALLBACK_BANKS);
+  const [selectedBankCode, setSelectedBankCode] = useState('');
 
   const [form, setForm] = useState({
     amount: 10000,
@@ -46,9 +50,13 @@ export default function NewTransferPage() {
     beneficiaryBankCode: '',
     beneficiaryAccountNumber: '',
     beneficiaryAccountName: '',
+    source_of_funds: '',
+    transaction_purpose: '',
     description: '',
     requestedTransferAt: '',
   });
+
+  const [acctError, setAcctError] = useState('');
 
   const [meta, setMeta] = useState({
     partner_reference_no: '',
@@ -67,30 +75,97 @@ export default function NewTransferPage() {
     additional_info: '',
   });
 
+  // Load bank list (fallback to the built-in list on failure).
   useEffect(() => {
-    apiFetch<ApiRes | ApprovedApp[]>('/applications?status=APPROVED&limit=100').then((data) => {
-      const list: ApprovedApp[] = Array.isArray(data) ? data : (data as ApiRes).items ?? [];
-      setApprovedApps(list);
-      if (list.length > 0) setSenderApplicationId(String(list[0].id));
-    }).catch(() => {});
+    getTransferBanks()
+      .then((list) => { if (list && list.length) setBanks(list); })
+      .catch(() => { /* keep FALLBACK_BANKS */ });
   }, []);
 
-  function displayLabel(app: ApprovedApp) {
-    const name = app.display_name || app.full_name || app.legal_name || `App #${app.id}`;
-    const extra = app.phone || app.email || '';
-    return `${name}${extra ? ` (${extra})` : ''}`;
-  }
-
-  async function submit() {
-    if (!senderApplicationId) {
-      setErr('Silakan pilih pengirim terlebih dahulu.');
+  // Debounced sender search — only fires once a sender is not yet locked in.
+  useEffect(() => {
+    if (selectedSender) return;
+    const q = senderQuery.trim();
+    if (q.length < 2) {
+      setSenderResults([]);
+      setSenderSearching(false);
       return;
     }
+    const seq = ++senderSeq.current;
+    setSenderSearching(true);
+    const t = setTimeout(() => {
+      searchSenders(q)
+        .then((list) => {
+          if (seq === senderSeq.current) setSenderResults(list);
+        })
+        .catch(() => {
+          if (seq === senderSeq.current) setSenderResults([]);
+        })
+        .finally(() => {
+          if (seq === senderSeq.current) setSenderSearching(false);
+        });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [senderQuery, selectedSender]);
 
-    // ── Validation ──────────────────────────────────────────────────────
-    const amount = Number(form.amount);
-    if (!(amount > 0)) {
-      setErr('Nominal harus lebih dari 0.');
+  function pickSender(s: SenderSearchItem) {
+    setSelectedSender(s);
+    setSenderResults([]);
+    setSenderQuery('');
+  }
+
+  function clearSender() {
+    setSelectedSender(null);
+    setSenderQuery('');
+    setSenderResults([]);
+  }
+
+  function onBankChange(code: string) {
+    setSelectedBankCode(code);
+    const bank = banks.find((b) => (b.code ?? '') === code);
+    setForm((s) => ({
+      ...s,
+      beneficiaryBankName: bank?.name ?? '',
+      beneficiaryBankCode: bank?.code ?? '',
+    }));
+  }
+
+  function onAccountChange(v: string) {
+    const digits = v.replace(/\D/g, '');
+    setAcctError(digits !== v ? 'Nomor rekening hanya boleh berisi angka.' : '');
+    setForm((s) => ({ ...s, beneficiaryAccountNumber: digits }));
+  }
+
+  // ── Derived validation ──────────────────────────────────────────────────────
+  const amountNum = Number(form.amount);
+  const amountError =
+    !Number.isFinite(amountNum) || amountNum < TRANSFER_MIN_AMOUNT
+      ? 'Minimum transfer Rp10.000'
+      : amountNum > TRANSFER_MAX_AMOUNT
+        ? 'Maksimum transfer Rp500.000.000'
+        : '';
+
+  const accountDigitsOnly = /^\d+$/.test(form.beneficiaryAccountNumber);
+
+  const formValid =
+    !!selectedSender &&
+    !amountError &&
+    !acctError &&
+    accountDigitsOnly &&
+    !!clean(form.beneficiaryBankName) &&
+    !!clean(form.beneficiaryAccountName);
+
+  async function submit() {
+    if (!selectedSender) {
+      setErr('Silakan pilih pengirim dari hasil pencarian.');
+      return;
+    }
+    if (amountError) {
+      setErr(amountError);
+      return;
+    }
+    if (!accountDigitsOnly) {
+      setErr('Nomor rekening hanya boleh berisi angka.');
       return;
     }
     const currency = (form.currency || 'IDR').trim().toUpperCase();
@@ -99,11 +174,7 @@ export default function NewTransferPage() {
       return;
     }
     if (!clean(form.beneficiaryBankName)) {
-      setErr('Bank penerima wajib diisi.');
-      return;
-    }
-    if (!clean(form.beneficiaryAccountNumber)) {
-      setErr('Nomor rekening penerima wajib diisi.');
+      setErr('Bank penerima wajib dipilih.');
       return;
     }
     if (!clean(form.beneficiaryAccountName)) {
@@ -131,15 +202,17 @@ export default function NewTransferPage() {
     setErr('');
     try {
       const body: CreateTransferBody = {
-        amount,
+        amount: amountNum,
         currency,
         beneficiaryBankName: form.beneficiaryBankName.trim(),
         beneficiaryBankCode: clean(form.beneficiaryBankCode),
         beneficiaryAccountNumber: form.beneficiaryAccountNumber.trim(),
         beneficiaryAccountName: form.beneficiaryAccountName.trim(),
+        source_of_funds: clean(form.source_of_funds),
+        transaction_purpose: clean(form.transaction_purpose),
         description: clean(form.description),
         requestedTransferAt: clean(form.requestedTransferAt),
-        sender_application_id: Number(senderApplicationId),
+        sender_application_id: Number(selectedSender.application_id),
 
         // SNAP / transfer metadata — only sent when filled
         partner_reference_no: clean(meta.partner_reference_no),
@@ -199,23 +272,71 @@ export default function NewTransferPage() {
       )}
 
       <div className="rounded-2xl border p-4 space-y-3">
-        {/* Sender dropdown */}
+        {/* Sender searchable picker */}
         <div>
           <label className="text-xs text-muted-foreground">Pengirim (KYC/KYB Disetujui)</label>
-          {approvedApps.length === 0 ? (
-            <p className="mt-1 text-xs text-slate-400">Belum ada aplikasi berstatus APPROVED.</p>
+
+          {selectedSender ? (
+            <div className="mt-1 rounded-lg border bg-slate-50 p-3 space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <div className="text-xs text-muted-foreground">Nama Pengirim</div>
+                  <div className="text-sm font-medium">
+                    {selectedSender.display_name || `App #${selectedSender.application_id}`}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">CIF Pengirim</div>
+                  <div className="text-sm font-medium font-mono">{formatCif(selectedSender.cif_no)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Tipe Pengirim</div>
+                  <div className="text-sm font-medium">{selectedSender.application_type ?? '—'}</div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400">Application ID #{selectedSender.application_id}</span>
+                <button type="button" onClick={clearSender} className="text-xs text-kesh-700 hover:underline">
+                  Ganti Pengirim
+                </button>
+              </div>
+            </div>
           ) : (
-            <select
-              className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
-              value={senderApplicationId}
-              onChange={(e) => setSenderApplicationId(e.target.value)}
-            >
-              {approvedApps.map((app) => (
-                <option key={String(app.id)} value={String(app.id)}>
-                  {displayLabel(app)}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1 space-y-1">
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                value={senderQuery}
+                onChange={(e) => setSenderQuery(e.target.value)}
+                placeholder="Cari nama atau CIF pengirim…"
+              />
+              {senderQuery.trim().length > 0 && senderQuery.trim().length < 2 && (
+                <p className="text-xs text-slate-400">Ketik minimal 2 karakter untuk mencari.</p>
+              )}
+              {senderSearching && <p className="text-xs text-slate-400">Mencari…</p>}
+              {!senderSearching && senderQuery.trim().length >= 2 && senderResults.length === 0 && (
+                <p className="text-xs text-slate-400">Tidak ada pengirim yang cocok.</p>
+              )}
+              {senderResults.length > 0 && (
+                <ul className="rounded-lg border divide-y max-h-64 overflow-auto">
+                  {senderResults.map((s) => (
+                    <li key={String(s.application_id)}>
+                      <button
+                        type="button"
+                        onClick={() => pickSender(s)}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                      >
+                        <div className="text-sm font-medium">
+                          {(s.display_name || `App #${s.application_id}`)} — <span className="font-mono">{formatCif(s.cif_no)}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {(s.application_type ?? '—')} / {(s.status ?? '—')}
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </div>
 
@@ -224,11 +345,17 @@ export default function NewTransferPage() {
             <label className="text-xs text-muted-foreground">Nominal</label>
             <input
               type="number"
-              min={1}
-              className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+              min={TRANSFER_MIN_AMOUNT}
+              max={TRANSFER_MAX_AMOUNT}
+              className={`mt-1 w-full border rounded-lg px-3 py-2 text-sm ${amountError ? 'border-red-400' : ''}`}
               value={form.amount}
               onChange={(e) => setForm((s) => ({ ...s, amount: Number(e.target.value) }))}
             />
+            {amountError ? (
+              <p className="mt-1 text-xs text-red-600">{amountError}</p>
+            ) : (
+              <p className="mt-1 text-xs text-slate-400">Rp10.000 – Rp500.000.000</p>
+            )}
           </div>
           <div className="col-span-1">
             <label className="text-xs text-muted-foreground">Mata Uang</label>
@@ -254,12 +381,18 @@ export default function NewTransferPage() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-muted-foreground">Bank Penerima</label>
-            <input
-              className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
-              value={form.beneficiaryBankName}
-              onChange={(e) => setForm((s) => ({ ...s, beneficiaryBankName: e.target.value }))}
-              placeholder="BCA / Mandiri / BRI / ..."
-            />
+            <select
+              className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"
+              value={selectedBankCode}
+              onChange={(e) => onBankChange(e.target.value)}
+            >
+              <option value="">Pilih bank…</option>
+              {banks.map((b) => (
+                <option key={String(b.code ?? b.name)} value={b.code ?? ''}>
+                  {b.code ? `${b.code} — ${b.name ?? ''}` : (b.name ?? '')}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Kode Bank Penerima (opsional)</label>
@@ -276,10 +409,12 @@ export default function NewTransferPage() {
           <div>
             <label className="text-xs text-muted-foreground">Nomor Rekening</label>
             <input
-              className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+              inputMode="numeric"
+              className={`mt-1 w-full border rounded-lg px-3 py-2 text-sm ${acctError ? 'border-red-400' : ''}`}
               value={form.beneficiaryAccountNumber}
-              onChange={(e) => setForm((s) => ({ ...s, beneficiaryAccountNumber: e.target.value }))}
+              onChange={(e) => onAccountChange(e.target.value)}
             />
+            {acctError && <p className="mt-1 text-xs text-red-600">{acctError}</p>}
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Nama Rekening</label>
@@ -287,6 +422,27 @@ export default function NewTransferPage() {
               className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
               value={form.beneficiaryAccountName}
               onChange={(e) => setForm((s) => ({ ...s, beneficiaryAccountName: e.target.value }))}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-muted-foreground">Sumber Dana</label>
+            <input
+              className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+              value={form.source_of_funds}
+              onChange={(e) => setForm((s) => ({ ...s, source_of_funds: e.target.value }))}
+              placeholder="mis: gaji, hasil usaha"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Tujuan Transaksi</label>
+            <input
+              className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+              value={form.transaction_purpose}
+              onChange={(e) => setForm((s) => ({ ...s, transaction_purpose: e.target.value }))}
+              placeholder="mis: pembayaran vendor"
             />
           </div>
         </div>
@@ -456,7 +612,7 @@ export default function NewTransferPage() {
 
       <button
         onClick={submit}
-        disabled={loading || !senderApplicationId}
+        disabled={loading || !formValid}
         className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-60 transition-colors"
       >
         {loading ? 'Menyimpan…' : 'Buat Draft'}

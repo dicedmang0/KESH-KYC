@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/providers';
 import { getRoleFromToken } from '@/lib/api';
 import { Pagination } from '@/components/pagination';
+import { formatCif } from '@/lib/utils';
 import {
   getMonitoringCases,
   formatCaseStatus,
@@ -331,7 +332,7 @@ export default function MonitoringPage() {
                   <td className="px-3 py-3">
                     <div className="font-medium text-slate-800">{c.customer_name ?? '—'}</div>
                   </td>
-                  <td className="px-3 py-3 font-mono text-xs text-slate-600">{c.cif_no ?? '—'}</td>
+                  <td className="px-3 py-3 font-mono text-xs text-slate-600">{formatCif(c.cif_no)}</td>
                   <td className="px-3 py-3"><SeverityBadge severity={c.severity} /></td>
                   <td className="px-3 py-3"><StatusBadge status={c.status} /></td>
                   <td className="px-3 py-3 text-xs text-slate-600">{formatDate(c.due_date)}</td>

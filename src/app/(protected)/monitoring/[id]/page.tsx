@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/app/providers';
 import { getRoleFromToken } from '@/lib/api';
+import { formatCif } from '@/lib/utils';
 import {
   getMonitoringCase,
   complianceReview,
@@ -300,7 +301,7 @@ export default function MonitoringDetailPage() {
           <Field label="Status" value={<StatusBadge status={detail.status} />} />
           <Field label="Severity" value={<SeverityBadge severity={detail.severity} />} />
           <Field label="Nama Customer" value={detail.customer_name} />
-          <Field label="CIF" value={<span className="font-mono">{detail.cif_no}</span>} />
+          <Field label="CIF" value={<span className="font-mono">{formatCif(detail.cif_no)}</span>} />
           <Field label="Sumber" value={detail.source_type} />
           {detail.transfer_id && (
             <Field
@@ -403,13 +404,25 @@ export default function MonitoringDetailPage() {
             <div>
               <p className="text-xs font-medium text-slate-600 mb-2">Transfer</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <Field label="Nama Pengirim" value={detail.linked_transfer.sender_name} />
+                <Field label="CIF Pengirim" value={detail.linked_transfer.sender_cif_no ? formatCif(detail.linked_transfer.sender_cif_no) : undefined} />
                 <Field label="Nominal" value={formatMonitoringAmount(detail.linked_transfer.amount, detail.linked_transfer.currency ?? 'IDR')} />
+                <Field label="Sumber Dana" value={detail.linked_transfer.source_of_funds} />
+                <Field label="Tujuan Transaksi" value={detail.linked_transfer.transaction_purpose} />
+                <Field label="Penerima" value={detail.linked_transfer.beneficiary_account_name} />
+                <Field label="No. Rekening Penerima" value={detail.linked_transfer.beneficiary_account_number} />
+                <Field label="Bank Penerima" value={detail.linked_transfer.beneficiary_bank_name} />
                 <Field label="Metode" value={detail.linked_transfer.transfer_method} />
                 <Field label="Channel" value={detail.linked_transfer.transfer_channel} />
-                <Field label="Penerima" value={detail.linked_transfer.beneficiary_account_name} />
-                <Field label="Bank Penerima" value={detail.linked_transfer.beneficiary_bank_name} />
                 <Field label="Status Transfer" value={detail.linked_transfer.status} />
               </div>
+              {detail.transfer_id != null && (
+                <p className="mt-2 text-xs text-slate-400">
+                  <Link href={`/transfers/${detail.transfer_id}`} className="text-kesh-700 hover:underline">
+                    Transfer #{detail.transfer_id}
+                  </Link>
+                </p>
+              )}
             </div>
           )}
           {detail.linked_application && (

@@ -7,10 +7,10 @@ import {
   getTransfers,
   formatTransferAmount,
   transferReference,
-  formatDateTime,
   type TransferListRow,
 } from '@/lib/transfers';
 import { useAuth } from '@/app/providers';
+import { formatCif } from '@/lib/utils';
 import { Pagination } from '@/components/pagination';
 import { TransferStatusBadge, TransferResultBadge } from '@/components/transfer-badges';
 
@@ -88,12 +88,12 @@ export default function TransfersPage() {
       <div className="rounded-2xl border overflow-hidden">
         <div className="grid grid-cols-12 gap-2 bg-muted/40 px-4 py-3 text-xs font-medium">
           <div className="col-span-2">Referensi</div>
+          <div className="col-span-2">Pengirim</div>
           <div className="col-span-2">Penerima</div>
           <div className="col-span-2">Bank</div>
-          <div className="col-span-2">Nominal</div>
+          <div className="col-span-1">Nominal</div>
           <div className="col-span-1">Status</div>
           <div className="col-span-1">Hasil</div>
-          <div className="col-span-1">Dibuat</div>
           <div className="col-span-1 text-right">Aksi</div>
         </div>
 
@@ -109,6 +109,18 @@ export default function TransfersPage() {
                 <div className="text-xs text-muted-foreground">#{r.id}</div>
               </div>
               <div className="col-span-2">
+                <div className="font-medium">{r.sender_name ?? '—'}</div>
+                {r.sender_cif_no && (
+                  <div className="text-xs text-muted-foreground font-mono">{formatCif(r.sender_cif_no)}</div>
+                )}
+                {r.sender_type && (
+                  <div className="text-xs text-muted-foreground">{r.sender_type}</div>
+                )}
+                {!r.sender_name && r.sender_application_id != null && (
+                  <div className="text-xs text-muted-foreground">App #{r.sender_application_id}</div>
+                )}
+              </div>
+              <div className="col-span-2">
                 <div className="font-medium">{r.beneficiary_account_name}</div>
                 <div className="text-xs text-muted-foreground">{r.beneficiary_account_number}</div>
               </div>
@@ -118,10 +130,9 @@ export default function TransfersPage() {
                   <div className="text-xs text-muted-foreground">{r.beneficiary_bank_code}</div>
                 )}
               </div>
-              <div className="col-span-2 font-medium">{formatTransferAmount(r)}</div>
+              <div className="col-span-1 font-medium">{formatTransferAmount(r)}</div>
               <div className="col-span-1"><TransferStatusBadge status={r.status} /></div>
               <div className="col-span-1"><TransferResultBadge result={r.result} /></div>
-              <div className="col-span-1 text-xs text-muted-foreground">{formatDateTime(r.created_at)}</div>
               <div className="col-span-1 text-right">
                 <Link className="text-sm text-kesh-700 hover:underline font-medium" href={`/transfers/${r.id}`}>
                   Buka

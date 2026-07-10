@@ -64,7 +64,12 @@ export type LinkedTransferSummary = {
   currency?: string | null;
   transfer_method?: string | null;
   transfer_channel?: string | null;
+  sender_name?: string | null;
+  sender_cif_no?: string | null;
+  source_of_funds?: string | null;
+  transaction_purpose?: string | null;
   beneficiary_account_name?: string | null;
+  beneficiary_account_number?: string | null;
   beneficiary_bank_name?: string | null;
   status?: string | null;
 };
