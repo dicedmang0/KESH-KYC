@@ -12,6 +12,9 @@ import {
   formatTransferAmount,
   transferReference,
   formatDateTime,
+  canSubmitTransfer,
+  canApproveTransfer,
+  canUpdateTransferResult,
   type TransferDetail,
 } from '@/lib/transfers';
 import { evaluateTransfer } from '@/lib/monitoring';
@@ -244,9 +247,9 @@ export default function TransferDetailPage() {
   }
 
   // Role + status conditions for action visibility
-  const canSubmit = role === 'FinanceStaff' && row?.status === 'DRAFT';
-  const canDecide = role === 'FinanceManager' && row?.status === 'SUBMITTED';
-  const canSetResult = role === 'FinanceManager' && row?.status === 'APPROVED';
+  const canSubmit = canSubmitTransfer(role) && row?.status === 'DRAFT';
+  const canDecide = canApproveTransfer(role) && row?.status === 'SUBMITTED';
+  const canSetResult = canUpdateTransferResult(role) && row?.status === 'APPROVED';
   const hasAnyAction = canSubmit || canDecide || canSetResult;
   const canEvaluateMonitoring = role === 'ComplianceLead' || role === 'SystemAdmin';
 

@@ -7,6 +7,7 @@ import {
   getTransfers,
   formatTransferAmount,
   transferReference,
+  canCreateTransfer,
   type TransferListRow,
 } from '@/lib/transfers';
 import { useAuth } from '@/app/providers';
@@ -57,7 +58,7 @@ export default function TransfersPage() {
           <p className="text-sm text-muted-foreground">Pencatatan transfer ke bank (manual)</p>
         </div>
 
-        {role === 'FinanceStaff' && (
+        {canCreateTransfer(role) && (
           <Link
             href="/transfers/new"
             className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 transition-colors"

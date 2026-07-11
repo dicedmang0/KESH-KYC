@@ -3,6 +3,26 @@
 
 import { apiFetch } from "./api";
 
+// ── Transfer permission helpers ───────────────────────────────────────────────
+// FrontDesk (Frontliner) can create, edit draft, and submit.
+// FinanceManager and SystemAdmin can approve, reject, and update result.
+
+export function canCreateTransfer(role: string | null | undefined): boolean {
+  return role === 'FinanceStaff' || role === 'FrontDesk' || role === 'SystemAdmin';
+}
+
+export function canSubmitTransfer(role: string | null | undefined): boolean {
+  return role === 'FinanceStaff' || role === 'FrontDesk' || role === 'SystemAdmin';
+}
+
+export function canApproveTransfer(role: string | null | undefined): boolean {
+  return role === 'FinanceManager' || role === 'SystemAdmin';
+}
+
+export function canUpdateTransferResult(role: string | null | undefined): boolean {
+  return role === 'FinanceManager' || role === 'SystemAdmin';
+}
+
 export type TransferStatus =
   | "DRAFT"
   | "SUBMITTED"

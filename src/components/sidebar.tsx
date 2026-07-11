@@ -60,7 +60,7 @@ export default function Sidebar() {
     BranchAdmin:    [],
     ComplianceLead: ['/dashboard', '/kyc', '/watchlist', '/monitoring', '/reports'],
     Director:       ['/dashboard', '/monitoring'],
-    FrontDesk:      ['/dashboard', '/users', '/kyc'],
+    FrontDesk:      ['/dashboard', '/users', '/kyc', '/transfers'],
     Auditor:        ['/dashboard', '/kyc', '/monitoring', '/reports'],
     FinanceStaff:   ['/dashboard', '/transfers', '/reports'],
     FinanceManager: ['/dashboard', '/transfers', '/reports'],

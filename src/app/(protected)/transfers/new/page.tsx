@@ -6,6 +6,7 @@ import {
   createTransfer,
   searchSenders,
   getTransferBanks,
+  canCreateTransfer,
   FALLBACK_BANKS,
   TRANSFER_MIN_AMOUNT,
   TRANSFER_MAX_AMOUNT,
@@ -240,13 +241,13 @@ export default function NewTransferPage() {
     }
   }
 
-  if (token !== null && role !== 'FinanceStaff') {
+  if (token !== null && !canCreateTransfer(role)) {
     return (
       <div className="p-6 max-w-2xl">
         <div className="flex flex-col items-center gap-3 py-16 text-slate-500">
           <ShieldOff className="h-10 w-10 text-slate-300" />
           <p className="text-base font-medium text-slate-700">Akses Ditolak</p>
-          <p className="text-sm">Hanya Staff Finance yang dapat membuat transfer.</p>
+          <p className="text-sm">Anda tidak memiliki izin untuk membuat transfer.</p>
           <button
             onClick={() => router.push('/transfers')}
             className="mt-1 text-sm text-kesh-700 hover:underline"
