@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { apiFetch, apiUpload, getRoleFromToken } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { formatCif } from '@/lib/utils';
 import EddForm, { DEFAULT_EDD, type EddFormData } from '@/components/EddForm';
+import WebcamCapture from '@/components/WebcamCapture';
 
 type Status = 'DRAFT' | 'SUBMITTED' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED';
 
@@ -34,6 +36,28 @@ type Person = {
   signature_uri?: string | null;
   cif_no?: string | null;
   cif_relationship_type?: string | null;
+  // CDD extended fields
+  alias?: string | null;
+  ktp_number?: string | null;
+  sim_number?: string | null;
+  passport_number?: string | null;
+  province_code?: string | null;
+  province_name?: string | null;
+  city_code?: string | null;
+  city_name?: string | null;
+  district_code?: string | null;
+  district_name?: string | null;
+  village_code?: string | null;
+  village_name?: string | null;
+  street_address?: string | null;
+  house_number?: string | null;
+  rt_rw?: string | null;
+  apartment_block?: string | null;
+  address_landmark?: string | null;
+  industry_category?: string | null;
+  company_name?: string | null;
+  company_address?: string | null;
+  monthly_income_range?: string | null;
 };
 
 type Business = {
@@ -55,12 +79,10 @@ type Business = {
 };
 
 const RISK_FACTOR_LABELS: Record<string, string> = {
-  INDIVIDUAL_OCCUPATION_HIGH_RBA: 'Profil pekerjaan high risk berdasarkan RBA',
-  INDIVIDUAL_OCCUPATION_MEDIUM_RBA: 'Profil pekerjaan medium risk berdasarkan RBA',
-  INDIVIDUAL_OCCUPATION_LOW_RBA: 'Profil pekerjaan low risk berdasarkan RBA',
-  GEOGRAPHY_HIGH_RBA: 'Area geografis high risk berdasarkan RBA',
-  GEOGRAPHY_MEDIUM_RBA: 'Area geografis medium risk berdasarkan RBA',
-  GEOGRAPHY_LOW_RBA: 'Area geografis low risk berdasarkan RBA',
+  DTTOT_MATCH: 'Teridentifikasi dalam daftar DTTOT',
+  PEP_MATCH: 'Teridentifikasi sebagai PEP',
+  PPPSPM_MATCH: 'Teridentifikasi dalam daftar PPPSPM',
+  ONBOARDING_OFFLINE_DIRECT: 'Onboarding tatap muka langsung',
 };
 
 function getRiskFactorLabel(code?: string | null, backendLabel?: string | null): string {
@@ -138,6 +160,41 @@ type PrecheckResult = {
   [key: string]: unknown;
 };
 
+type RefItem = { code: string; name: string };
+type IncomeRange = { code: string; label: string };
+
+// Individual required doc types and labels
+const INDIVIDUAL_REQUIRED_DOC_TYPES = [
+  'INDIVIDUAL_KTP_PHOTO',
+  'INDIVIDUAL_FACE_PHOTO',
+  'INDIVIDUAL_FACE_WITH_KTP_PHOTO',
+];
+
+const INDIVIDUAL_DOC_LABELS: Record<string, string> = {
+  INDIVIDUAL_KTP_PHOTO: 'Foto KTP',
+  INDIVIDUAL_FACE_PHOTO: 'Foto Wajah Pengguna',
+  INDIVIDUAL_FACE_WITH_KTP_PHOTO: 'Foto Wajah dengan KTP',
+};
+
+function getDocStatusInfo(d?: Document) {
+  const hasFile = !!(d?.file_uri ?? d?.file_url);
+  const uploadedLike =
+    d?.status === 'UPLOADED' || d?.status === 'APPROVED' ||
+    (d?.status === 'PENDING' && hasFile) ||
+    (!d?.status && hasFile);
+  const failedLike = d?.status === 'FAILED' || d?.status === 'REJECTED';
+  return {
+    uploadedLike: !!uploadedLike,
+    failedLike: !!failedLike,
+    statusLabel: uploadedLike ? 'Berhasil Terupload' : failedLike ? 'Perlu Upload Ulang' : 'Belum Terupload',
+    statusCls: uploadedLike
+      ? 'bg-emerald-100 text-emerald-700'
+      : failedLike
+      ? 'bg-red-100 text-red-700'
+      : 'bg-slate-100 text-slate-500',
+  };
+}
+
 function getErrMsg(e: unknown, fallback: string): string {
   return e instanceof Error ? e.message : fallback;
 }
@@ -180,15 +237,11 @@ export default function UserDetailPage() {
   const [precheck, setPrecheck] = useState<PrecheckResult | null>(null);
   const [eddData, setEddData] = useState<Partial<EddFormData>>({});
   const [eddSaving, setEddSaving] = useState(false);
-  const [eddSaveError, setEddSaveError] = useState('');
-  const [eddSaveMsg, setEddSaveMsg] = useState('');
   const [userRole, setUserRole] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
-  const [actionMsg, setActionMsg] = useState('');
-  const [actionErr, setActionErr] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
 
@@ -196,7 +249,6 @@ export default function UserDetailPage() {
   const [docType, setDocType] = useState('KTP');
   const [docFile, setDocFile] = useState<File | null>(null);
   const [docUploading, setDocUploading] = useState(false);
-  const [docErr, setDocErr] = useState('');
   const [docInputKey, setDocInputKey] = useState(0);
 
   // Party add (BUSINESS + DRAFT only)
@@ -210,7 +262,48 @@ export default function UserDetailPage() {
   const [partyPhone, setPartyPhone] = useState('');
   const [partyEmail, setPartyEmail] = useState('');
   const [partyLoading, setPartyLoading] = useState(false);
-  const [partyErr, setPartyErr] = useState('');
+
+  // Individual document upload state
+  const ktpInputRef = useRef<HTMLInputElement>(null);
+  const [ktpUploading, setKtpUploading] = useState(false);
+  type WebcamTarget = 'INDIVIDUAL_FACE_PHOTO' | 'INDIVIDUAL_FACE_WITH_KTP_PHOTO';
+  const [webcamTarget, setWebcamTarget] = useState<WebcamTarget | null>(null);
+
+  // Individual CDD extended form state
+  const [cddAlias, setCddAlias] = useState('');
+  const [cddKtp, setCddKtp] = useState('');
+  const [cddKtpErr, setCddKtpErr] = useState('');
+  const [cddSim, setCddSim] = useState('');
+  const [cddSimErr, setCddSimErr] = useState('');
+  const [cddPassport, setCddPassport] = useState('');
+  const [cddPassportErr, setCddPassportErr] = useState('');
+  const [cddNationality, setCddNationality] = useState('Indonesia');
+  const [cddProvinceCode, setCddProvinceCode] = useState('');
+  const [cddCityCode, setCddCityCode] = useState('');
+  const [cddDistrictCode, setCddDistrictCode] = useState('');
+  const [cddVillageCode, setCddVillageCode] = useState('');
+  const [cddStreet, setCddStreet] = useState('');
+  const [cddHouseNo, setCddHouseNo] = useState('');
+  const [cddRtRw, setCddRtRw] = useState('');
+  const [cddApartment, setCddApartment] = useState('');
+  const [cddLandmark, setCddLandmark] = useState('');
+  const [cddIndustry, setCddIndustry] = useState('');
+  const [cddCompanyName, setCddCompanyName] = useState('');
+  const [cddCompanyAddress, setCddCompanyAddress] = useState('');
+  const [cddIncomeRange, setCddIncomeRange] = useState('');
+  const [cddSaving, setCddSaving] = useState(false);
+
+  // Reference data for dropdowns
+  const [provinces, setProvinces] = useState<RefItem[]>([]);
+  const [regencies, setRegencies] = useState<RefItem[]>([]);
+  const [districts, setDistricts] = useState<RefItem[]>([]);
+  const [villages, setVillages] = useState<RefItem[]>([]);
+  const [nationalities, setNationalities] = useState<RefItem[]>([]);
+  const [industryCategories, setIndustryCategories] = useState<RefItem[]>([]);
+  const [incomeRanges, setIncomeRanges] = useState<IncomeRange[]>([]);
+  const [regenciesLoading, setRegenciesLoading] = useState(false);
+  const [districtsLoading, setDistrictsLoading] = useState(false);
+  const [villagesLoading, setVillagesLoading] = useState(false);
 
   async function load() {
     if (!id) return;
@@ -225,6 +318,29 @@ export default function UserDetailPage() {
       setApp(appData);
       setPerson(resp.person ?? null);
       setBusiness(resp.business ?? null);
+
+      // Populate CDD form from person data (Individual only)
+      if (appData.type === 'INDIVIDUAL' && resp.person) {
+        const p = resp.person;
+        setCddAlias(p.alias ?? '');
+        setCddKtp(p.ktp_number ?? '');
+        setCddSim(p.sim_number ?? '');
+        setCddPassport(p.passport_number ?? '');
+        setCddNationality(p.nationality ?? 'Indonesia');
+        setCddProvinceCode(p.province_code ?? '');
+        setCddCityCode(p.city_code ?? '');
+        setCddDistrictCode(p.district_code ?? '');
+        setCddVillageCode(p.village_code ?? '');
+        setCddStreet(p.street_address ?? '');
+        setCddHouseNo(p.house_number ?? '');
+        setCddRtRw(p.rt_rw ?? '');
+        setCddApartment(p.apartment_block ?? '');
+        setCddLandmark(p.address_landmark ?? '');
+        setCddIndustry(p.industry_category ?? '');
+        setCddCompanyName(p.company_name ?? '');
+        setCddCompanyAddress(p.company_address ?? '');
+        setCddIncomeRange(p.monthly_income_range ?? '');
+      }
       setRisk(resp.risk ?? null);
       setDocs(resp.documents ?? []);
       setParties(resp.parties ?? []);
@@ -259,20 +375,92 @@ export default function UserDetailPage() {
     setUserRole(getRoleFromToken(token));
   }, []);
 
+  // Load static reference lists when app type is INDIVIDUAL
+  useEffect(() => {
+    if (app?.type !== 'INDIVIDUAL') return;
+    function toList<T>(r: unknown): T[] {
+      if (Array.isArray(r)) return r as T[];
+      if (r && typeof r === 'object' && 'data' in r && Array.isArray((r as { data: unknown }).data)) {
+        return (r as { data: T[] }).data;
+      }
+      return [];
+    }
+    Promise.all([
+      apiFetch<unknown>('/references/provinces'),
+      apiFetch<unknown>('/references/nationalities'),
+      apiFetch<unknown>('/references/industry-categories'),
+      apiFetch<unknown>('/references/monthly-income-ranges'),
+    ]).then(([prov, nat, ind, inc]) => {
+      setProvinces(toList<RefItem>(prov));
+      setNationalities(toList<RefItem>(nat));
+      setIndustryCategories(toList<RefItem>(ind));
+      setIncomeRanges(toList<IncomeRange>(inc));
+    }).catch(() => {});
+  }, [app?.type]);
+
+  // Cascade: load regencies when province changes
+  useEffect(() => {
+    if (!cddProvinceCode) { setRegencies([]); return; }
+    function toList(r: unknown): RefItem[] {
+      if (Array.isArray(r)) return r as RefItem[];
+      if (r && typeof r === 'object' && 'data' in r && Array.isArray((r as { data: unknown }).data)) {
+        return (r as { data: RefItem[] }).data;
+      }
+      return [];
+    }
+    setRegenciesLoading(true);
+    apiFetch<unknown>(`/references/regencies?province_code=${encodeURIComponent(cddProvinceCode)}`)
+      .then((r) => setRegencies(toList(r)))
+      .catch(() => setRegencies([]))
+      .finally(() => setRegenciesLoading(false));
+  }, [cddProvinceCode]);
+
+  // Cascade: load districts when city changes
+  useEffect(() => {
+    if (!cddCityCode) { setDistricts([]); return; }
+    function toList(r: unknown): RefItem[] {
+      if (Array.isArray(r)) return r as RefItem[];
+      if (r && typeof r === 'object' && 'data' in r && Array.isArray((r as { data: unknown }).data)) {
+        return (r as { data: RefItem[] }).data;
+      }
+      return [];
+    }
+    setDistrictsLoading(true);
+    apiFetch<unknown>(`/references/districts?regency_code=${encodeURIComponent(cddCityCode)}`)
+      .then((r) => setDistricts(toList(r)))
+      .catch(() => setDistricts([]))
+      .finally(() => setDistrictsLoading(false));
+  }, [cddCityCode]);
+
+  // Cascade: load villages when district changes
+  useEffect(() => {
+    if (!cddDistrictCode) { setVillages([]); return; }
+    function toList(r: unknown): RefItem[] {
+      if (Array.isArray(r)) return r as RefItem[];
+      if (r && typeof r === 'object' && 'data' in r && Array.isArray((r as { data: unknown }).data)) {
+        return (r as { data: RefItem[] }).data;
+      }
+      return [];
+    }
+    setVillagesLoading(true);
+    apiFetch<unknown>(`/references/villages?district_code=${encodeURIComponent(cddDistrictCode)}`)
+      .then((r) => setVillages(toList(r)))
+      .catch(() => setVillages([]))
+      .finally(() => setVillagesLoading(false));
+  }, [cddDistrictCode]);
+
   async function saveEdd(formData: EddFormData, complete: boolean) {
     if (!id) return;
     setEddSaving(true);
-    setEddSaveError('');
-    setEddSaveMsg('');
     try {
       await apiFetch(`/applications/${id}/edd`, {
         method: 'PATCH',
         body: { ...formData, complete },
       });
-      setEddSaveMsg(complete ? 'EDD berhasil dilengkapi.' : 'Draft EDD berhasil disimpan.');
+      toast.success(complete ? 'EDD berhasil dilengkapi.' : 'Draft EDD berhasil disimpan.');
       await load();
     } catch (e: unknown) {
-      setEddSaveError(getErrMsg(e, complete ? 'Simpan EDD gagal' : 'Simpan draft EDD gagal'));
+      toast.error(getErrMsg(e, 'Gagal menyimpan data. Silakan coba lagi.'));
     } finally {
       setEddSaving(false);
     }
@@ -281,14 +469,12 @@ export default function UserDetailPage() {
   async function runPrecheck() {
     if (!id) return;
     setActionLoading(true);
-    setActionErr('');
-    setActionMsg('');
     setPrecheck(null);
     try {
       const res = await apiFetch<PrecheckResult>(`/applications/${id}/precheck`);
       setPrecheck(res);
     } catch (e: unknown) {
-      setActionErr(getErrMsg(e, 'Precheck gagal'));
+      toast.error(getErrMsg(e, 'Gagal menyimpan data. Silakan coba lagi.'));
     } finally {
       setActionLoading(false);
     }
@@ -297,14 +483,12 @@ export default function UserDetailPage() {
   async function submit() {
     if (!id) return;
     setActionLoading(true);
-    setActionErr('');
-    setActionMsg('');
     try {
       await apiFetch(`/applications/${id}/submit`, { method: 'PATCH' });
-      setActionMsg('Berhasil di-submit.');
+      toast.success('Aplikasi berhasil disubmit.');
       await load();
     } catch (e: unknown) {
-      setActionErr(getErrMsg(e, 'Submit gagal'));
+      toast.error(getErrMsg(e, 'Gagal submit aplikasi. Silakan coba lagi.'));
     } finally {
       setActionLoading(false);
     }
@@ -313,17 +497,15 @@ export default function UserDetailPage() {
   async function approve() {
     if (!id) return;
     setActionLoading(true);
-    setActionErr('');
-    setActionMsg('');
     try {
       await apiFetch(`/applications/${id}/decision`, {
         method: 'PATCH',
         body: { decision: 'APPROVED' },
       });
-      setActionMsg('Aplikasi disetujui.');
+      toast.success('Aplikasi berhasil disetujui.');
       await load();
     } catch (e: unknown) {
-      setActionErr(getErrMsg(e, 'Approve gagal'));
+      toast.error(getErrMsg(e, 'Gagal menyimpan data. Silakan coba lagi.'));
     } finally {
       setActionLoading(false);
     }
@@ -332,23 +514,21 @@ export default function UserDetailPage() {
   async function reject() {
     if (!id) return;
     if (!rejectReason.trim()) {
-      setActionErr('Alasan penolakan wajib diisi.');
+      toast.error('Alasan penolakan wajib diisi.');
       return;
     }
     setActionLoading(true);
-    setActionErr('');
-    setActionMsg('');
     try {
       await apiFetch(`/applications/${id}/decision`, {
         method: 'PATCH',
         body: { decision: 'REJECTED', reason: rejectReason.trim() },
       });
-      setActionMsg('Aplikasi ditolak.');
+      toast.success('Aplikasi berhasil ditolak.');
       setShowRejectInput(false);
       setRejectReason('');
       await load();
     } catch (e: unknown) {
-      setActionErr(getErrMsg(e, 'Reject gagal'));
+      toast.error(getErrMsg(e, 'Gagal menyimpan data. Silakan coba lagi.'));
     } finally {
       setActionLoading(false);
     }
@@ -358,7 +538,6 @@ export default function UserDetailPage() {
     e.preventDefault();
     if (!id || !docFile) return;
     setDocUploading(true);
-    setDocErr('');
     try {
       const form = new FormData();
       form.append('file', docFile);
@@ -366,9 +545,10 @@ export default function UserDetailPage() {
       await apiUpload(`/applications/${id}/documents/upload`, form);
       setDocFile(null);
       setDocInputKey((k) => k + 1);
+      toast.success('Dokumen berhasil diunggah.');
       await load();
     } catch (e: unknown) {
-      setDocErr(getErrMsg(e, 'Upload dokumen gagal'));
+      toast.error(getErrMsg(e, 'Upload gagal. Silakan coba lagi.'));
     } finally {
       setDocUploading(false);
     }
@@ -376,36 +556,39 @@ export default function UserDetailPage() {
 
   async function viewDocument(docId: number | string) {
     if (!id) return;
-    setDocErr('');
-    // Open a placeholder tab synchronously so it isn't blocked as a popup
-    // once we navigate it after the async signed-URL fetch resolves.
-    const win = window.open('', '_blank');
-    if (win) win.opener = null;
+    // Pre-open without noopener so the window reference stays navigable.
+    // noopener/noreferrer on a blank pre-open causes Chrome to return a null
+    // or detached window, leaving the tab stuck at about:blank.
+    const newTab = window.open('about:blank', '_blank');
     try {
       const resp = await apiFetch<{ signed_url?: string; expires_in?: number }>(
         `/applications/${id}/documents/${docId}/url`
       );
       if (resp?.signed_url) {
-        if (win) win.location.href = resp.signed_url;
-        else window.open(resp.signed_url, '_blank', 'noopener,noreferrer');
+        if (newTab) {
+          newTab.location.replace(resp.signed_url);
+        } else {
+          const blocked = !window.open(resp.signed_url, '_blank', 'noopener,noreferrer');
+          if (blocked) toast.error('Gagal membuka dokumen. Silakan coba lagi.');
+        }
       } else {
-        win?.close();
-        setDocErr('URL dokumen tidak tersedia');
+        newTab?.close();
+        toast.error('Gagal membuka dokumen. Silakan coba lagi.');
       }
-    } catch (e: unknown) {
-      win?.close();
-      setDocErr(getErrMsg(e, 'Gagal membuka dokumen'));
+    } catch {
+      newTab?.close();
+      toast.error('Gagal membuka dokumen. Silakan coba lagi.');
     }
   }
 
   async function deleteDocument(docId: number | string) {
     if (!id) return;
-    setDocErr('');
     try {
       await apiFetch(`/applications/${id}/documents/${docId}`, { method: 'DELETE' });
+      toast.success('Dokumen berhasil dihapus.');
       await load();
     } catch (e: unknown) {
-      setDocErr(getErrMsg(e, 'Hapus dokumen gagal'));
+      toast.error(getErrMsg(e, 'Gagal menghapus dokumen. Silakan coba lagi.'));
     }
   }
 
@@ -413,7 +596,6 @@ export default function UserDetailPage() {
     e.preventDefault();
     if (!id) return;
     setPartyLoading(true);
-    setPartyErr('');
     try {
       await apiFetch(`/applications/${id}/parties`, {
         method: 'POST',
@@ -436,7 +618,7 @@ export default function UserDetailPage() {
       setPartyOpen(false);
       await load();
     } catch (e: unknown) {
-      setPartyErr(getErrMsg(e, 'Tambah pihak gagal'));
+      toast.error(getErrMsg(e, 'Gagal menyimpan data. Silakan coba lagi.'));
     } finally {
       setPartyLoading(false);
     }
@@ -444,12 +626,110 @@ export default function UserDetailPage() {
 
   async function deleteParty(partyId: number | string) {
     if (!id) return;
-    setPartyErr('');
     try {
       await apiFetch(`/applications/${id}/parties/${partyId}`, { method: 'DELETE' });
       await load();
     } catch (e: unknown) {
-      setPartyErr(getErrMsg(e, 'Hapus pihak gagal'));
+      toast.error(getErrMsg(e, 'Gagal menyimpan data. Silakan coba lagi.'));
+    }
+  }
+
+  function validateCdd(): boolean {
+    let valid = true;
+    if (!cddKtp.trim() || !/^\d{15,16}$/.test(cddKtp)) {
+      setCddKtpErr('Nomor KTP wajib diisi 15–16 digit angka.');
+      valid = false;
+    } else {
+      setCddKtpErr('');
+    }
+    if (cddSim.length > 20) {
+      setCddSimErr('Nomor SIM maksimal 20 karakter.');
+      valid = false;
+    } else {
+      setCddSimErr('');
+    }
+    if (cddPassport.length > 20) {
+      setCddPassportErr('Nomor Paspor maksimal 20 karakter.');
+      valid = false;
+    } else {
+      setCddPassportErr('');
+    }
+    return valid;
+  }
+
+  async function saveCdd() {
+    if (!id) return;
+    if (!validateCdd()) return;
+    setCddSaving(true);
+    try {
+      await apiFetch(`/applications/${id}`, {
+        method: 'PATCH',
+        body: {
+          alias: cddAlias || null,
+          ktp_number: cddKtp || null,
+          sim_number: cddSim || null,
+          passport_number: cddPassport || null,
+          province_code: cddProvinceCode || null,
+          city_code: cddCityCode || null,
+          district_code: cddDistrictCode || null,
+          village_code: cddVillageCode || null,
+          street_address: cddStreet || null,
+          house_number: cddHouseNo || null,
+          rt_rw: cddRtRw || null,
+          apartment_block: cddApartment || null,
+          address_landmark: cddLandmark || null,
+          nationality: cddNationality || null,
+          industry_category: cddIndustry || null,
+          company_name: cddCompanyName || null,
+          company_address: cddCompanyAddress || null,
+          monthly_income_range: cddIncomeRange || null,
+        },
+      });
+      toast.success('Data berhasil disimpan.');
+      await load();
+    } catch (e: unknown) {
+      toast.error(getErrMsg(e, 'Gagal menyimpan data. Silakan coba lagi.'));
+    } finally {
+      setCddSaving(false);
+    }
+  }
+
+  async function uploadKtpFile(file: File) {
+    if (!id) return;
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      toast.error('Format file harus JPG, PNG, atau WebP.');
+      if (ktpInputRef.current) ktpInputRef.current.value = '';
+      return;
+    }
+    setKtpUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('doc_type', 'INDIVIDUAL_KTP_PHOTO');
+      await apiUpload(`/applications/${id}/documents/upload`, form);
+      if (ktpInputRef.current) ktpInputRef.current.value = '';
+      toast.success('Dokumen berhasil diunggah.');
+      await load();
+    } catch (e: unknown) {
+      toast.error(getErrMsg(e, 'Upload gagal. Silakan coba lagi.'));
+    } finally {
+      setKtpUploading(false);
+    }
+  }
+
+  async function uploadWebcamCapture(file: File) {
+    if (!id || !webcamTarget) throw new Error('Upload gagal. Silakan coba lagi.');
+    const form = new FormData();
+    form.append('file', file);
+    form.append('doc_type', webcamTarget);
+    try {
+      await apiUpload(`/applications/${id}/documents/upload`, form);
+      setWebcamTarget(null);
+      toast.success('Dokumen berhasil diunggah.');
+      await load();
+    } catch (e: unknown) {
+      throw new Error(getErrMsg(e, 'Upload gagal. Silakan coba lagi.'));
     }
   }
 
@@ -459,6 +739,20 @@ export default function UserDetailPage() {
 
   const canSubmit = app.status === 'DRAFT';
   const canDecide = app.status === 'SUBMITTED' || app.status === 'IN_REVIEW';
+
+  // For INDIVIDUAL submit validation — check all 3 required docs are uploaded
+  const uploadedDocTypeSet = new Set(
+    docs
+      .filter((d) => {
+        const hasFile = !!(d.file_uri ?? d.file_url);
+        return d.status === 'UPLOADED' || d.status === 'APPROVED' ||
+          (d.status === 'PENDING' && hasFile) || (!d.status && hasFile);
+      })
+      .map((d) => d.doc_type)
+  );
+  const missingIndivDocs = app.type === 'INDIVIDUAL' && canSubmit
+    ? INDIVIDUAL_REQUIRED_DOC_TYPES.filter((t) => !uploadedDocTypeSet.has(t))
+    : [];
   const displayName = app.type === 'INDIVIDUAL' ? person?.full_name : business?.legal_name;
 
   const cifNo = app.type === 'INDIVIDUAL' ? person?.cif_no : business?.cif_no;
@@ -519,14 +813,6 @@ export default function UserDetailPage() {
         </div>
       )}
 
-      {/* Action feedback */}
-      {actionMsg && (
-        <div className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{actionMsg}</div>
-      )}
-      {actionErr && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{actionErr}</div>
-      )}
-
       {/* Action buttons */}
       <div className="rounded-xl border p-4 space-y-3">
         <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Tindakan</p>
@@ -548,6 +834,16 @@ export default function UserDetailPage() {
               Ajukan
             </button>
           )}
+        </div>
+
+        {missingIndivDocs.length > 0 && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+            Dokumen wajib belum lengkap:{' '}
+            {missingIndivDocs.map((t) => INDIVIDUAL_DOC_LABELS[t]).join(', ')}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
 
           {canDecide && (
             <>
@@ -564,7 +860,7 @@ export default function UserDetailPage() {
                 )}
               </div>
               <button
-                onClick={() => { setShowRejectInput(true); setActionErr(''); }}
+                onClick={() => setShowRejectInput(true)}
                 disabled={actionLoading}
                 className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50"
               >
@@ -594,7 +890,7 @@ export default function UserDetailPage() {
               Konfirmasi Penolakan
             </button>
             <button
-              onClick={() => { setShowRejectInput(false); setRejectReason(''); setActionErr(''); }}
+              onClick={() => { setShowRejectInput(false); setRejectReason(''); }}
               className="rounded-md border px-3 py-2 text-sm hover:bg-slate-50"
             >
               Batal
@@ -628,22 +924,312 @@ export default function UserDetailPage() {
 
       {/* Detail info */}
       {app.type === 'INDIVIDUAL' ? (
-        <div className="rounded-xl border p-4 space-y-2">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Informasi Individu</p>
-          <Row label="Nama Lengkap" value={person?.full_name} />
-          <Row label="Email" value={person?.email} />
-          <Row label="Telepon" value={person?.phone} />
-          <Row label="Tempat / Tgl Lahir" value={[person?.pob, person?.dob].filter(Boolean).join(', ')} />
-          <Row label="Kewarganegaraan" value={person?.nationality} />
-          <Row label="Jenis Identitas" value={person?.identity_type} />
-          <Row label="Nomor Identitas" value={person?.identity_number} />
-          <Row label="Alamat KTP" value={person?.address_identity} />
-          <Row label="Alamat Domisili" value={person?.address_residential} />
-          <Row label="Pekerjaan" value={person?.occupation} />
-          <Row label="Gender" value={person?.gender} />
-          <Row label="CIF Pengguna Jasa" value={formatCif(person?.cif_no)} />
-          <Row label="Parameter CIF" value={getCifRelationshipLabel(person?.cif_relationship_type)} />
-        </div>
+        canSubmit ? (
+          /* ── DRAFT: Editable CDD form ──────────────────────────────── */
+          <div className="rounded-xl border p-4 space-y-5">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Informasi Individu</p>
+
+            {/* 1. Data Pribadi */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-600 border-b pb-1">Data Pribadi</p>
+              <div className="space-y-2">
+                <Row label="Nama Lengkap" value={person?.full_name} />
+                <Row label="Email" value={person?.email} />
+                <Row label="Telepon" value={person?.phone} />
+                <Row label="Tempat / Tgl Lahir" value={[person?.pob, person?.dob].filter(Boolean).join(', ')} />
+                <Row label="Jenis Kelamin" value={person?.gender} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-slate-500">Alias</label>
+                <input
+                  value={cddAlias}
+                  onChange={(e) => setCddAlias(e.target.value)}
+                  placeholder="Nama alias (opsional)"
+                  className="rounded-md border px-2 py-1.5 text-sm"
+                />
+              </div>
+            </div>
+
+            {/* 2. Identitas */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-600 border-b pb-1">Identitas</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Nomor KTP <span className="text-red-500">*</span></label>
+                  <input
+                    value={cddKtp}
+                    onChange={(e) => { setCddKtp(e.target.value.replace(/\D/g, '')); setCddKtpErr(''); }}
+                    maxLength={16}
+                    placeholder="15–16 digit angka"
+                    className={`rounded-md border px-2 py-1.5 text-sm${cddKtpErr ? ' border-red-400' : ''}`}
+                  />
+                  {cddKtpErr && <p className="text-xs text-red-600">{cddKtpErr}</p>}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Nomor SIM</label>
+                  <input
+                    value={cddSim}
+                    onChange={(e) => { setCddSim(e.target.value); setCddSimErr(''); }}
+                    maxLength={20}
+                    placeholder="Opsional, maks. 20 karakter"
+                    className={`rounded-md border px-2 py-1.5 text-sm${cddSimErr ? ' border-red-400' : ''}`}
+                  />
+                  {cddSimErr && <p className="text-xs text-red-600">{cddSimErr}</p>}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Nomor Paspor</label>
+                  <input
+                    value={cddPassport}
+                    onChange={(e) => { setCddPassport(e.target.value); setCddPassportErr(''); }}
+                    maxLength={20}
+                    placeholder="Opsional, maks. 20 karakter"
+                    className={`rounded-md border px-2 py-1.5 text-sm${cddPassportErr ? ' border-red-400' : ''}`}
+                  />
+                  {cddPassportErr && <p className="text-xs text-red-600">{cddPassportErr}</p>}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Kewarganegaraan</label>
+                  <select
+                    value={cddNationality}
+                    onChange={(e) => setCddNationality(e.target.value)}
+                    className="rounded-md border bg-white px-2 py-1.5 text-sm"
+                  >
+                    <option value="">— Pilih —</option>
+                    {nationalities.map((n) => (
+                      <option key={n.code} value={n.code}>{n.name}</option>
+                    ))}
+                    {/* Fallback: keep existing value selectable even if not in list */}
+                    {cddNationality && !nationalities.find((n) => n.code === cddNationality) && (
+                      <option value={cddNationality}>{cddNationality}</option>
+                    )}
+                  </select>
+                </div>
+              </div>
+              {person?.identity_number && !cddKtp && (
+                <p className="text-xs text-slate-400">
+                  Nomor identitas lama: <span className="font-mono">{person.identity_number}</span>
+                </p>
+              )}
+            </div>
+
+            {/* 3. Alamat */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-600 border-b pb-1">Alamat</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Provinsi</label>
+                  <select
+                    value={cddProvinceCode}
+                    onChange={(e) => {
+                      setCddProvinceCode(e.target.value);
+                      setCddCityCode('');
+                      setCddDistrictCode('');
+                      setCddVillageCode('');
+                    }}
+                    className="rounded-md border bg-white px-2 py-1.5 text-sm"
+                  >
+                    <option value="">— Pilih Provinsi —</option>
+                    {provinces.map((p) => (
+                      <option key={p.code} value={p.code}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Kota / Kabupaten</label>
+                  <select
+                    value={cddCityCode}
+                    disabled={!cddProvinceCode || regenciesLoading}
+                    onChange={(e) => {
+                      setCddCityCode(e.target.value);
+                      setCddDistrictCode('');
+                      setCddVillageCode('');
+                    }}
+                    className="rounded-md border bg-white px-2 py-1.5 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    {regenciesLoading ? (
+                      <option disabled>Memuat...</option>
+                    ) : cddProvinceCode && regencies.length === 0 ? (
+                      <option disabled>Data kota/kabupaten belum tersedia untuk provinsi ini.</option>
+                    ) : (
+                      <>
+                        <option value="">— Pilih Kota/Kabupaten —</option>
+                        {regencies.map((r) => (
+                          <option key={r.code} value={r.code}>{r.name}</option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Kecamatan</label>
+                  <select
+                    value={cddDistrictCode}
+                    disabled={!cddCityCode || districtsLoading}
+                    onChange={(e) => {
+                      setCddDistrictCode(e.target.value);
+                      setCddVillageCode('');
+                    }}
+                    className="rounded-md border bg-white px-2 py-1.5 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    {districtsLoading ? (
+                      <option disabled>Memuat...</option>
+                    ) : cddCityCode && districts.length === 0 ? (
+                      <option disabled>Data kecamatan belum tersedia untuk kota/kabupaten ini.</option>
+                    ) : (
+                      <>
+                        <option value="">— Pilih Kecamatan —</option>
+                        {districts.map((d) => (
+                          <option key={d.code} value={d.code}>{d.name}</option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Kelurahan / Desa</label>
+                  <select
+                    value={cddVillageCode}
+                    disabled={!cddDistrictCode || villagesLoading}
+                    onChange={(e) => setCddVillageCode(e.target.value)}
+                    className="rounded-md border bg-white px-2 py-1.5 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    {villagesLoading ? (
+                      <option disabled>Memuat...</option>
+                    ) : cddDistrictCode && villages.length === 0 ? (
+                      <option disabled>Data kelurahan/desa belum tersedia untuk kecamatan ini.</option>
+                    ) : (
+                      <>
+                        <option value="">— Pilih Kelurahan/Desa —</option>
+                        {villages.map((v) => (
+                          <option key={v.code} value={v.code}>{v.name}</option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Nama Jalan</label>
+                  <input value={cddStreet} onChange={(e) => setCddStreet(e.target.value)} placeholder="Nama jalan" className="rounded-md border px-2 py-1.5 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Nomor Rumah</label>
+                  <input value={cddHouseNo} onChange={(e) => setCddHouseNo(e.target.value)} placeholder="Nomor rumah" className="rounded-md border px-2 py-1.5 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">RT / RW</label>
+                  <input value={cddRtRw} onChange={(e) => setCddRtRw(e.target.value)} placeholder="Contoh: 001/002" className="rounded-md border px-2 py-1.5 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Apartemen / Blok</label>
+                  <input value={cddApartment} onChange={(e) => setCddApartment(e.target.value)} placeholder="Opsional" className="rounded-md border px-2 py-1.5 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <label className="text-xs text-slate-500">Patokan</label>
+                  <input value={cddLandmark} onChange={(e) => setCddLandmark(e.target.value)} placeholder="Patokan alamat (opsional)" className="rounded-md border px-2 py-1.5 text-sm" />
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Pekerjaan */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-600 border-b pb-1">Pekerjaan</p>
+              <div className="space-y-2 mb-2">
+                <Row label="Pekerjaan" value={person?.occupation} />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Industri / Kegiatan Usaha</label>
+                  <select value={cddIndustry} onChange={(e) => setCddIndustry(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-sm">
+                    <option value="">— Pilih industri —</option>
+                    {industryCategories.map((c) => (
+                      <option key={c.code} value={c.code}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Penghasilan / Bulan</label>
+                  <select value={cddIncomeRange} onChange={(e) => setCddIncomeRange(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-sm">
+                    <option value="">— Pilih rentang —</option>
+                    {incomeRanges.map((r) => (
+                      <option key={r.code} value={r.code}>{r.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Nama Perusahaan</label>
+                  <input value={cddCompanyName} onChange={(e) => setCddCompanyName(e.target.value)} placeholder="Diisi jika pengguna bekerja" className="rounded-md border px-2 py-1.5 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <label className="text-xs text-slate-500">Alamat Tempat Bekerja</label>
+                  <input value={cddCompanyAddress} onChange={(e) => setCddCompanyAddress(e.target.value)} placeholder="Opsional" className="rounded-md border px-2 py-1.5 text-sm" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 border-t pt-3">
+              <button
+                type="button"
+                onClick={saveCdd}
+                disabled={cddSaving}
+                className="rounded-md bg-kesh-700 px-4 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
+              >
+                {cddSaving ? 'Menyimpan…' : 'Simpan Data'}
+              </button>
+            </div>
+
+            <div className="border-t pt-2 space-y-2">
+              <Row label="CIF Pengguna Jasa" value={formatCif(person?.cif_no)} />
+              <Row label="Parameter CIF" value={getCifRelationshipLabel(person?.cif_relationship_type)} />
+            </div>
+          </div>
+        ) : (
+          /* ── Non-DRAFT: Read-only individual view ──────────────────── */
+          <div className="rounded-xl border p-4 space-y-2">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Informasi Individu</p>
+
+            <p className="text-xs font-semibold text-slate-600 border-b pb-1 mb-2">Data Pribadi</p>
+            <Row label="Nama Lengkap" value={person?.full_name} />
+            <Row label="Alias" value={person?.alias} />
+            <Row label="Email" value={person?.email} />
+            <Row label="Telepon" value={person?.phone} />
+            <Row label="Tempat / Tgl Lahir" value={[person?.pob, person?.dob].filter(Boolean).join(', ')} />
+            <Row label="Jenis Kelamin" value={person?.gender} />
+
+            <p className="text-xs font-semibold text-slate-600 border-b pb-1 mb-2 mt-4">Identitas</p>
+            <Row label="Nomor KTP" value={person?.ktp_number} />
+            <Row label="Nomor SIM" value={person?.sim_number} />
+            <Row label="Nomor Paspor" value={person?.passport_number} />
+            <Row label="Kewarganegaraan" value={person?.nationality} />
+            {person?.identity_number && !person?.ktp_number && (
+              <Row label="Nomor Identitas (Lama)" value={person?.identity_number} />
+            )}
+
+            <p className="text-xs font-semibold text-slate-600 border-b pb-1 mb-2 mt-4">Alamat</p>
+            <Row label="Provinsi" value={person?.province_name} />
+            <Row label="Kota / Kabupaten" value={person?.city_name} />
+            <Row label="Kecamatan" value={person?.district_name} />
+            <Row label="Kelurahan / Desa" value={person?.village_name} />
+            <Row label="Nama Jalan" value={person?.street_address} />
+            <Row label="Nomor Rumah" value={person?.house_number} />
+            <Row label="RT / RW" value={person?.rt_rw} />
+            <Row label="Apartemen / Blok" value={person?.apartment_block} />
+            <Row label="Patokan" value={person?.address_landmark} />
+            <Row label="Alamat KTP" value={person?.address_identity} />
+            <Row label="Alamat Domisili" value={person?.address_residential} />
+
+            <p className="text-xs font-semibold text-slate-600 border-b pb-1 mb-2 mt-4">Pekerjaan</p>
+            <Row label="Pekerjaan" value={person?.occupation} />
+            <Row label="Industri / Kegiatan Usaha" value={person?.industry_category} />
+            <Row label="Nama Perusahaan" value={person?.company_name} />
+            <Row label="Alamat Tempat Bekerja" value={person?.company_address} />
+            <Row label="Penghasilan / Bulan" value={person?.monthly_income_range} />
+
+            <div className="border-t pt-2 mt-4 space-y-2">
+              <Row label="CIF Pengguna Jasa" value={formatCif(person?.cif_no)} />
+              <Row label="Parameter CIF" value={getCifRelationshipLabel(person?.cif_relationship_type)} />
+            </div>
+          </div>
+        )
       ) : (
         <div className="rounded-xl border p-4 space-y-2">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Informasi Perusahaan</p>
@@ -699,64 +1285,80 @@ export default function UserDetailPage() {
           </div>
 
           {/* Risk Factors */}
-          {(risk.risk_factors?.length ?? 0) > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs text-slate-500">
-                    <th className="pb-2 pr-3">Faktor</th>
-                    <th className="pb-2 pr-3">Skor</th>
-                    <th className="pb-2 pr-3">Tingkat</th>
-                    <th className="pb-2 pr-3">Sumber</th>
-                    <th className="pb-2">Detail</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(risk.risk_factors ?? []).map((f, i) => {
-                    const sevCls =
-                      f.severity === 'CRITICAL' ? 'bg-red-200 text-red-800' :
-                      f.severity === 'HIGH'     ? 'bg-red-100 text-red-700' :
-                      f.severity === 'MEDIUM'   ? 'bg-amber-100 text-amber-700' :
-                      f.severity === 'LOW'      ? 'bg-emerald-100 text-emerald-700' :
-                                                  'bg-slate-100 text-slate-600';
-                    return (
-                      <tr key={f.code ?? i} className="border-b last:border-0 align-top">
-                        <td className="py-2 pr-3">
-                          <div className="font-medium text-slate-800">{getRiskFactorLabel(f.code, f.label)}</div>
-                          {f.code && (
-                            <div className="text-xs text-slate-400 font-mono">{f.code}</div>
-                          )}
-                          {f.metadata?.matched && (
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              Teridentifikasi: {Array.isArray(f.metadata.matched) ? f.metadata.matched.join(', ') : f.metadata.matched}
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-2 pr-3 font-medium text-slate-700">
-                          {f.score != null ? f.score : '—'}
-                        </td>
-                        <td className="py-2 pr-3">
-                          {f.severity ? (
-                            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${sevCls}`}>
-                              {f.severity}
-                            </span>
-                          ) : '—'}
-                        </td>
-                        <td className="py-2 pr-3 text-slate-600 capitalize">
-                          {f.source ?? '—'}
-                        </td>
-                        <td className="py-2 text-slate-600 text-xs max-w-xs">
-                          {f.details ?? '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-sm text-slate-400">Belum ada faktor risiko tercatat.</p>
-          )}
+          {(() => {
+            const riskFactors = risk.risk_factors ?? [];
+            const nonBaseFactors = riskFactors.filter(f => f.code !== 'ONBOARDING_OFFLINE_DIRECT');
+            const showNoWatchlistNotice = risk.risk_level === 'LOW' && nonBaseFactors.length === 0;
+
+            return (
+              <>
+                {riskFactors.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-xs text-slate-500">
+                          <th className="pb-2 pr-3">Faktor</th>
+                          <th className="pb-2 pr-3">Skor</th>
+                          <th className="pb-2 pr-3">Tingkat</th>
+                          <th className="pb-2 pr-3">Sumber</th>
+                          <th className="pb-2">Detail</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {riskFactors.map((f, i) => {
+                          const sevCls =
+                            f.severity === 'CRITICAL' ? 'bg-red-200 text-red-800' :
+                            f.severity === 'HIGH'     ? 'bg-red-100 text-red-700' :
+                            f.severity === 'MEDIUM'   ? 'bg-amber-100 text-amber-700' :
+                            f.severity === 'LOW'      ? 'bg-emerald-100 text-emerald-700' :
+                                                        'bg-slate-100 text-slate-600';
+                          return (
+                            <tr key={f.code ?? i} className="border-b last:border-0 align-top">
+                              <td className="py-2 pr-3">
+                                <div className="font-medium text-slate-800">{getRiskFactorLabel(f.code, f.label)}</div>
+                                {f.code && (
+                                  <div className="text-xs text-slate-400 font-mono">{f.code}</div>
+                                )}
+                                {f.metadata?.matched && (
+                                  <div className="text-xs text-slate-500 mt-0.5">
+                                    Teridentifikasi: {Array.isArray(f.metadata.matched) ? f.metadata.matched.join(', ') : f.metadata.matched}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2 pr-3 font-medium text-slate-700">
+                                {f.score != null ? f.score : '—'}
+                              </td>
+                              <td className="py-2 pr-3">
+                                {f.severity ? (
+                                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${sevCls}`}>
+                                    {f.severity}
+                                  </span>
+                                ) : '—'}
+                              </td>
+                              <td className="py-2 pr-3 text-slate-600 capitalize">
+                                {f.source ?? '—'}
+                              </td>
+                              <td className="py-2 text-slate-600 text-xs max-w-xs">
+                                {f.details ?? '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : !showNoWatchlistNotice ? (
+                  <p className="text-sm text-slate-400">Belum ada faktor risiko tercatat.</p>
+                ) : null}
+
+                {showNoWatchlistNotice && (
+                  <p className="text-sm text-slate-500 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+                    Tidak ada match DTTOT, PEP, atau PPPSPM.
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </div>
       ) : app.status === 'DRAFT' ? (
         <div className="rounded-xl border p-4 space-y-2">
@@ -773,109 +1375,226 @@ export default function UserDetailPage() {
       )}
 
       {/* Documents */}
-      <div className="rounded-xl border p-4 space-y-3">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Dokumen</p>
+      {app.type === 'INDIVIDUAL' ? (
+        /* ── Individual: 3 required document cards ──────────────────────── */
+        <div className="rounded-xl border p-4 space-y-4">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Dokumen</p>
 
-        {docErr && (
-          <div className="rounded-md bg-red-50 p-2.5 text-sm text-red-700">{docErr}</div>
-        )}
+          {/* Hidden KTP file input */}
+          <input
+            ref={ktpInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadKtpFile(f); }}
+          />
 
-        {docs.length === 0 ? (
-          <p className="text-sm text-slate-400">Belum ada dokumen.</p>
-        ) : (
-          <ul className="space-y-1.5">
-            {docs.map((d) => {
-              const filename = d.extracted_json?.original_name ?? d.original_name;
-              // Documents are not separately reviewed — the label only reflects
-              // whether the file was successfully uploaded.
-              const uploaded = !!(d.file_uri ?? d.file_url);
-              const statusLabel =
-                d.status === 'UPLOADED' ? 'Berhasil Terupload' :
-                d.status === 'FAILED' ? 'Gagal Upload' :
-                d.status === 'REJECTED' ? 'Perlu Upload Ulang' :
-                d.status === 'APPROVED' ? 'Berhasil Terupload' :
-                d.status === 'PENDING' ? (uploaded ? 'Berhasil Terupload' : 'Belum Terupload') :
-                d.status ? d.status :
-                (uploaded ? 'Berhasil Terupload' : 'Belum Terupload');
-              const failedLike = d.status === 'FAILED' || d.status === 'REJECTED';
-              const uploadedLike =
-                d.status === 'UPLOADED' || d.status === 'APPROVED' ||
-                (d.status === 'PENDING' && uploaded) ||
-                (!d.status && uploaded);
-              const statusCls =
-                uploadedLike ? 'bg-emerald-100 text-emerald-700' :
-                failedLike ? 'bg-red-100 text-red-700' :
-                'bg-slate-100 text-slate-600';
+          <div className="space-y-3">
+            {/* 1. Foto KTP */}
+            {(() => {
+              const doc = docs.find((d) => d.doc_type === 'INDIVIDUAL_KTP_PHOTO');
+              const { uploadedLike, statusLabel, statusCls } = getDocStatusInfo(doc);
               return (
-                <li key={String(d.id)} className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="font-medium text-slate-700">{d.doc_type}</span>
-                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>
-                    {statusLabel}
-                  </span>
-                  {filename && <span className="text-slate-500">— {filename}</span>}
-                  <button
-                    type="button"
-                    onClick={() => viewDocument(d.id)}
-                    className="text-kesh-700 underline text-xs hover:text-kesh-600"
-                  >
-                    Lihat
-                  </button>
-                  {canSubmit && (
-                    <button
-                      onClick={() => deleteDocument(d.id)}
-                      className="ml-auto text-xs text-red-600 hover:underline"
-                    >
-                      Hapus
-                    </button>
+                <div className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-700">Foto KTP</p>
+                    <p className="text-xs text-slate-400 font-mono">INDIVIDUAL_KTP_PHOTO</p>
+                  </div>
+                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
+                  {doc && (
+                    <button type="button" onClick={() => viewDocument(doc.id)} className="text-xs text-kesh-700 underline hover:text-kesh-600">Lihat</button>
                   )}
-                </li>
+                  {canSubmit && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={ktpUploading}
+                        onClick={() => ktpInputRef.current?.click()}
+                        className="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        {ktpUploading ? 'Mengunggah…' : uploadedLike ? 'Upload Ulang' : 'Upload'}
+                      </button>
+                      {doc && (
+                        <button type="button" onClick={() => deleteDocument(doc.id)} className="text-xs text-red-600 hover:underline">Hapus</button>
+                      )}
+                    </>
+                  )}
+                </div>
               );
-            })}
-          </ul>
-        )}
+            })()}
 
-        {/* Upload form — DRAFT only */}
-        {canSubmit && (
-          <form onSubmit={uploadDocument} className="border-t pt-3 space-y-2">
-            <p className="text-xs font-medium text-slate-600">Upload Dokumen Baru</p>
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-slate-500">Tipe</label>
-                <select
-                  value={docType}
-                  onChange={(e) => setDocType(e.target.value)}
-                  className="rounded-md border bg-white px-2 py-1.5 text-sm"
-                >
-                  {(app.type === 'INDIVIDUAL'
-                    ? ['KTP', 'SIM', 'PASPOR', 'SIGNATURE']
-                    : ['AKTA_PENDIRIAN', 'NIB_SIUP', 'NPWP_BADAN', 'KTP_KUASA']
-                  ).map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-slate-500">File *</label>
-                <input
-                  key={docInputKey}
-                  type="file"
-                  accept="image/png,image/jpeg,application/pdf"
-                  required
-                  onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
-                  className="text-sm"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={docUploading || !docFile}
-                className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
-              >
-                {docUploading ? 'Mengunggah…' : 'Unggah'}
-              </button>
+            {/* 2. Foto Wajah Pengguna */}
+            {(() => {
+              const doc = docs.find((d) => d.doc_type === 'INDIVIDUAL_FACE_PHOTO');
+              const { uploadedLike, statusLabel, statusCls } = getDocStatusInfo(doc);
+              return (
+                <div className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-700">Foto Wajah Pengguna</p>
+                    <p className="text-xs text-slate-400 font-mono">INDIVIDUAL_FACE_PHOTO</p>
+                  </div>
+                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
+                  {doc && (
+                    <button type="button" onClick={() => viewDocument(doc.id)} className="text-xs text-kesh-700 underline hover:text-kesh-600">Lihat</button>
+                  )}
+                  {canSubmit && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setWebcamTarget('INDIVIDUAL_FACE_PHOTO')}
+                        className="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50"
+                      >
+                        {uploadedLike ? 'Ambil Ulang' : 'Ambil Foto'}
+                      </button>
+                      {doc && (
+                        <button type="button" onClick={() => deleteDocument(doc.id)} className="text-xs text-red-600 hover:underline">Hapus</button>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* 3. Foto Wajah dengan KTP */}
+            {(() => {
+              const doc = docs.find((d) => d.doc_type === 'INDIVIDUAL_FACE_WITH_KTP_PHOTO');
+              const { uploadedLike, statusLabel, statusCls } = getDocStatusInfo(doc);
+              return (
+                <div className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-700">Foto Wajah dengan KTP</p>
+                    <p className="text-xs text-slate-400 font-mono">INDIVIDUAL_FACE_WITH_KTP_PHOTO</p>
+                  </div>
+                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
+                  {doc && (
+                    <button type="button" onClick={() => viewDocument(doc.id)} className="text-xs text-kesh-700 underline hover:text-kesh-600">Lihat</button>
+                  )}
+                  {canSubmit && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setWebcamTarget('INDIVIDUAL_FACE_WITH_KTP_PHOTO')}
+                        className="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50"
+                      >
+                        {uploadedLike ? 'Ambil Ulang' : 'Ambil Foto dengan KTP'}
+                      </button>
+                      {doc && (
+                        <button type="button" onClick={() => deleteDocument(doc.id)} className="text-xs text-red-600 hover:underline">Hapus</button>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Extra docs outside the 3 required types (legacy / admin uploads) */}
+          {docs.filter((d) => !INDIVIDUAL_REQUIRED_DOC_TYPES.includes(d.doc_type)).length > 0 && (
+            <div className="pt-2 border-t space-y-1.5">
+              <p className="text-xs font-medium text-slate-500">Dokumen Lainnya</p>
+              <ul className="space-y-1.5">
+                {docs
+                  .filter((d) => !INDIVIDUAL_REQUIRED_DOC_TYPES.includes(d.doc_type))
+                  .map((d) => {
+                    const filename = d.extracted_json?.original_name ?? d.original_name;
+                    const { statusLabel, statusCls } = getDocStatusInfo(d);
+                    return (
+                      <li key={String(d.id)} className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="font-medium text-slate-700">{d.doc_type}</span>
+                        <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
+                        {filename && <span className="text-slate-500">— {filename}</span>}
+                        <button type="button" onClick={() => viewDocument(d.id)} className="text-kesh-700 underline text-xs hover:text-kesh-600">Lihat</button>
+                        {canSubmit && (
+                          <button type="button" onClick={() => deleteDocument(d.id)} className="ml-auto text-xs text-red-600 hover:underline">Hapus</button>
+                        )}
+                      </li>
+                    );
+                  })}
+              </ul>
             </div>
-          </form>
-        )}
-      </div>
+          )}
+        </div>
+      ) : (
+        /* ── Business: existing generic document upload section ─────────── */
+        <div className="rounded-xl border p-4 space-y-3">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Dokumen</p>
+
+          {docs.length === 0 ? (
+            <p className="text-sm text-slate-400">Belum ada dokumen.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {docs.map((d) => {
+                const filename = d.extracted_json?.original_name ?? d.original_name;
+                const { statusLabel, statusCls } = getDocStatusInfo(d);
+                return (
+                  <li key={String(d.id)} className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-medium text-slate-700">{d.doc_type}</span>
+                    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>
+                      {statusLabel}
+                    </span>
+                    {filename && <span className="text-slate-500">— {filename}</span>}
+                    <button
+                      type="button"
+                      onClick={() => viewDocument(d.id)}
+                      className="text-kesh-700 underline text-xs hover:text-kesh-600"
+                    >
+                      Lihat
+                    </button>
+                    {canSubmit && (
+                      <button
+                        type="button"
+                        onClick={() => deleteDocument(d.id)}
+                        className="ml-auto text-xs text-red-600 hover:underline"
+                      >
+                        Hapus
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {/* Upload form — DRAFT only */}
+          {canSubmit && (
+            <form onSubmit={uploadDocument} className="border-t pt-3 space-y-2">
+              <p className="text-xs font-medium text-slate-600">Upload Dokumen Baru</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Tipe</label>
+                  <select
+                    value={docType}
+                    onChange={(e) => setDocType(e.target.value)}
+                    className="rounded-md border bg-white px-2 py-1.5 text-sm"
+                  >
+                    {['AKTA_PENDIRIAN', 'NIB_SIUP', 'NPWP_BADAN', 'KTP_KUASA'].map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">File *</label>
+                  <input
+                    key={docInputKey}
+                    type="file"
+                    accept="image/png,image/jpeg,application/pdf"
+                    required
+                    onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+                    className="text-sm"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={docUploading || !docFile}
+                  className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
+                >
+                  {docUploading ? 'Mengunggah…' : 'Unggah'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
 
       {/* Parties (Business only) */}
       {app.type === 'BUSINESS' && (
@@ -892,10 +1611,6 @@ export default function UserDetailPage() {
               </button>
             )}
           </div>
-
-          {partyErr && (
-            <div className="rounded-md bg-red-50 p-2.5 text-sm text-red-700">{partyErr}</div>
-          )}
 
           {/* Add party form — DRAFT only */}
           {canSubmit && partyOpen && (
@@ -1060,16 +1775,12 @@ export default function UserDetailPage() {
             )}
           </div>
 
-          {eddSaveMsg && (
-            <div className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{eddSaveMsg}</div>
-          )}
-
           <EddForm
             initialData={{ ...DEFAULT_EDD, ...eddData }}
             canEdit={canEditEdd}
             eddCompleted={eddCompleted}
             saving={eddSaving}
-            saveError={eddSaveError}
+            saveError=""
             onSaveDraft={(data) => saveEdd(data, false)}
             onComplete={(data) => saveEdd(data, true)}
           />
@@ -1116,6 +1827,24 @@ export default function UserDetailPage() {
           )}
         </div>
       ) : null}
+
+      {/* Webcam capture modal — Individual face photos */}
+      {webcamTarget && (
+        <WebcamCapture
+          instruction={
+            webcamTarget === 'INDIVIDUAL_FACE_PHOTO'
+              ? 'Pastikan wajah pengguna terlihat jelas menghadap kamera.'
+              : 'Pastikan wajah pengguna terlihat jelas dan KTP dipegang di dekat wajah.'
+          }
+          filenamePrefix={
+            webcamTarget === 'INDIVIDUAL_FACE_PHOTO'
+              ? `individual-face-photo-${id}`
+              : `individual-face-with-ktp-${id}`
+          }
+          onCapture={uploadWebcamCapture}
+          onClose={() => setWebcamTarget(null)}
+        />
+      )}
     </div>
   );
 }
