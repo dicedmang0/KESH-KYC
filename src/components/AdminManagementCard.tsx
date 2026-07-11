@@ -26,9 +26,10 @@ const INTERNAL_ROLES = [
 
 const ROLE_LABELS: Record<string, string> = {
   SystemAdmin:    'Admin Sistem',
+  Director:       'Direktur',
   BranchAdmin:    'Admin Cabang',
-  FrontDesk:      'Front Desk',
-  ComplianceLead: 'Lead Compliance',
+  FrontDesk:      'Frontliner',
+  ComplianceLead: 'AML Compliance',
   Auditor:        'Auditor',
   FinanceStaff:   'Staff Finance',
   FinanceManager: 'Manager Finance',

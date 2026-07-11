@@ -338,7 +338,16 @@ export default function MonitoringPage() {
                   <td className="px-3 py-3 text-xs text-slate-600">{formatDate(c.due_date)}</td>
                   <td className="px-3 py-3 text-xs text-slate-600">{formatDateTime(c.detected_at)}</td>
                   <td className="px-3 py-3 text-xs text-slate-600 max-w-xs">
-                    {c.trigger_summary ?? '—'}
+                    {c.alert_names && c.alert_names.length > 0 ? (
+                      <div>
+                        <div className="text-slate-700">{c.alert_names[0]}</div>
+                        {c.alert_names.length > 1 && (
+                          <div className="text-slate-400">+{c.alert_names.length - 1} alert lain</div>
+                        )}
+                      </div>
+                    ) : (
+                      c.trigger_summary ?? '—'
+                    )}
                   </td>
                   <td className="px-3 py-3 text-right">
                     <Link

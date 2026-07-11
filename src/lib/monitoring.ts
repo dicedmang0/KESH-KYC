@@ -29,10 +29,26 @@ export type MonitoringReportStatus =
 
 // ── Entity types ──────────────────────────────────────────────────────────────
 
+export type AlertInformation = {
+  report_type?: string | null;
+  trigger_criteria?: string | null;
+  parameters?: string[];
+  analysis?: string | null;
+  recommendation?: string | null;
+  matched_conditions?: string[];
+  evidence?: Record<string, unknown> | null;
+  supported_by_system?: boolean | null;
+  limitations?: string[];
+  source?: string | null;
+};
+
 export type MonitoringTrigger = {
   id?: number | string | null;
   rule_code?: string | null;
   rule_name?: string | null;
+  alert_code?: string | null;
+  alert_name?: string | null;
+  alert_information?: AlertInformation | null;
   trigger_type?: string | null;
   severity?: string | null;
   score?: number | null;
@@ -56,6 +72,8 @@ export type MonitoringCase = {
   due_date?: string | null;
   report_type?: string | null;
   trigger_summary?: string | null;
+  alert_names?: string[] | null;
+  alert_count?: number | null;
 };
 
 export type LinkedTransferSummary = {

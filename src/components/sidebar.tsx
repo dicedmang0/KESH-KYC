@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   BarChart3,
   Users,
@@ -30,14 +30,14 @@ type Item = {
 };
 
 const allItems: Item[] = [
-  { href: '/dashboard',  label: 'Dasbor',              icon: BarChart3      },
-  { href: '/users',      label: 'Manajemen Pengguna',  icon: Users          },
-  { href: '/kyc',        label: 'Verifikasi KYC/KYB',  icon: ShieldCheck    },
-  { href: '/transfers',  label: 'Pencatatan Transfer',  icon: ArrowLeftRight },
-  { href: '/watchlist',  label: 'Daftar Pengawasan',    icon: ClipboardList  },
-  { href: '/monitoring', label: 'Monitoring',           icon: AlertTriangle  },
-  { href: '/reports',    label: 'Laporan',              icon: FileBarChart   },
-  { href: '/settings',   label: 'Pengaturan',           icon: Settings       },
+  { href: '/dashboard',  label: 'Dashboard',               icon: BarChart3      },
+  { href: '/users',      label: 'Manajemen Pengguna Jasa', icon: Users          },
+  { href: '/kyc',        label: 'Verifikasi KYC/KYB',      icon: ShieldCheck    },
+  { href: '/transfers',  label: 'Pencatatan Transfer',      icon: ArrowLeftRight },
+  { href: '/watchlist',  label: 'Daftar Pengawasan',        icon: ClipboardList  },
+  { href: '/monitoring', label: 'Monitoring',               icon: AlertTriangle  },
+  { href: '/reports',    label: 'Laporan',                  icon: FileBarChart   },
+  { href: '/settings',   label: 'Pengaturan',               icon: Settings       },
 ];
 
 // Director sees a different label for the monitoring menu entry.
@@ -48,18 +48,22 @@ const ROLE_ITEM_LABEL: Record<string, Partial<Record<string, string>>> = {
 export default function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { token, logout } = useAuth();
   const role = getRoleFromToken(token);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setMounted(true); }, []);
+
   const ROLE_MENU: Record<string, string[]> = {
-    SystemAdmin:        ['/dashboard', '/users', '/kyc', '/transfers', '/watchlist', '/monitoring', '/reports', '/settings'],
-    BranchAdmin:        ['/dashboard', '/users', '/kyc', '/reports'],
-    ComplianceLead:     ['/dashboard', '/users', '/kyc', '/watchlist', '/monitoring', '/reports'],
-    Director:           ['/dashboard', '/monitoring'],
-    FrontDesk:          ['/dashboard', '/users', '/kyc', '/reports'],
-    Auditor:            ['/dashboard', '/users', '/kyc', '/monitoring', '/reports'],
-    FinanceStaff:       ['/dashboard', '/transfers', '/reports'],
-    FinanceManager:     ['/dashboard', '/transfers', '/reports'],
+    SystemAdmin:    ['/dashboard', '/users', '/kyc', '/transfers', '/watchlist', '/monitoring', '/reports', '/settings'],
+    BranchAdmin:    [],
+    ComplianceLead: ['/dashboard', '/kyc', '/watchlist', '/monitoring', '/reports'],
+    Director:       ['/dashboard', '/monitoring'],
+    FrontDesk:      ['/dashboard', '/users', '/kyc'],
+    Auditor:        ['/dashboard', '/kyc', '/monitoring', '/reports'],
+    FinanceStaff:   ['/dashboard', '/transfers', '/reports'],
+    FinanceManager: ['/dashboard', '/transfers', '/reports'],
   };
 
   const allowedHrefs = new Set(ROLE_MENU[role ?? ''] ?? ['/dashboard']);
@@ -116,9 +120,11 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Navigation */}
+        {/* Navigation — rendered only after mount so server and client initial
+            output are identical (empty nav), avoiding className attribute mismatches
+            from role/pathname-dependent active state. */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {visibleItems.map(({ href, label, icon: Icon }) => {
+          {mounted && visibleItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname?.startsWith(href + '/');
             const displayLabel = ROLE_ITEM_LABEL[role ?? '']?.[href] ?? label;
             return (
@@ -151,8 +157,10 @@ export default function Sidebar() {
               <span>Keluar</span>
             </button>
           )}
+          {/* Year rendered only after mount — new Date() at SSR time is
+              non-deterministic and would mismatch at year boundaries. */}
           <p className="mt-2 px-3 text-[10px] text-white/25">
-            © {new Date().getFullYear()} KESH
+            {mounted ? `© ${new Date().getFullYear()} KESH` : '© KESH'}
           </p>
         </div>
       </aside>

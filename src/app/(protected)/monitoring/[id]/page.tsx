@@ -26,6 +26,7 @@ import {
   DIRECTOR_DECISION_LABELS,
   REPORT_STATUS_LABELS,
   type MonitoringCaseDetail,
+  type MonitoringTrigger,
   type ComplianceReviewAction,
   type DirectorDecision,
   type MonitoringReportStatus,
@@ -88,6 +89,126 @@ function StatusBadge({ status }: { status?: string | null }) {
     status === 'ARCHIVED'                ? 'bg-slate-100 text-slate-400' :
                                            'bg-slate-100 text-slate-500';
   return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>{formatCaseStatus(status)}</span>;
+}
+
+function SystemSupportBadge({ supported }: { supported?: boolean | null }) {
+  if (supported === true) {
+    return <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-700">Terdeteksi Sistem</span>;
+  }
+  if (supported === false) {
+    return <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700">Template / Manual-ready</span>;
+  }
+  return null;
+}
+
+function AlertInformationCard({ trigger, index }: { trigger: MonitoringTrigger; index: number }) {
+  const [open, setOpen] = useState(false);
+  const info = trigger.alert_information;
+
+  const hasInfo = !!(info && (
+    info.report_type || info.trigger_criteria || info.analysis ||
+    info.recommendation || (info.parameters?.length ?? 0) > 0 ||
+    (info.matched_conditions?.length ?? 0) > 0 ||
+    (info.evidence && Object.keys(info.evidence).length > 0) ||
+    (info.limitations?.length ?? 0) > 0 || info.source
+  ));
+
+  const title = trigger.alert_name ?? trigger.rule_name ?? trigger.rule_code ?? `Trigger #${index + 1}`;
+
+  if (!hasInfo) {
+    return (
+      <div className="rounded-lg border bg-slate-50 p-3 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-slate-700">{title}</span>
+          <SystemSupportBadge supported={info?.supported_by_system} />
+        </div>
+        <p className="text-xs text-slate-400 mt-1">Tidak ada detail alert tersedia.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between p-3 text-left hover:bg-slate-50 transition-colors"
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium text-slate-800">{title}</span>
+          <SystemSupportBadge supported={info?.supported_by_system} />
+        </div>
+        <span className="text-slate-400 text-xs ml-2 shrink-0">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && info && (
+        <div className="border-t p-3 space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {trigger.alert_name && <Field label="Alert" value={trigger.alert_name} />}
+            {info.report_type && <Field label="Jenis Laporan" value={info.report_type} />}
+            {info.source && <Field label="Sumber" value={info.source} />}
+            {info.trigger_criteria && (
+              <div className="sm:col-span-2">
+                <Field label="Kriteria Trigger" value={info.trigger_criteria} />
+              </div>
+            )}
+            {info.analysis && (
+              <div className="sm:col-span-2">
+                <Field label="Analisis" value={info.analysis} />
+              </div>
+            )}
+            {info.recommendation && (
+              <div className="sm:col-span-2">
+                <Field label="Rekomendasi" value={info.recommendation} />
+              </div>
+            )}
+          </div>
+
+          {(info.parameters?.length ?? 0) > 0 && (
+            <div>
+              <div className="text-xs text-slate-500 mb-1">Parameter</div>
+              <ul className="list-disc list-inside text-sm text-slate-700 space-y-0.5">
+                {info.parameters!.map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {(info.matched_conditions?.length ?? 0) > 0 && (
+            <div>
+              <div className="text-xs text-slate-500 mb-1">Kondisi yang Terdeteksi</div>
+              <ul className="list-disc list-inside text-sm text-slate-700 space-y-0.5">
+                {info.matched_conditions!.map((c, i) => <li key={i}>{c}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {info.evidence && Object.keys(info.evidence).length > 0 && (
+            <div>
+              <div className="text-xs text-slate-500 mb-1">Evidence</div>
+              <div className="rounded bg-slate-50 p-2 space-y-1">
+                {Object.entries(info.evidence).map(([k, v]) => (
+                  <div key={k} className="flex gap-2 text-xs">
+                    <span className="text-slate-500 font-medium min-w-28 shrink-0">{k}</span>
+                    <span className="text-slate-700 break-all">
+                      {v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(info.limitations?.length ?? 0) > 0 && (
+            <div>
+              <div className="text-xs text-slate-500 mb-1">Limitasi Data</div>
+              <ul className="list-disc list-inside text-xs text-slate-500 space-y-0.5">
+                {info.limitations!.map((l, i) => <li key={i}>{l}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Compliance actions available per case type
@@ -340,24 +461,25 @@ export default function MonitoringDetailPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-slate-500">
-                  <th className="pb-2 pr-3">Kode / Nama</th>
+                  <th className="pb-2 pr-3">Alert / Kode</th>
                   <th className="pb-2 pr-3">Tipe</th>
                   <th className="pb-2 pr-3">Severity</th>
                   <th className="pb-2 pr-3">Skor</th>
                   <th className="pb-2 pr-3">Nominal</th>
-                  <th className="pb-2 pr-3">Tipe Trigger</th>
-                  <th className="pb-2">Detail</th>
+                  <th className="pb-2">Tipe Trigger</th>
                 </tr>
               </thead>
               <tbody>
                 {(detail.triggers ?? []).map((t, i) => (
                   <tr key={t.id ?? i} className="border-b last:border-0 align-top">
                     <td className="py-2 pr-3">
-                      <div className="font-medium text-slate-800">{formatTriggerLabel(t.rule_code)}</div>
+                      <div className="font-medium text-slate-800">
+                        {t.alert_name ?? formatTriggerLabel(t.rule_code)}
+                      </div>
                       {t.rule_code && (
                         <div className="text-xs text-slate-400 font-mono">{t.rule_code}</div>
                       )}
-                      {t.rule_name && (
+                      {!t.alert_name && t.rule_name && (
                         <div className="text-xs text-slate-500">{t.rule_name}</div>
                       )}
                     </td>
@@ -365,7 +487,7 @@ export default function MonitoringDetailPage() {
                     <td className="py-2 pr-3"><SeverityBadge severity={t.severity} /></td>
                     <td className="py-2 pr-3 text-slate-700 font-medium">{t.score ?? '—'}</td>
                     <td className="py-2 pr-3 text-xs text-slate-600">{formatMonitoringAmount(t.amount)}</td>
-                    <td className="py-2 pr-3">
+                    <td className="py-2">
                       {t.supporting ? (
                         <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-500">
                           Pendukung
@@ -375,13 +497,6 @@ export default function MonitoringDetailPage() {
                           Pengklasifikasi
                         </span>
                       )}
-                    </td>
-                    <td className="py-2 text-xs text-slate-600 max-w-xs">
-                      {t.details
-                        ? typeof t.details === 'string'
-                          ? t.details
-                          : <pre className="whitespace-pre-wrap font-mono text-xs">{JSON.stringify(t.details, null, 2)}</pre>
-                        : '—'}
                     </td>
                   </tr>
                 ))}
@@ -393,6 +508,16 @@ export default function MonitoringDetailPage() {
             <p className="text-xs text-slate-400 italic">
               * Transfer bernilai tinggi bersifat pendukung dan tidak sendirinya mengindikasikan transaksi mencurigakan.
             </p>
+          )}
+
+          {/* Alert Information accordion per trigger */}
+          {detail.triggers?.some((t) => t.alert_name || t.alert_information) && (
+            <div className="space-y-2 pt-2 border-t">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alert Information</p>
+              {(detail.triggers ?? []).map((t, i) => (
+                <AlertInformationCard key={t.id ?? i} trigger={t} index={i} />
+              ))}
+            </div>
           )}
         </Section>
       )}

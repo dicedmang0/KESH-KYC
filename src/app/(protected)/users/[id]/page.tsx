@@ -461,6 +461,8 @@ export default function UserDetailPage() {
   const canDecide = app.status === 'SUBMITTED' || app.status === 'IN_REVIEW';
   const displayName = app.type === 'INDIVIDUAL' ? person?.full_name : business?.legal_name;
 
+  const cifNo = app.type === 'INDIVIDUAL' ? person?.cif_no : business?.cif_no;
+
   const isHighRisk = risk?.risk_level === 'HIGH' || app.edd_required === true;
   const eddRequired = app.edd_required ?? false;
   const eddCompleted = app.edd_completed ?? false;
@@ -475,7 +477,15 @@ export default function UserDetailPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">{displayName || `Application #${app.id ?? id}`}</h1>
+          <div className="flex items-baseline gap-2">
+            {cifNo && (
+              <span className="font-mono text-base font-bold text-kesh-700">
+                {formatCif(cifNo)}
+              </span>
+            )}
+            <h1 className="text-xl font-semibold">{displayName || '—'}</h1>
+          </div>
+          <p className="text-xs text-slate-400 mt-0.5">Aplikasi #{app.id ?? id}</p>
           <div className="mt-1 flex items-center gap-2">
             <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[app.status] ?? 'bg-slate-100 text-slate-700'}`}>
               {{ DRAFT: 'Draft', SUBMITTED: 'Diajukan', IN_REVIEW: 'Dalam Review', APPROVED: 'Disetujui', REJECTED: 'Ditolak' }[app.status] ?? app.status}
@@ -1084,7 +1094,7 @@ export default function UserDetailPage() {
           )}
           {screening.checked_at && (
             <p className="text-xs text-slate-500">
-              Diperiksa: {new Date(screening.checked_at).toLocaleString('id-ID')}
+              Diperiksa: {new Date(screening.checked_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}
             </p>
           )}
           {Array.isArray(screening.matches) && screening.matches.length > 0 ? (
