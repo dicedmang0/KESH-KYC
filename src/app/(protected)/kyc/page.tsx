@@ -133,24 +133,6 @@ function StatusBadge({ s }: { s?: AppStatus | string | null }) {
   );
 }
 
-function RiskPill({ level, score }: { level?: RiskLevel | null; score?: number | null }) {
-  if (!level) return <span className="text-xs text-slate-400">-</span>;
-  const cls =
-    level === "HIGH"
-      ? "bg-red-100 text-red-700"
-      : level === "MEDIUM"
-      ? "bg-amber-100 text-amber-700"
-      : level === "PROHIBITED"
-      ? "bg-black text-white"
-      : "bg-emerald-100 text-emerald-700";
-  const scoreStr = score != null ? ` (${score})` : "";
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs ${cls}`}>
-      {level}{scoreStr}
-    </span>
-  );
-}
-
 // ── Page Inner ────────────────────────────────────────────────────────────────
 
 function KycPageInner() {
@@ -337,7 +319,6 @@ function KycPageInner() {
                     <TableHead>Nama</TableHead>
                     <TableHead>Tipe</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Risiko</TableHead>
                     <TableHead>Tanggal</TableHead>
                     <TableHead>Aksi</TableHead>
                   </TableRow>
@@ -369,9 +350,6 @@ function KycPageInner() {
                         </TableCell>
                         <TableCell>
                           <StatusBadge s={row.status} />
-                        </TableCell>
-                        <TableCell>
-                          <RiskPill level={row.risk_level} score={row.risk_score} />
                         </TableCell>
                         <TableCell className="text-sm text-slate-600">
                           {fmtDate(row.submitted_at || row.created_at)}

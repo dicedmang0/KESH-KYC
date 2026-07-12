@@ -146,3 +146,19 @@ export function getRoleFromToken(token: string | null | undefined): string | nul
     return null;
   }
 }
+
+// Decode the display name from a JWT access token, if present (client-side only).
+export function getNameFromToken(token: string | null | undefined): string | null {
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64.padEnd(Math.ceil(b64.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(padded)) as { full_name?: unknown; name?: unknown };
+    const name = payload.full_name ?? payload.name;
+    return typeof name === "string" && name.trim() ? name.trim() : null;
+  } catch {
+    return null;
+  }
+}

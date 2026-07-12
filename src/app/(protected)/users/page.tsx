@@ -85,19 +85,6 @@ function StatusBadge({ s }: { s: Status }) {
   );
 }
 
-function RiskPill({ level }: { level?: Item["risk_level"] }) {
-  if (!level) return <span className="text-xs text-slate-400">-</span>;
-  const cls =
-    level === "HIGH"
-      ? "bg-red-100 text-red-700"
-      : level === "MEDIUM"
-      ? "bg-amber-100 text-amber-700"
-      : level === "PROHIBITED"
-      ? "bg-black text-white"
-      : "bg-emerald-100 text-emerald-700";
-  return <span className={`px-2 py-0.5 rounded text-xs ${cls}`}>{level}</span>;
-}
-
 const EMPTY_API: ApiRes = { data: [], total: 0, page: 1, limit: 20 };
 
 function UsersPageInner() {
@@ -349,7 +336,6 @@ function UsersPageInner() {
                     <TableHead>Nama Pengguna Jasa</TableHead>
                     <TableHead>Jenis Pengguna</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Risk</TableHead>
                     <TableHead>Tanggal Dibuat</TableHead>
                     <TableHead>Detail</TableHead>
                   </TableRow>
@@ -370,9 +356,6 @@ function UsersPageInner() {
                       </TableCell>
                       <TableCell>
                         <StatusBadge s={row.status} />
-                      </TableCell>
-                      <TableCell>
-                        <RiskPill level={row.risk_level || undefined} />
                       </TableCell>
                       <TableCell>{fmtDate(row.created_at)}</TableCell>
                       <TableCell>

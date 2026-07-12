@@ -11,7 +11,6 @@ import { Card, CardContent } from "@/components/ui/card";
 
 type Kind = "INDIVIDUAL" | "BUSINESS";
 type RefItem = { code: string; name: string };
-type IncomeRange = { code: string; label: string };
 
 function toRefList<T>(r: unknown): T[] {
   if (Array.isArray(r)) return r as T[];
@@ -75,7 +74,8 @@ function NewApplicationPageInner() {
   const [villages, setVillages] = useState<RefItem[]>([]);
   const [nationalities, setNationalities] = useState<RefItem[]>([]);
   const [industryCategories, setIndustryCategories] = useState<RefItem[]>([]);
-  const [incomeRanges, setIncomeRanges] = useState<IncomeRange[]>([]);
+  const [incomeRanges, setIncomeRanges] = useState<RefItem[]>([]);
+  const [occupations, setOccupations] = useState<RefItem[]>([]);
   const [regenciesLoading, setRegenciesLoading] = useState(false);
   const [districtsLoading, setDistrictsLoading] = useState(false);
   const [villagesLoading, setVillagesLoading] = useState(false);
@@ -88,11 +88,13 @@ function NewApplicationPageInner() {
       apiFetch<unknown>("/references/nationalities"),
       apiFetch<unknown>("/references/industry-categories"),
       apiFetch<unknown>("/references/monthly-income-ranges"),
-    ]).then(([prov, nat, ind, inc]) => {
+      apiFetch<unknown>("/references/occupations"),
+    ]).then(([prov, nat, ind, inc, occ]) => {
       setProvinces(toRefList<RefItem>(prov));
       setNationalities(toRefList<RefItem>(nat));
       setIndustryCategories(toRefList<RefItem>(ind));
-      setIncomeRanges(toRefList<IncomeRange>(inc));
+      setIncomeRanges(toRefList<RefItem>(inc));
+      setOccupations(toRefList<RefItem>(occ));
     }).catch(() => {});
   }, [kind]);
 
@@ -475,12 +477,19 @@ function NewApplicationPageInner() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="grid gap-1">
                     <label className="text-sm font-medium">Pekerjaan</label>
-                    <input
-                      className="rounded-md border px-3 py-2 text-sm"
+                    <select
+                      className="rounded-md border bg-white px-3 py-2 text-sm"
                       value={i_occupation}
                       onChange={(e) => setIOccupation(e.target.value)}
-                      placeholder="mis. Software Engineer"
-                    />
+                    >
+                      <option value="">— Pilih pekerjaan —</option>
+                      {occupations.map((o) => (
+                        <option key={o.code} value={o.name}>{o.name}</option>
+                      ))}
+                      {i_occupation && !occupations.find((o) => o.name === i_occupation) && (
+                        <option value={i_occupation}>{i_occupation}</option>
+                      )}
+                    </select>
                   </div>
                   <div className="grid gap-1">
                     <label className="text-sm font-medium">Industri / Kegiatan Usaha</label>
@@ -512,9 +521,13 @@ function NewApplicationPageInner() {
                       onChange={(e) => setIIncomeRange(e.target.value)}
                     >
                       <option value="">— Pilih rentang —</option>
-                      {incomeRanges.map((r) => (
-                        <option key={r.code} value={r.code}>{r.label}</option>
-                      ))}
+                      {incomeRanges.length === 0 ? (
+                        <option value="" disabled>Rentang penghasilan belum tersedia.</option>
+                      ) : (
+                        incomeRanges.map((r) => (
+                          <option key={r.code} value={r.code}>{r.name}</option>
+                        ))
+                      )}
                     </select>
                   </div>
                   <div className="grid gap-1 md:col-span-2">

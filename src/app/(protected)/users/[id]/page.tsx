@@ -60,14 +60,18 @@ type Person = {
   monthly_income_range?: string | null;
 };
 
+type WatchlistStatus = 'CLEAR' | 'NEAR_MATCH' | 'MATCH' | string;
+
 type Business = {
   legal_name?: string | null;
-  trade_name?: string | null;
   legal_form?: string | null;
   incorporation_place?: string | null;
   incorporation_date?: string | null;
+  deed_number?: string | null;
+  business_license_number?: string | null;
   nib?: string | null;
   npwp?: string | null;
+  company_email?: string | null;
   address_line?: string | null;
   city?: string | null;
   province?: string | null;
@@ -76,35 +80,15 @@ type Business = {
   industry_code?: string | null;
   business_activity?: string | null;
   cif_no?: string | null;
-};
-
-const RISK_FACTOR_LABELS: Record<string, string> = {
-  DTTOT_MATCH: 'Teridentifikasi dalam daftar DTTOT',
-  PEP_MATCH: 'Teridentifikasi sebagai PEP',
-  PPPSPM_MATCH: 'Teridentifikasi dalam daftar PPPSPM',
-  ONBOARDING_OFFLINE_DIRECT: 'Onboarding tatap muka langsung',
-};
-
-function getRiskFactorLabel(code?: string | null, backendLabel?: string | null): string {
-  if (code && RISK_FACTOR_LABELS[code]) return RISK_FACTOR_LABELS[code];
-  return backendLabel ?? code ?? '—';
-}
-
-type RiskFactor = {
-  code?: string | null;
-  label?: string | null;
-  score?: number | null;
-  severity?: 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | string | null;
-  source?: string | null;
-  details?: string | null;
-  metadata?: { matched?: string | string[] | null; [key: string]: unknown } | null;
-};
-
-type Risk = {
-  risk_score?: number | null;
-  risk_level?: string | null;
-  override_level?: string | null;
-  risk_factors?: RiskFactor[] | null;
+  // Pengurus Utama / PIC (entity-level)
+  pic_name?: string | null;
+  pic_position?: string | null;
+  pic_identity_number?: string | null;
+  pic_identity_type?: string | null;
+  // Screening DTTOT/PPPSPM summary per subject (default CLEAR)
+  company_watchlist_status?: WatchlistStatus | null;
+  management_watchlist_status?: WatchlistStatus | null;
+  shareholder_watchlist_status?: WatchlistStatus | null;
 };
 
 type Document = {
@@ -131,7 +115,6 @@ type DetailResponse = {
   business?: Business | null;
   documents: Document[];
   parties: Party[];
-  risk?: Risk | null;
   edd?: EddRecord | null;
 };
 
@@ -145,6 +128,12 @@ type Party = {
   dob?: string | null;
   cif_no?: string | null;
   cif_relationship_type?: string | null;
+  // Detail pemegang saham & BO (form terbaru)
+  ownership_percentage?: number | string | null;
+  address?: string | null;
+  identity_document_type?: string | null;
+  source_of_funds?: string | null;
+  source_of_wealth?: string | null;
 };
 
 type ScreeningResult = {
@@ -161,7 +150,6 @@ type PrecheckResult = {
 };
 
 type RefItem = { code: string; name: string };
-type IncomeRange = { code: string; label: string };
 
 // Individual required doc types and labels
 const INDIVIDUAL_REQUIRED_DOC_TYPES = [
@@ -206,6 +194,32 @@ function getCifRelationshipLabel(value?: string | null): string {
   return '—';
 }
 
+// Watchlist (DTTOT/PPPSPM) screening status badge — CLEAR / NEAR_MATCH / MATCH.
+function WatchlistBadge({ status }: { status?: string | null }) {
+  const s = status ?? 'CLEAR';
+  const map: Record<string, { label: string; cls: string }> = {
+    CLEAR: { label: 'Clear', cls: 'bg-emerald-100 text-emerald-700' },
+    NEAR_MATCH: { label: 'Near Match', cls: 'bg-amber-100 text-amber-700' },
+    MATCH: { label: 'Match', cls: 'bg-red-100 text-red-700' },
+  };
+  const info = map[s] ?? { label: s, cls: 'bg-slate-100 text-slate-600' };
+  return <span className={`rounded px-2 py-0.5 text-xs font-medium ${info.cls}`}>{info.label}</span>;
+}
+
+const PARTY_ROLE_LABELS: Record<string, string> = {
+  DIRECTOR: 'Direktur',
+  COMMISSIONER: 'Komisaris',
+  MANAGER: 'Manajer',
+  BO: 'Beneficial Owner',
+  AUTHORIZED_REP: 'PIC',
+  SHAREHOLDER: 'Pemegang Saham',
+};
+
+function partyRoleLabel(role?: string | null): string {
+  if (!role) return '—';
+  return PARTY_ROLE_LABELS[role] ?? role;
+}
+
 const STATUS_COLOR: Record<Status, string> = {
   DRAFT: 'bg-slate-100 text-slate-700',
   SUBMITTED: 'bg-amber-100 text-amber-700',
@@ -230,7 +244,6 @@ export default function UserDetailPage() {
   const [app, setApp] = useState<ApplicationDetail | null>(null);
   const [person, setPerson] = useState<Person | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
-  const [risk, setRisk] = useState<Risk | null>(null);
   const [docs, setDocs] = useState<Document[]>([]);
   const [parties, setParties] = useState<Party[]>([]);
   const [screening, setScreening] = useState<ScreeningResult | null>(null);
@@ -291,6 +304,7 @@ export default function UserDetailPage() {
   const [cddCompanyName, setCddCompanyName] = useState('');
   const [cddCompanyAddress, setCddCompanyAddress] = useState('');
   const [cddIncomeRange, setCddIncomeRange] = useState('');
+  const [cddOccupation, setCddOccupation] = useState('');
   const [cddSaving, setCddSaving] = useState(false);
 
   // Reference data for dropdowns
@@ -300,7 +314,8 @@ export default function UserDetailPage() {
   const [villages, setVillages] = useState<RefItem[]>([]);
   const [nationalities, setNationalities] = useState<RefItem[]>([]);
   const [industryCategories, setIndustryCategories] = useState<RefItem[]>([]);
-  const [incomeRanges, setIncomeRanges] = useState<IncomeRange[]>([]);
+  const [incomeRanges, setIncomeRanges] = useState<RefItem[]>([]);
+  const [occupations, setOccupations] = useState<RefItem[]>([]);
   const [regenciesLoading, setRegenciesLoading] = useState(false);
   const [districtsLoading, setDistrictsLoading] = useState(false);
   const [villagesLoading, setVillagesLoading] = useState(false);
@@ -340,8 +355,8 @@ export default function UserDetailPage() {
         setCddCompanyName(p.company_name ?? '');
         setCddCompanyAddress(p.company_address ?? '');
         setCddIncomeRange(p.monthly_income_range ?? '');
+        setCddOccupation(p.occupation ?? '');
       }
-      setRisk(resp.risk ?? null);
       setDocs(resp.documents ?? []);
       setParties(resp.parties ?? []);
 
@@ -390,11 +405,13 @@ export default function UserDetailPage() {
       apiFetch<unknown>('/references/nationalities'),
       apiFetch<unknown>('/references/industry-categories'),
       apiFetch<unknown>('/references/monthly-income-ranges'),
-    ]).then(([prov, nat, ind, inc]) => {
+      apiFetch<unknown>('/references/occupations'),
+    ]).then(([prov, nat, ind, inc, occ]) => {
       setProvinces(toList<RefItem>(prov));
       setNationalities(toList<RefItem>(nat));
       setIndustryCategories(toList<RefItem>(ind));
-      setIncomeRanges(toList<IncomeRange>(inc));
+      setIncomeRanges(toList<RefItem>(inc));
+      setOccupations(toList<RefItem>(occ));
     }).catch(() => {});
   }, [app?.type]);
 
@@ -679,6 +696,7 @@ export default function UserDetailPage() {
           apartment_block: cddApartment || null,
           address_landmark: cddLandmark || null,
           nationality: cddNationality || null,
+          occupation: cddOccupation || null,
           industry_category: cddIndustry || null,
           company_name: cddCompanyName || null,
           company_address: cddCompanyAddress || null,
@@ -757,14 +775,17 @@ export default function UserDetailPage() {
 
   const cifNo = app.type === 'INDIVIDUAL' ? person?.cif_no : business?.cif_no;
 
-  const isHighRisk = risk?.risk_level === 'HIGH' || app.edd_required === true;
   const eddRequired = app.edd_required ?? false;
   const eddCompleted = app.edd_completed ?? false;
   const approveBlocked = eddRequired && !eddCompleted;
 
+  // KYC final decision (approve/reject) is limited to compliance roles + admin.
+  // FrontDesk can create/input/submit KYC but cannot approve or reject.
+  const canDecideByRole = ['ComplianceStaff', 'ComplianceLead', 'SystemAdmin'].includes(userRole ?? '');
+
   const canEditEdd = ['SystemAdmin', 'ComplianceLead'].includes(userRole ?? '');
   const canViewEdd = ['SystemAdmin', 'ComplianceLead', 'Auditor'].includes(userRole ?? '');
-  const showEddSection = isHighRisk || eddRequired || Object.keys(eddData).length > 0;
+  const showEddSection = eddRequired || Object.keys(eddData).length > 0;
 
   return (
     <div className="space-y-5 p-6 max-w-3xl">
@@ -785,15 +806,6 @@ export default function UserDetailPage() {
               {{ DRAFT: 'Draft', SUBMITTED: 'Diajukan', IN_REVIEW: 'Dalam Review', APPROVED: 'Disetujui', REJECTED: 'Ditolak' }[app.status] ?? app.status}
             </span>
             <span className="text-xs text-slate-500">{{ INDIVIDUAL: 'Individu', BUSINESS: 'Perusahaan' }[app.type] ?? app.type}</span>
-            {risk?.risk_level && (
-              <span className={`rounded px-2 py-0.5 text-xs font-medium ${
-                risk.risk_level === 'HIGH' ? 'bg-red-100 text-red-700' :
-                risk.risk_level === 'MEDIUM' ? 'bg-amber-100 text-amber-700' :
-                'bg-emerald-100 text-emerald-700'
-              }`}>
-                Risiko: {risk.risk_level}{risk.risk_score != null ? ` (${risk.risk_score})` : ''}
-              </span>
-            )}
           </div>
         </div>
         <button onClick={() => router.back()} className="text-sm text-slate-500 hover:text-slate-700 underline transition-colors">
@@ -801,10 +813,10 @@ export default function UserDetailPage() {
         </button>
       </div>
 
-      {/* HIGH RISK / EDD banner */}
-      {isHighRisk && !eddCompleted && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          <p className="font-semibold">Application ini tergolong HIGH RISK dan memerlukan Enhanced Due Diligence (EDD) sebelum dapat disetujui.</p>
+      {/* EDD banner */}
+      {eddRequired && !eddCompleted && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <p className="font-semibold">Application ini memerlukan Enhanced Due Diligence (EDD) sebelum dapat disetujui.</p>
         </div>
       )}
       {eddCompleted && (
@@ -845,7 +857,7 @@ export default function UserDetailPage() {
 
         <div className="flex flex-wrap gap-2">
 
-          {canDecide && (
+          {canDecide && canDecideByRole && (
             <>
               <div className="flex flex-col gap-1">
                 <button
@@ -1133,10 +1145,19 @@ export default function UserDetailPage() {
             {/* 4. Pekerjaan */}
             <div className="space-y-3">
               <p className="text-xs font-semibold text-slate-600 border-b pb-1">Pekerjaan</p>
-              <div className="space-y-2 mb-2">
-                <Row label="Pekerjaan" value={person?.occupation} />
-              </div>
               <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Pekerjaan</label>
+                  <select value={cddOccupation} onChange={(e) => setCddOccupation(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-sm">
+                    <option value="">— Pilih pekerjaan —</option>
+                    {occupations.map((o) => (
+                      <option key={o.code} value={o.name}>{o.name}</option>
+                    ))}
+                    {cddOccupation && !occupations.find((o) => o.name === cddOccupation) && (
+                      <option value={cddOccupation}>{cddOccupation}</option>
+                    )}
+                  </select>
+                </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-500">Industri / Kegiatan Usaha</label>
                   <select value={cddIndustry} onChange={(e) => setCddIndustry(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-sm">
@@ -1150,9 +1171,13 @@ export default function UserDetailPage() {
                   <label className="text-xs text-slate-500">Penghasilan / Bulan</label>
                   <select value={cddIncomeRange} onChange={(e) => setCddIncomeRange(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-sm">
                     <option value="">— Pilih rentang —</option>
-                    {incomeRanges.map((r) => (
-                      <option key={r.code} value={r.code}>{r.label}</option>
-                    ))}
+                    {incomeRanges.length === 0 ? (
+                      <option value="" disabled>Rentang penghasilan belum tersedia.</option>
+                    ) : (
+                      incomeRanges.map((r) => (
+                        <option key={r.code} value={r.code}>{r.name}</option>
+                      ))
+                    )}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1">
@@ -1232,145 +1257,45 @@ export default function UserDetailPage() {
         )
       ) : (
         <div className="rounded-xl border p-4 space-y-2">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Informasi Perusahaan</p>
-          <Row label="Nama Legal" value={business?.legal_name} />
-          <Row label="Nama Dagang" value={business?.trade_name} />
-          <Row label="Bentuk Badan" value={business?.legal_form} />
-          <Row label="Tempat Pendirian" value={business?.incorporation_place} />
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Informasi Identitas Badan Usaha</p>
+          <Row label="Nama Badan Usaha" value={business?.legal_name} />
+          <Row label="Bentuk Badan Usaha" value={business?.legal_form} />
+          <Row label="Nomor Akta Pendirian & Perubahan Terakhir" value={business?.deed_number} />
           <Row label="Tanggal Pendirian" value={business?.incorporation_date} />
-          <Row label="NIB" value={business?.nib} />
-          <Row label="NPWP" value={business?.npwp} />
+          <Row label="Tempat Pendirian" value={business?.incorporation_place} />
+          <Row label="Nomor Izin Usaha (NIB/OSS/SIUP)" value={business?.business_license_number || business?.nib} />
+          <Row label="NPWP Badan Usaha" value={business?.npwp} />
           <Row label="KBLI" value={business?.industry_code} />
           <Row label="Bidang Usaha" value={business?.business_activity} />
-          <Row label="Alamat" value={business?.address_line} />
+          <Row label="Alamat Kedudukan" value={business?.address_line} />
           <Row label="Kota" value={business?.city} />
           <Row label="Provinsi" value={business?.province} />
           <Row label="Kode Pos" value={business?.postal_code} />
-          <Row label="Telepon" value={business?.phone} />
+          <Row label="Nomor Telepon Perusahaan" value={business?.phone} />
+          <Row label="Email Perusahaan" value={business?.company_email} />
           <Row label="CIF Badan Hukum" value={formatCif(business?.cif_no)} />
-        </div>
-      )}
 
-      {/* Risk Assessment */}
-      {risk ? (
-        <div className="rounded-xl border p-4 space-y-4">
-          {/* Summary row */}
-          <div className="flex flex-wrap items-center gap-4">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Risk Assessment</p>
+          <p className="text-xs font-semibold text-slate-600 border-b pb-1 mb-2 mt-4">Pengurus Utama / PIC</p>
+          <Row label="Nama Pengurus Utama / PIC" value={business?.pic_name} />
+          <Row label="Jabatan" value={business?.pic_position} />
+          <Row label="Nomor Identitas" value={business?.pic_identity_number} />
+          <Row label="Jenis Identitas" value={business?.pic_identity_type} />
+
+          <p className="text-xs font-semibold text-slate-600 border-b pb-1 mb-2 mt-4">Screening DTTOT / PPPSPM</p>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="w-40 shrink-0 font-medium text-slate-600">Perusahaan</span>
+              <WatchlistBadge status={business?.company_watchlist_status} />
             </div>
-            <div className="flex items-center gap-3 ml-auto">
-              {risk.risk_level && (
-                <span className={`rounded px-2 py-0.5 text-xs font-semibold ${
-                  risk.risk_level === 'HIGH' || risk.risk_level === 'PROHIBITED'
-                    ? 'bg-red-100 text-red-700'
-                    : risk.risk_level === 'MEDIUM'
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-emerald-100 text-emerald-700'
-                }`}>
-                  {risk.risk_level}
-                </span>
-              )}
-              {risk.risk_score != null && (
-                <span className="text-sm font-medium text-slate-700">
-                  Score: {risk.risk_score}
-                </span>
-              )}
-              {risk.override_level && (
-                <span className="rounded bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
-                  Override: {risk.override_level}
-                </span>
-              )}
+            <div className="flex items-center gap-2">
+              <span className="w-40 shrink-0 font-medium text-slate-600">Pengurus</span>
+              <WatchlistBadge status={business?.management_watchlist_status} />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-40 shrink-0 font-medium text-slate-600">Pemegang Saham</span>
+              <WatchlistBadge status={business?.shareholder_watchlist_status} />
             </div>
           </div>
-
-          {/* Risk Factors */}
-          {(() => {
-            const riskFactors = risk.risk_factors ?? [];
-            const nonBaseFactors = riskFactors.filter(f => f.code !== 'ONBOARDING_OFFLINE_DIRECT');
-            const showNoWatchlistNotice = risk.risk_level === 'LOW' && nonBaseFactors.length === 0;
-
-            return (
-              <>
-                {riskFactors.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-xs text-slate-500">
-                          <th className="pb-2 pr-3">Faktor</th>
-                          <th className="pb-2 pr-3">Skor</th>
-                          <th className="pb-2 pr-3">Tingkat</th>
-                          <th className="pb-2 pr-3">Sumber</th>
-                          <th className="pb-2">Detail</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {riskFactors.map((f, i) => {
-                          const sevCls =
-                            f.severity === 'CRITICAL' ? 'bg-red-200 text-red-800' :
-                            f.severity === 'HIGH'     ? 'bg-red-100 text-red-700' :
-                            f.severity === 'MEDIUM'   ? 'bg-amber-100 text-amber-700' :
-                            f.severity === 'LOW'      ? 'bg-emerald-100 text-emerald-700' :
-                                                        'bg-slate-100 text-slate-600';
-                          return (
-                            <tr key={f.code ?? i} className="border-b last:border-0 align-top">
-                              <td className="py-2 pr-3">
-                                <div className="font-medium text-slate-800">{getRiskFactorLabel(f.code, f.label)}</div>
-                                {f.code && (
-                                  <div className="text-xs text-slate-400 font-mono">{f.code}</div>
-                                )}
-                                {f.metadata?.matched && (
-                                  <div className="text-xs text-slate-500 mt-0.5">
-                                    Teridentifikasi: {Array.isArray(f.metadata.matched) ? f.metadata.matched.join(', ') : f.metadata.matched}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="py-2 pr-3 font-medium text-slate-700">
-                                {f.score != null ? f.score : '—'}
-                              </td>
-                              <td className="py-2 pr-3">
-                                {f.severity ? (
-                                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${sevCls}`}>
-                                    {f.severity}
-                                  </span>
-                                ) : '—'}
-                              </td>
-                              <td className="py-2 pr-3 text-slate-600 capitalize">
-                                {f.source ?? '—'}
-                              </td>
-                              <td className="py-2 text-slate-600 text-xs max-w-xs">
-                                {f.details ?? '—'}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : !showNoWatchlistNotice ? (
-                  <p className="text-sm text-slate-400">Belum ada faktor risiko tercatat.</p>
-                ) : null}
-
-                {showNoWatchlistNotice && (
-                  <p className="text-sm text-slate-500 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
-                    Tidak ada match DTTOT, PEP, atau PPPSPM.
-                  </p>
-                )}
-              </>
-            );
-          })()}
-        </div>
-      ) : app.status === 'DRAFT' ? (
-        <div className="rounded-xl border p-4 space-y-2">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Risk Assessment</p>
-          <p className="text-sm text-slate-500">
-            Risk belum dihitung. Submit application untuk menjalankan screening dan risk scoring.
-          </p>
-        </div>
-      ) : (
-        <div className="rounded-xl border p-4 space-y-2">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Risk Assessment</p>
-          <p className="text-sm text-slate-400">Risk belum tersedia.</p>
         </div>
       )}
 
@@ -1624,8 +1549,8 @@ export default function UserDetailPage() {
                     onChange={(e) => setPartyRole(e.target.value)}
                     className="rounded-md border bg-white px-2 py-1.5 text-sm"
                   >
-                    {['DIRECTOR', 'COMMISSIONER', 'MANAGER', 'BO', 'AUTHORIZED_REP'].map((r) => (
-                      <option key={r} value={r}>{r}</option>
+                    {['DIRECTOR', 'COMMISSIONER', 'MANAGER', 'SHAREHOLDER', 'BO', 'AUTHORIZED_REP'].map((r) => (
+                      <option key={r} value={r}>{partyRoleLabel(r)}</option>
                     ))}
                   </select>
                 </div>
@@ -1720,25 +1645,40 @@ export default function UserDetailPage() {
                 <thead>
                   <tr className="border-b text-left text-xs text-slate-500">
                     <th className="py-1 pr-4">Nama</th>
-                    <th className="py-1 pr-4">Role</th>
+                    <th className="py-1 pr-4">Peran</th>
                     <th className="py-1 pr-4">Identitas</th>
-                    <th className="py-1 pr-4">Kewarganegaraan</th>
+                    <th className="py-1 pr-4">Kepemilikan</th>
                     <th className="py-1 pr-4">CIF</th>
                     <th className="py-1">Parameter CIF</th>
                     {canSubmit && <th className="py-1" />}
                   </tr>
                 </thead>
                 <tbody>
-                  {parties.map((p) => (
-                    <tr key={String(p.id)} className="border-b last:border-0">
-                      <td className="py-1.5 pr-4 font-medium">{p.full_name}</td>
-                      <td className="py-1.5 pr-4">{p.role}</td>
+                  {parties.map((p) => {
+                    const isOwner = p.role === 'BO' || p.role === 'SHAREHOLDER';
+                    return (
+                    <tr key={String(p.id)} className="border-b last:border-0 align-top">
+                      <td className="py-1.5 pr-4 font-medium">
+                        {p.full_name}
+                        {isOwner && (p.address || p.source_of_funds || p.source_of_wealth) && (
+                          <div className="text-xs font-normal text-slate-400 mt-0.5 space-y-0.5">
+                            {p.address && <div>Alamat: {p.address}</div>}
+                            {p.source_of_funds && <div>Sumber Dana: {p.source_of_funds}</div>}
+                            {p.source_of_wealth && <div>Sumber Kekayaan: {p.source_of_wealth}</div>}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-4">{partyRoleLabel(p.role)}</td>
                       <td className="py-1.5 pr-4 text-slate-600">
-                        {p.identity_type && p.identity_number
-                          ? `${p.identity_type}: ${p.identity_number}`
+                        {(p.identity_document_type || p.identity_type) && p.identity_number
+                          ? `${p.identity_document_type || p.identity_type}: ${p.identity_number}`
                           : '—'}
                       </td>
-                      <td className="py-1.5 pr-4">{p.nationality || '—'}</td>
+                      <td className="py-1.5 pr-4 text-slate-600">
+                        {p.ownership_percentage != null && p.ownership_percentage !== ''
+                          ? `${p.ownership_percentage}%`
+                          : '—'}
+                      </td>
                       <td className="py-1.5 pr-4 text-slate-600">{formatCif(p.cif_no)}</td>
                       <td className="py-1.5">{getCifRelationshipLabel(p.cif_relationship_type)}</td>
                       {canSubmit && (
@@ -1752,7 +1692,8 @@ export default function UserDetailPage() {
                         </td>
                       )}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

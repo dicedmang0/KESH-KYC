@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/providers";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getRoleFromToken, getNameFromToken } from "@/lib/api";
+import { roleLabel } from "@/lib/roles";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
@@ -62,6 +63,10 @@ export default function DashboardPage() {
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [loadingSubs, setLoadingSubs] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Greeting: prefer the user's name (if the token carries one), fall back to role label.
+  const userRoleLabel = roleLabel(getRoleFromToken(token));
+  const userName = getNameFromToken(token);
 
   // Guard kalau belum login
   useEffect(() => {
@@ -148,7 +153,14 @@ export default function DashboardPage() {
       <div className="flex flex-col justify-between gap-2 rounded-xl bg-white border border-slate-200 p-4 shadow-sm sm:flex-row sm:items-center">
         <div>
           <p className="text-xs text-slate-400">Ringkasan Dasbor</p>
-          <p className="text-sm font-semibold text-slate-900">Selamat datang, Administrator</p>
+          {userName ? (
+            <>
+              <p className="text-sm font-semibold text-slate-900">Selamat datang, {userName}</p>
+              <p className="text-xs text-slate-500">{userRoleLabel}</p>
+            </>
+          ) : (
+            <p className="text-sm font-semibold text-slate-900">Selamat datang, {userRoleLabel}</p>
+          )}
         </div>
         <div className="text-right">
           <p className="text-xs text-slate-400">Diperbarui pada</p>

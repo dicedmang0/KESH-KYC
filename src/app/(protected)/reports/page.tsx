@@ -185,21 +185,6 @@ function StatusBadge({ s }: { s?: string | null }) {
   );
 }
 
-function RiskPill({ level }: { level?: string | null }) {
-  if (!level) return <span className="text-xs text-slate-400">-</span>;
-  const cls =
-    level === "HIGH"
-      ? "bg-red-100 text-red-700"
-      : level === "MEDIUM"
-      ? "bg-amber-100 text-amber-700"
-      : level === "PROHIBITED"
-      ? "bg-black text-white"
-      : "bg-emerald-100 text-emerald-700";
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs ${cls}`}>{level}</span>
-  );
-}
-
 function SectionSkeleton() {
   return (
     <div className="space-y-2 p-2">
@@ -577,14 +562,6 @@ function ReportsPageInner() {
             </Card>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-slate-500">Risiko Tinggi</p>
-                <p className="mt-1.5 text-2xl font-semibold text-red-600">
-                  {kpis.highRisk.toLocaleString()}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
                 <p className="text-xs text-slate-500">Upload Watchlist</p>
                 <p className="mt-1.5 text-2xl font-semibold">
                   {loadingWatchlist ? "—" : watchlist.length.toLocaleString()}
@@ -633,8 +610,6 @@ function ReportsPageInner() {
                       <TableHead>Nama</TableHead>
                       <TableHead>Tipe</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Level Risiko</TableHead>
-                      <TableHead>Skor</TableHead>
                       <TableHead>Tanggal</TableHead>
                       <TableHead>Aksi</TableHead>
                     </TableRow>
@@ -668,16 +643,6 @@ function ReportsPageInner() {
                           </TableCell>
                           <TableCell>
                             <StatusBadge s={row.status} />
-                          </TableCell>
-                          <TableCell>
-                            <RiskPill level={row.risk_level} />
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {row.risk_score != null ? (
-                              row.risk_score
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
                           </TableCell>
                           <TableCell className="text-sm text-slate-600">
                             {fmtDate(row.submitted_at || row.created_at)}

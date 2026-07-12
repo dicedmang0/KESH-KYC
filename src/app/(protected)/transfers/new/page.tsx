@@ -15,6 +15,7 @@ import {
   type TransferBank,
 } from '@/lib/transfers';
 import { formatCif } from '@/lib/utils';
+import { toast } from '@/lib/toast';
 import { useAuth } from '@/app/providers';
 import { useRouter } from 'next/navigation';
 import { ShieldOff, ChevronDown, ChevronRight } from 'lucide-react';
@@ -235,7 +236,11 @@ export default function NewTransferPage() {
       const created = await createTransfer(body);
       router.push(`/transfers/${created.id}`);
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Gagal membuat transfer');
+      // Surfaces the backend message (e.g. "Pengguna jasa harus berstatus
+      // APPROVED untuk pencatatan transfer.") both inline and as a toast.
+      const msg = e instanceof Error ? e.message : 'Gagal membuat transfer';
+      setErr(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -276,6 +281,9 @@ export default function NewTransferPage() {
         {/* Sender searchable picker */}
         <div>
           <label className="text-xs text-muted-foreground">Pengirim (KYC/KYB Disetujui)</label>
+          <p className="mt-0.5 text-xs text-slate-400">
+            Hanya pengguna jasa berstatus APPROVED yang dapat dicatat transaksinya.
+          </p>
 
           {selectedSender ? (
             <div className="mt-1 rounded-lg border bg-slate-50 p-3 space-y-2">
