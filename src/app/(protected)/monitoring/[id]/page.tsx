@@ -2,14 +2,15 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useAuth } from '@/app/providers';
 import { getRoleFromToken } from '@/lib/api';
 import { formatCif } from '@/lib/utils';
+import { toast } from '@/lib/toast';
 import {
   getMonitoringCase,
-  complianceReview,
-  directorReview,
+  staffReview,
+  managerReview,
   updateMonitoringReport,
   formatCaseStatus,
   formatCaseType,
@@ -19,16 +20,18 @@ import {
   formatDateTime,
   formatDate,
   formatReportStatus,
-  formatComplianceAction,
+  formatStaffAction,
+  formatManagerAction,
   formatComplianceReviewer,
-  getComplianceReviewSummary,
-  COMPLIANCE_ACTION_LABELS,
-  DIRECTOR_DECISION_LABELS,
+  getStaffReviewSummary,
+  getManagerReviewSummary,
+  STAFF_ACTION_LABELS,
+  MANAGER_ACTION_LABELS,
   REPORT_STATUS_LABELS,
   type MonitoringCaseDetail,
   type MonitoringTrigger,
-  type ComplianceReviewAction,
-  type DirectorDecision,
+  type StaffReviewAction,
+  type ManagerReviewAction,
   type MonitoringReportStatus,
 } from '@/lib/monitoring';
 
@@ -75,19 +78,24 @@ function CaseTypeBadge({ type }: { type?: string | null }) {
 
 function StatusBadge({ status }: { status?: string | null }) {
   const cls =
-    status === 'DETECTED'                ? 'bg-orange-100 text-orange-700' :
-    status === 'UNDER_COMPLIANCE_REVIEW' ? 'bg-blue-100 text-blue-700' :
-    status === 'NEED_CLARIFICATION'      ? 'bg-amber-100 text-amber-700' :
-    status === 'CLOSED_FALSE_POSITIVE'   ? 'bg-slate-100 text-slate-500' :
-    status === 'COMPLIANCE_APPROVED'     ? 'bg-teal-100 text-teal-700' :
-    status === 'COMPLIANCE_REJECTED'     ? 'bg-red-100 text-red-700' :
-    status === 'PENDING_DIRECTOR_REVIEW' ? 'bg-purple-100 text-purple-700' :
-    status === 'DIRECTOR_APPROVED'       ? 'bg-emerald-100 text-emerald-700' :
-    status === 'DIRECTOR_REJECTED'       ? 'bg-red-100 text-red-700' :
-    status === 'READY_TO_REPORT'         ? 'bg-teal-100 text-teal-700' :
-    status === 'REPORTED'                ? 'bg-green-100 text-green-700' :
-    status === 'ARCHIVED'                ? 'bg-slate-100 text-slate-400' :
-                                           'bg-slate-100 text-slate-500';
+    status === 'DETECTED'                         ? 'bg-orange-100 text-orange-700' :
+    status === 'UNDER_COMPLIANCE_REVIEW'          ? 'bg-blue-100 text-blue-700' :
+    status === 'NEED_CLARIFICATION'               ? 'bg-amber-100 text-amber-700' :
+    status === 'CLOSED_FALSE_POSITIVE'            ? 'bg-slate-100 text-slate-500' :
+    status === 'COMPLIANCE_APPROVED'              ? 'bg-teal-100 text-teal-700' :
+    status === 'COMPLIANCE_REJECTED'              ? 'bg-red-100 text-red-700' :
+    status === 'PENDING_COMPLIANCE_STAFF_REVIEW'  ? 'bg-blue-100 text-blue-700' :
+    status === 'PENDING_COMPLIANCE_MANAGER_REVIEW'? 'bg-purple-100 text-purple-700' :
+    status === 'STAFF_REVIEWED'                   ? 'bg-teal-100 text-teal-700' :
+    status === 'MANAGER_APPROVED'                 ? 'bg-emerald-100 text-emerald-700' :
+    status === 'MANAGER_REJECTED'                 ? 'bg-red-100 text-red-700' :
+    status === 'PENDING_DIRECTOR_REVIEW'          ? 'bg-purple-100 text-purple-700' :
+    status === 'DIRECTOR_APPROVED'                ? 'bg-emerald-100 text-emerald-700' :
+    status === 'DIRECTOR_REJECTED'                ? 'bg-red-100 text-red-700' :
+    status === 'READY_TO_REPORT'                  ? 'bg-teal-100 text-teal-700' :
+    status === 'REPORTED'                         ? 'bg-green-100 text-green-700' :
+    status === 'ARCHIVED'                         ? 'bg-slate-100 text-slate-400' :
+                                                    'bg-slate-100 text-slate-500';
   return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>{formatCaseStatus(status)}</span>;
 }
 
@@ -211,35 +219,13 @@ function AlertInformationCard({ trigger, index }: { trigger: MonitoringTrigger; 
   );
 }
 
-// Compliance actions available per case type
-function getComplianceActions(caseType?: string | null): ComplianceReviewAction[] {
-  const base: ComplianceReviewAction[] = [
-    'CLOSE_FALSE_POSITIVE',
-    'NEED_CLARIFICATION',
-    'ESCALATE_TO_DIRECTOR',
-    'RECOMMEND_REPORT',
-  ];
-  // For LTKT only, allow direct READY_TO_REPORT
-  if (caseType === 'LTKT') {
-    return [...base, 'READY_TO_REPORT'];
-  }
-  return base;
-}
-
-const COMPLIANCE_ACTIONABLE_STATUSES = new Set([
+const STAFF_ACTIONABLE_STATUSES = new Set([
   'DETECTED',
   'UNDER_COMPLIANCE_REVIEW',
   'NEED_CLARIFICATION',
+  'PENDING_COMPLIANCE_STAFF_REVIEW',
 ]);
 
-// Actions that forward the case to the Director require compliance notes (backend-enforced).
-const COMPLIANCE_NOTES_REQUIRED_ACTIONS = new Set<ComplianceReviewAction>([
-  'ESCALATE_TO_DIRECTOR',
-  'RECOMMEND_REPORT',
-]);
-
-// Report update endpoint is only valid for these statuses (backend workflow:
-// Director APPROVED transitions case.status straight to READY_TO_REPORT).
 const REPORT_EDITABLE_STATUSES = new Set([
   'READY_TO_REPORT',
   'REPORTED',
@@ -247,34 +233,31 @@ const REPORT_EDITABLE_STATUSES = new Set([
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const ALLOWED_ROLES = new Set(['SystemAdmin', 'ComplianceLead', 'Director', 'Auditor']);
+const ALLOWED_ROLES = new Set(['SystemAdmin', 'ComplianceLead', 'ComplianceStaff', 'Auditor']);
 
 export default function MonitoringDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const rawId = params?.id;
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
 
   const { token } = useAuth();
   const role = getRoleFromToken(token);
-  const isDirector = role === 'Director';
 
   const [detail, setDetail] = useState<MonitoringCaseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Compliance review form
-  const [compAction, setCompAction] = useState<ComplianceReviewAction>('NEED_CLARIFICATION');
-  const [compNotes, setCompNotes] = useState('');
-  const [compSubmitting, setCompSubmitting] = useState(false);
-  const [compError, setCompError] = useState('');
+  // Staff review form
+  const [staffAction, setStaffAction] = useState<StaffReviewAction>('ESCALATE_TO_MANAGER');
+  const [staffNotes, setStaffNotes] = useState('');
+  const [staffSubmitting, setStaffSubmitting] = useState(false);
+  const [staffError, setStaffError] = useState('');
 
-  // Director review form
-  const [dirDecision, setDirDecision] = useState<DirectorDecision>('APPROVED');
-  const [dirNotes, setDirNotes] = useState('');
-  const [dirSubmitting, setDirSubmitting] = useState(false);
-  const [dirError, setDirError] = useState('');
-  const [dirSuccess, setDirSuccess] = useState('');
+  // Manager review form
+  const [managerAction, setManagerAction] = useState<ManagerReviewAction>('APPROVE_REPORT');
+  const [managerNotes, setManagerNotes] = useState('');
+  const [managerSubmitting, setManagerSubmitting] = useState(false);
+  const [managerError, setManagerError] = useState('');
 
   // Report tracking form
   const [repStatus, setRepStatus] = useState<MonitoringReportStatus>('READY_TO_SUBMIT');
@@ -284,8 +267,8 @@ export default function MonitoringDetailPage() {
   const [repSubmitting, setRepSubmitting] = useState(false);
   const [repError, setRepError] = useState('');
 
-  const canComplianceReview = role === 'ComplianceLead' || role === 'SystemAdmin';
-  const canDirectorReview = role === 'Director' || role === 'SystemAdmin';
+  const canStaffReview = role === 'ComplianceStaff' || role === 'SystemAdmin';
+  const canManagerReview = role === 'ComplianceLead' || role === 'SystemAdmin';
   const canEditReport = role === 'ComplianceLead' || role === 'SystemAdmin';
 
   useEffect(() => {
@@ -297,7 +280,6 @@ export default function MonitoringDetailPage() {
       .then((data) => {
         if (!alive) return;
         setDetail(data);
-        // Pre-fill report form fields if available
         if (data.report_status) setRepStatus(data.report_status);
         if (data.report_reference_no) setRepRef(data.report_reference_no);
         if (data.report_file_uri) setRepFile(data.report_file_uri);
@@ -310,44 +292,39 @@ export default function MonitoringDetailPage() {
     return () => { alive = false; };
   }, [id]);
 
-  async function submitComplianceReview() {
-    if (!id) return;
-    // ESCALATE_TO_DIRECTOR / RECOMMEND_REPORT must carry notes — validate before calling API.
-    if (COMPLIANCE_NOTES_REQUIRED_ACTIONS.has(compAction) && !compNotes.trim()) {
-      setCompError('Catatan compliance wajib diisi sebelum diteruskan ke Dirut.');
-      return;
-    }
-    setCompSubmitting(true);
-    setCompError('');
+  async function submitStaffReview() {
+    if (!id || !staffNotes.trim()) return;
+    setStaffSubmitting(true);
+    setStaffError('');
     try {
-      const updated = await complianceReview(id, { action: compAction, notes: compNotes });
+      const updated = await staffReview(id, { action: staffAction, notes: staffNotes });
       setDetail(updated);
-      setCompNotes('');
+      setStaffNotes('');
+      toast.success('Review Compliance Staff berhasil disimpan.');
     } catch (e: unknown) {
-      setCompError(e instanceof Error ? e.message : 'Gagal menyimpan review');
+      const msg = e instanceof Error ? e.message : 'Gagal menyimpan review Compliance Staff.';
+      setStaffError(msg);
+      toast.error('Gagal menyimpan review Compliance Staff.');
     } finally {
-      setCompSubmitting(false);
+      setStaffSubmitting(false);
     }
   }
 
-  async function submitDirectorReview() {
-    if (!id) return;
-    setDirSubmitting(true);
-    setDirError('');
+  async function submitManagerReview() {
+    if (!id || !managerNotes.trim()) return;
+    setManagerSubmitting(true);
+    setManagerError('');
     try {
-      const updated = await directorReview(id, { decision: dirDecision, notes: dirNotes });
-      setDirNotes('');
-      if (isDirector) {
-        // Case leaves PENDING_DIRECTOR_REVIEW → Director may no longer view it. Redirect back.
-        setDirSuccess('Keputusan tersimpan. Mengalihkan ke daftar monitoring…');
-        setTimeout(() => router.push('/monitoring'), 1200);
-      } else {
-        setDetail(updated);
-      }
+      const updated = await managerReview(id, { action: managerAction, notes: managerNotes });
+      setDetail(updated);
+      setManagerNotes('');
+      toast.success('Approval Compliance Manager berhasil disimpan.');
     } catch (e: unknown) {
-      setDirError(e instanceof Error ? e.message : 'Gagal menyimpan keputusan');
+      const msg = e instanceof Error ? e.message : 'Gagal menyimpan approval Compliance Manager.';
+      setManagerError(msg);
+      toast.error('Gagal menyimpan approval Compliance Manager.');
     } finally {
-      setDirSubmitting(false);
+      setManagerSubmitting(false);
     }
   }
 
@@ -383,14 +360,9 @@ export default function MonitoringDetailPage() {
   }
 
   if (error) {
-    const forbidden = /403|forbidden/i.test(error);
-    // Director may only open PENDING_DIRECTOR_REVIEW cases; a 403 means it already moved on.
-    const message = isDirector && forbidden
-      ? 'Case ini sudah tidak menunggu review Dirut.'
-      : error;
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 p-6">
-        <p className="text-sm text-red-700">{message}</p>
+        <p className="text-sm text-red-700">{error}</p>
         <Link href="/monitoring" className="mt-3 inline-block text-sm text-kesh-700 hover:underline">← Kembali ke Monitoring</Link>
       </div>
     );
@@ -398,14 +370,12 @@ export default function MonitoringDetailPage() {
 
   if (!detail) return null;
 
-  const complianceActionable = COMPLIANCE_ACTIONABLE_STATUSES.has(detail.status ?? '');
-  const directorActionable = detail.status === 'PENDING_DIRECTOR_REVIEW';
+  const staffActionable = STAFF_ACTIONABLE_STATUSES.has(detail.status ?? '');
+  const managerActionable = detail.status === 'PENDING_COMPLIANCE_MANAGER_REVIEW';
   const reportEditable = REPORT_EDITABLE_STATUSES.has(detail.status ?? '');
-  const availableCompActions = getComplianceActions(detail.case_type);
-  const compNotesRequired = COMPLIANCE_NOTES_REQUIRED_ACTIONS.has(compAction);
 
-  // Compliance review summary — shared helper reads nested object or flat columns.
-  const complianceSummary = getComplianceReviewSummary(detail);
+  const staffSummary = getStaffReviewSummary(detail);
+  const managerSummary = getManagerReviewSummary(detail);
 
   return (
     <div className="space-y-4">
@@ -503,14 +473,12 @@ export default function MonitoringDetailPage() {
               </tbody>
             </table>
           </div>
-          {/* Note about supporting-only triggers */}
           {detail.triggers?.some((t) => t.rule_code === 'LTKM_HIGH_VALUE_TRANSFER' && t.supporting) && (
             <p className="text-xs text-slate-400 italic">
               * Transfer bernilai tinggi bersifat pendukung dan tidak sendirinya mengindikasikan transaksi mencurigakan.
             </p>
           )}
 
-          {/* Alert Information accordion per trigger */}
           {detail.triggers?.some((t) => t.alert_name || t.alert_information) && (
             <div className="space-y-2 pt-2 border-t">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alert Information</p>
@@ -564,154 +532,134 @@ export default function MonitoringDetailPage() {
         </Section>
       )}
 
-      {/* ── 4. Compliance Review ────────────────────────────────────────── */}
-      <Section title="Review Compliance">
-        {/* Show last recorded review (nested object or flat columns) */}
-        {complianceSummary.hasAny && (
+      {/* ── 4. Review Compliance Staff ──────────────────────────────────── */}
+      <Section title="Review Compliance Staff">
+        {staffSummary.hasAny && (
           <div className="rounded-lg border bg-slate-50 p-3 space-y-2 text-sm">
             <p className="text-xs text-slate-500 font-medium">Review Terakhir</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Aksi Compliance" value={formatComplianceAction(complianceSummary.action)} />
-              <Field label="Direview Pada" value={complianceSummary.reviewedAt ? formatDateTime(complianceSummary.reviewedAt) : '-'} />
-              <Field label="Direview Oleh" value={formatComplianceReviewer(complianceSummary.reviewedBy)} />
+              <Field label="Aksi" value={formatStaffAction(staffSummary.action)} />
+              <Field label="Direview Pada" value={staffSummary.reviewedAt ? formatDateTime(staffSummary.reviewedAt) : '-'} />
+              <Field label="Direview Oleh" value={formatComplianceReviewer(staffSummary.reviewedBy)} />
               <div className="sm:col-span-2">
-                <Field label="Catatan Compliance" value={complianceSummary.notes ?? '-'} />
+                <Field label="Catatan" value={staffSummary.notes ?? '-'} />
               </div>
             </div>
           </div>
         )}
 
-        {/* Action form — ComplianceLead/SystemAdmin only, when status allows */}
-        {canComplianceReview && complianceActionable ? (
+        {canStaffReview && staffActionable ? (
           <div className="space-y-3 pt-2">
             <p className="text-xs font-medium text-slate-600">Tambah Review</p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Aksi</label>
-                <select
-                  value={compAction}
-                  onChange={(e) => setCompAction(e.target.value as ComplianceReviewAction)}
-                  className="w-full rounded-lg border px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
-                >
-                  {availableCompActions.map((a) => (
-                    <option key={a} value={a}>{COMPLIANCE_ACTION_LABELS[a]}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">
-                Catatan {compNotesRequired && <span className="text-red-500">*</span>}
-              </label>
-              <textarea
-                value={compNotes}
-                onChange={(e) => setCompNotes(e.target.value)}
-                rows={3}
-                placeholder="Catatan review compliance…"
-                className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-kesh-700 focus:ring-1 focus:ring-kesh-700/20"
-              />
-              {compNotesRequired && !compNotes.trim() && (
-                <p className="mt-1 text-xs text-amber-600">
-                  Catatan compliance wajib diisi sebelum diteruskan ke Dirut.
-                </p>
-              )}
-            </div>
-            {compError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{compError}</div>
-            )}
-            <button
-              disabled={compSubmitting || (compNotesRequired && !compNotes.trim())}
-              onClick={submitComplianceReview}
-              className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-50 transition-colors"
-            >
-              {compSubmitting ? 'Menyimpan…' : 'Simpan Review'}
-            </button>
-          </div>
-        ) : canComplianceReview && !complianceActionable ? (
-          <p className="text-xs text-slate-400 italic">Status saat ini tidak memerlukan review compliance.</p>
-        ) : (
-          !complianceSummary.hasAny && (
-            <p className="text-xs text-slate-400 italic">Belum ada review compliance.</p>
-          )
-        )}
-      </Section>
-
-      {/* ── 5. Director Review ──────────────────────────────────────────── */}
-      <Section title="Review Direktur Utama">
-        {/* Show last recorded director review */}
-        {detail.director_review?.decision && (
-          <div className="rounded-lg border bg-slate-50 p-3 space-y-1 text-sm">
-            <p className="text-xs text-slate-500 font-medium">Keputusan Terakhir</p>
-            <p>
-              <span className="text-slate-600">Keputusan: </span>
-              <span className="font-medium text-slate-800">
-                {DIRECTOR_DECISION_LABELS[detail.director_review.decision] ?? detail.director_review.decision}
-              </span>
-            </p>
-            {detail.director_review.notes && (
-              <p><span className="text-slate-600">Catatan: </span>{detail.director_review.notes}</p>
-            )}
-            {detail.director_review.reviewed_by && (
-              <p className="text-xs text-slate-400">
-                oleh {detail.director_review.reviewed_by}
-                {detail.director_review.reviewed_at && ` · ${formatDateTime(detail.director_review.reviewed_at)}`}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Action form — Director/SystemAdmin only, when status = PENDING_DIRECTOR_REVIEW */}
-        {canDirectorReview && directorActionable ? (
-          <div className="space-y-3 pt-2">
-            <p className="text-xs font-medium text-slate-600">Keputusan Dirut</p>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Keputusan</label>
+              <label className="block text-xs text-slate-500 mb-1">Aksi</label>
               <select
-                value={dirDecision}
-                onChange={(e) => setDirDecision(e.target.value as DirectorDecision)}
+                value={staffAction}
+                onChange={(e) => setStaffAction(e.target.value as StaffReviewAction)}
                 className="rounded-lg border px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
               >
-                {(Object.keys(DIRECTOR_DECISION_LABELS) as DirectorDecision[]).map((d) => (
-                  <option key={d} value={d}>{DIRECTOR_DECISION_LABELS[d]}</option>
+                {(Object.keys(STAFF_ACTION_LABELS) as StaffReviewAction[]).map((a) => (
+                  <option key={a} value={a}>{STAFF_ACTION_LABELS[a]}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Catatan <span className="text-red-500">*</span></label>
+              <label className="block text-xs text-slate-500 mb-1">
+                Catatan <span className="text-red-500">*</span>
+              </label>
               <textarea
-                value={dirNotes}
-                onChange={(e) => setDirNotes(e.target.value)}
+                value={staffNotes}
+                onChange={(e) => setStaffNotes(e.target.value)}
                 rows={3}
-                placeholder="Catatan keputusan Direktur Utama…"
+                placeholder="Catatan review Compliance Staff…"
                 className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-kesh-700 focus:ring-1 focus:ring-kesh-700/20"
               />
             </div>
-            {dirError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{dirError}</div>
-            )}
-            {dirSuccess && (
-              <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700">{dirSuccess}</div>
+            {staffError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{staffError}</div>
             )}
             <button
-              disabled={dirSubmitting || !dirNotes.trim() || !!dirSuccess}
-              onClick={submitDirectorReview}
+              disabled={staffSubmitting || !staffNotes.trim()}
+              onClick={submitStaffReview}
               className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-50 transition-colors"
             >
-              {dirSubmitting ? 'Menyimpan…' : 'Simpan Keputusan'}
+              {staffSubmitting ? 'Menyimpan…' : 'Simpan Review'}
             </button>
           </div>
-        ) : !detail.director_review?.decision ? (
-          <p className="text-xs text-slate-400 italic">
-            {directorActionable
-              ? 'Menunggu keputusan Direktur Utama.'
-              : 'Belum ada review Direktur Utama.'}
-          </p>
-        ) : null}
+        ) : canStaffReview && !staffActionable ? (
+          <p className="text-xs text-slate-400 italic">Status saat ini tidak memerlukan review Compliance Staff.</p>
+        ) : (
+          !staffSummary.hasAny && (
+            <p className="text-xs text-slate-400 italic">Belum ada review Compliance Staff.</p>
+          )
+        )}
+      </Section>
+
+      {/* ── 5. Approval Compliance Manager ─────────────────────────────── */}
+      <Section title="Approval Compliance Manager">
+        {managerSummary.hasAny && (
+          <div className="rounded-lg border bg-slate-50 p-3 space-y-2 text-sm">
+            <p className="text-xs text-slate-500 font-medium">Approval Terakhir</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Aksi" value={formatManagerAction(managerSummary.action)} />
+              <Field label="Diproses Pada" value={managerSummary.reviewedAt ? formatDateTime(managerSummary.reviewedAt) : '-'} />
+              <Field label="Diproses Oleh" value={formatComplianceReviewer(managerSummary.reviewedBy)} />
+              <div className="sm:col-span-2">
+                <Field label="Catatan" value={managerSummary.notes ?? '-'} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {canManagerReview && managerActionable ? (
+          <div className="space-y-3 pt-2">
+            <p className="text-xs font-medium text-slate-600">Approval Manager</p>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Aksi</label>
+              <select
+                value={managerAction}
+                onChange={(e) => setManagerAction(e.target.value as ManagerReviewAction)}
+                className="rounded-lg border px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
+              >
+                {(Object.keys(MANAGER_ACTION_LABELS) as ManagerReviewAction[]).map((a) => (
+                  <option key={a} value={a}>{MANAGER_ACTION_LABELS[a]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">
+                Catatan <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={managerNotes}
+                onChange={(e) => setManagerNotes(e.target.value)}
+                rows={3}
+                placeholder="Catatan approval Compliance Manager…"
+                className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-kesh-700 focus:ring-1 focus:ring-kesh-700/20"
+              />
+            </div>
+            {managerError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{managerError}</div>
+            )}
+            <button
+              disabled={managerSubmitting || !managerNotes.trim()}
+              onClick={submitManagerReview}
+              className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-50 transition-colors"
+            >
+              {managerSubmitting ? 'Menyimpan…' : 'Simpan Approval'}
+            </button>
+          </div>
+        ) : canManagerReview && !managerActionable ? (
+          <p className="text-xs text-slate-400 italic">Menunggu eskalasi dari Compliance Staff untuk approval manager.</p>
+        ) : (
+          !managerSummary.hasAny && (
+            <p className="text-xs text-slate-400 italic">Belum ada approval Compliance Manager.</p>
+          )
+        )}
       </Section>
 
       {/* ── 6. Report Tracking ──────────────────────────────────────────── */}
-      {/* Director has no report-tracking responsibility — hide entirely. */}
-      {!isDirector && (reportEditable || detail.report_status) && (
+      {(reportEditable || detail.report_status) && (
         <Section title="Tracking Laporan Regulasi">
           {canEditReport && reportEditable ? (
             <div className="space-y-3">

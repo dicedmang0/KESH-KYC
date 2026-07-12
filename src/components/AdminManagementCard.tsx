@@ -18,6 +18,7 @@ const INTERNAL_ROLES = [
   'SystemAdmin',
   'BranchAdmin',
   'FrontDesk',
+  'ComplianceStaff',
   'ComplianceLead',
   'Auditor',
   'FinanceStaff',
@@ -25,14 +26,15 @@ const INTERNAL_ROLES = [
 ];
 
 const ROLE_LABELS: Record<string, string> = {
-  SystemAdmin:    'Admin Sistem',
-  Director:       'Direktur',
-  BranchAdmin:    'Admin Cabang',
-  FrontDesk:      'Frontliner',
-  ComplianceLead: 'AML Compliance',
-  Auditor:        'Auditor',
-  FinanceStaff:   'Staff Finance',
-  FinanceManager: 'Manager Finance',
+  SystemAdmin:     'Admin Sistem',
+  Director:        'Direktur',
+  BranchAdmin:     'Admin Cabang',
+  FrontDesk:       'Frontliner',
+  ComplianceStaff: 'Compliance Staff',
+  ComplianceLead:  'Compliance Manager',
+  Auditor:         'Auditor',
+  FinanceStaff:    'Staff Finance',
+  FinanceManager:  'Manager Finance',
 };
 
 export default function AdminManagementCard() {

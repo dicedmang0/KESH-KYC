@@ -42,10 +42,7 @@ const allItems: Item[] = [
   { href: '/settings',   label: 'Pengaturan',               icon: Settings       },
 ];
 
-// Director sees a different label for the monitoring menu entry.
-const ROLE_ITEM_LABEL: Record<string, Partial<Record<string, string>>> = {
-  Director: { '/monitoring': 'Monitoring Dirut' },
-};
+const ROLE_ITEM_LABEL: Record<string, Partial<Record<string, string>>> = {};
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -58,14 +55,15 @@ export default function Sidebar() {
   useEffect(() => { setMounted(true); }, []);
 
   const ROLE_MENU: Record<string, string[]> = {
-    SystemAdmin:    ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist', '/monitoring', '/reports', '/settings'],
-    BranchAdmin:    [],
-    ComplianceLead: ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring', '/reports'],
-    Director:       ['/dashboard', '/monitoring'],
-    FrontDesk:      ['/dashboard', '/users', '/kyc', '/transfers', '/complaints'],
-    Auditor:        ['/dashboard', '/kyc', '/complaints', '/monitoring', '/reports'],
-    FinanceStaff:   ['/dashboard', '/transfers', '/reports'],
-    FinanceManager: ['/dashboard', '/transfers', '/complaints', '/reports'],
+    SystemAdmin:     ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist', '/monitoring', '/reports', '/settings'],
+    BranchAdmin:     [],
+    ComplianceLead:  ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring', '/reports'],
+    ComplianceStaff: ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring'],
+    Director:        ['/dashboard'],
+    FrontDesk:       ['/dashboard', '/users', '/kyc', '/transfers', '/complaints'],
+    Auditor:         ['/dashboard', '/kyc', '/complaints', '/monitoring', '/reports'],
+    FinanceStaff:    ['/dashboard', '/transfers', '/reports'],
+    FinanceManager:  ['/dashboard', '/transfers', '/complaints', '/reports'],
   };
 
   const allowedHrefs = new Set(ROLE_MENU[role ?? ''] ?? ['/dashboard']);

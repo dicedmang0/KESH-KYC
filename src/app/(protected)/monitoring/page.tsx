@@ -13,7 +13,7 @@ import {
   formatSeverity,
   formatDate,
   formatDateTime,
-  CASE_STATUS_LABELS,
+  CASE_STATUS_FILTER_OPTIONS,
   type MonitoringCase,
 } from '@/lib/monitoring';
 
@@ -48,19 +48,24 @@ function CaseTypeBadge({ type }: { type?: string | null }) {
 
 function StatusBadge({ status }: { status?: string | null }) {
   const cls =
-    status === 'DETECTED'                ? 'bg-orange-100 text-orange-700' :
-    status === 'UNDER_COMPLIANCE_REVIEW' ? 'bg-blue-100 text-blue-700' :
-    status === 'NEED_CLARIFICATION'      ? 'bg-amber-100 text-amber-700' :
-    status === 'CLOSED_FALSE_POSITIVE'   ? 'bg-slate-100 text-slate-500' :
-    status === 'COMPLIANCE_APPROVED'     ? 'bg-teal-100 text-teal-700' :
-    status === 'COMPLIANCE_REJECTED'     ? 'bg-red-100 text-red-700' :
-    status === 'PENDING_DIRECTOR_REVIEW' ? 'bg-purple-100 text-purple-700' :
-    status === 'DIRECTOR_APPROVED'       ? 'bg-emerald-100 text-emerald-700' :
-    status === 'DIRECTOR_REJECTED'       ? 'bg-red-100 text-red-700' :
-    status === 'READY_TO_REPORT'         ? 'bg-teal-100 text-teal-700' :
-    status === 'REPORTED'                ? 'bg-green-100 text-green-700' :
-    status === 'ARCHIVED'                ? 'bg-slate-100 text-slate-400' :
-                                           'bg-slate-100 text-slate-500';
+    status === 'DETECTED'                         ? 'bg-orange-100 text-orange-700' :
+    status === 'UNDER_COMPLIANCE_REVIEW'          ? 'bg-blue-100 text-blue-700' :
+    status === 'NEED_CLARIFICATION'               ? 'bg-amber-100 text-amber-700' :
+    status === 'CLOSED_FALSE_POSITIVE'            ? 'bg-slate-100 text-slate-500' :
+    status === 'COMPLIANCE_APPROVED'              ? 'bg-teal-100 text-teal-700' :
+    status === 'COMPLIANCE_REJECTED'              ? 'bg-red-100 text-red-700' :
+    status === 'PENDING_COMPLIANCE_STAFF_REVIEW'  ? 'bg-blue-100 text-blue-700' :
+    status === 'PENDING_COMPLIANCE_MANAGER_REVIEW'? 'bg-purple-100 text-purple-700' :
+    status === 'STAFF_REVIEWED'                   ? 'bg-teal-100 text-teal-700' :
+    status === 'MANAGER_APPROVED'                 ? 'bg-emerald-100 text-emerald-700' :
+    status === 'MANAGER_REJECTED'                 ? 'bg-red-100 text-red-700' :
+    status === 'PENDING_DIRECTOR_REVIEW'          ? 'bg-purple-100 text-purple-700' :
+    status === 'DIRECTOR_APPROVED'                ? 'bg-emerald-100 text-emerald-700' :
+    status === 'DIRECTOR_REJECTED'                ? 'bg-red-100 text-red-700' :
+    status === 'READY_TO_REPORT'                  ? 'bg-teal-100 text-teal-700' :
+    status === 'REPORTED'                         ? 'bg-green-100 text-green-700' :
+    status === 'ARCHIVED'                         ? 'bg-slate-100 text-slate-400' :
+                                                    'bg-slate-100 text-slate-500';
   return (
     <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>
       {formatCaseStatus(status)}
@@ -83,12 +88,19 @@ function SummaryCard({ label, value, loading }: { label: string; value: number; 
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const ALLOWED_ROLES = new Set(['SystemAdmin', 'ComplianceLead', 'Director', 'Auditor']);
+const ALLOWED_ROLES = new Set(['SystemAdmin', 'ComplianceLead', 'ComplianceStaff', 'Auditor']);
 
 export default function MonitoringPage() {
   const { token } = useAuth();
   const role = getRoleFromToken(token);
-  const isDirector = role === 'Director';
+  const isStaff = role === 'ComplianceStaff';
+  const canSeeReportsLink = role === 'SystemAdmin' || role === 'ComplianceLead' || role === 'Auditor';
+
+  // CTA label per role
+  const ctaLabel =
+    role === 'ComplianceStaff' ? 'Review Compliance Staff' :
+    role === 'ComplianceLead'  ? 'Approval Compliance Manager' :
+    'Detail';
 
   // filters
   const [q, setQ] = useState('');
@@ -106,16 +118,15 @@ export default function MonitoringPage() {
   const [error, setError] = useState('');
 
   // summary cards
-  const [summary, setSummary] = useState({ total: 0, compliance: 0, director: 0, ready: 0, reported: 0 });
+  const [summary, setSummary] = useState({ total: 0, staffPending: 0, managerPending: 0, ready: 0, reported: 0 });
   const [summaryLoading, setSummaryLoading] = useState(true);
 
   // fetch summary once on mount
   useEffect(() => {
-    // Director only ever sees PENDING_DIRECTOR_REVIEW cases — one card is enough.
-    if (isDirector) {
-      getMonitoringCases({ limit: 1, page: 1, status: 'PENDING_DIRECTOR_REVIEW' })
-        .then((dir) => {
-          setSummary({ total: 0, compliance: 0, director: dir.total, ready: 0, reported: 0 });
+    if (isStaff) {
+      getMonitoringCases({ limit: 1, page: 1, status: 'DETECTED' })
+        .then((res) => {
+          setSummary({ total: 0, staffPending: res.total, managerPending: 0, ready: 0, reported: 0 });
         })
         .catch(() => {})
         .finally(() => setSummaryLoading(false));
@@ -123,23 +134,23 @@ export default function MonitoringPage() {
     }
     Promise.all([
       getMonitoringCases({ limit: 1, page: 1 }),
-      getMonitoringCases({ limit: 1, page: 1, status: 'UNDER_COMPLIANCE_REVIEW' }),
-      getMonitoringCases({ limit: 1, page: 1, status: 'PENDING_DIRECTOR_REVIEW' }),
+      getMonitoringCases({ limit: 1, page: 1, status: 'DETECTED' }),
+      getMonitoringCases({ limit: 1, page: 1, status: 'PENDING_COMPLIANCE_MANAGER_REVIEW' }),
       getMonitoringCases({ limit: 1, page: 1, status: 'READY_TO_REPORT' }),
       getMonitoringCases({ limit: 1, page: 1, status: 'REPORTED' }),
     ])
-      .then(([all, comp, dir, ready, rep]) => {
+      .then(([all, staffPending, managerPending, ready, rep]) => {
         setSummary({
           total: all.total,
-          compliance: comp.total,
-          director: dir.total,
+          staffPending: staffPending.total,
+          managerPending: managerPending.total,
           ready: ready.total,
           reported: rep.total,
         });
       })
       .catch(() => {})
       .finally(() => setSummaryLoading(false));
-  }, [isDirector]);
+  }, [isStaff]);
 
   useEffect(() => {
     let alive = true;
@@ -151,8 +162,7 @@ export default function MonitoringPage() {
           page, limit,
           q: q || undefined,
           case_type: caseType || undefined,
-          // Director is scoped to PENDING_DIRECTOR_REVIEW (also enforced by backend).
-          status: isDirector ? 'PENDING_DIRECTOR_REVIEW' : (status || undefined),
+          status: status || undefined,
           report_type: reportType || undefined,
           due_before: dueBefore || undefined,
         });
@@ -167,7 +177,7 @@ export default function MonitoringPage() {
       }
     })();
     return () => { alive = false; };
-  }, [page, limit, q, caseType, status, reportType, dueBefore, isDirector]);
+  }, [page, limit, q, caseType, status, reportType, dueBefore]);
 
   const resetPage = () => setPage(1);
 
@@ -184,12 +194,10 @@ export default function MonitoringPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">{isDirector ? 'Monitoring Dirut' : 'Transaction Monitoring'}</h1>
-          <p className="text-sm text-slate-500">
-            {isDirector ? 'Case yang menunggu review Direktur Utama' : 'Pemantauan LTKT dan LTKM'}
-          </p>
+          <h1 className="text-xl font-semibold">Transaction Monitoring</h1>
+          <p className="text-sm text-slate-500">Pemantauan LTKT dan LTKM</p>
         </div>
-        {!isDirector && (
+        {canSeeReportsLink && (
           <Link
             href="/monitoring/reports"
             className="rounded-lg border px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
@@ -200,15 +208,15 @@ export default function MonitoringPage() {
       </div>
 
       {/* Summary cards */}
-      {isDirector ? (
+      {isStaff ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <SummaryCard label="Menunggu Review Dirut" value={summary.director} loading={summaryLoading} />
+          <SummaryCard label="Menunggu Review Compliance Staff" value={summary.staffPending} loading={summaryLoading} />
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <SummaryCard label="Total Case" value={summary.total} loading={summaryLoading} />
-          <SummaryCard label="Menunggu Compliance" value={summary.compliance} loading={summaryLoading} />
-          <SummaryCard label="Menunggu Dirut" value={summary.director} loading={summaryLoading} />
+          <SummaryCard label="Menunggu Review Compliance Staff" value={summary.staffPending} loading={summaryLoading} />
+          <SummaryCard label="Menunggu Approval Compliance Manager" value={summary.managerPending} loading={summaryLoading} />
           <SummaryCard label="Siap Lapor" value={summary.ready} loading={summaryLoading} />
           <SummaryCard label="Terlapor" value={summary.reported} loading={summaryLoading} />
         </div>
@@ -239,28 +247,19 @@ export default function MonitoringPage() {
             <option value="BOTH">LTKT + LTKM</option>
           </select>
         </div>
-        {isDirector ? (
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Status</label>
-            <div className="rounded-lg border bg-slate-50 px-3 py-2 text-sm text-slate-500">
-              Menunggu Review Dirut
-            </div>
-          </div>
-        ) : (
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Status</label>
-            <select
-              value={status}
-              onChange={(e) => { setStatus(e.target.value); resetPage(); }}
-              className="rounded-lg border px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
-            >
-              <option value="">Semua Status</option>
-              {Object.entries(CASE_STATUS_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Status</label>
+          <select
+            value={status}
+            onChange={(e) => { setStatus(e.target.value); resetPage(); }}
+            className="rounded-lg border px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
+          >
+            <option value="">Semua Status</option>
+            {CASE_STATUS_FILTER_OPTIONS.map((k) => (
+              <option key={k} value={k}>{formatCaseStatus(k)}</option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="block text-xs text-slate-500 mb-1">Report Type</label>
           <select
@@ -352,9 +351,9 @@ export default function MonitoringPage() {
                   <td className="px-3 py-3 text-right">
                     <Link
                       href={`/monitoring/${c.id}`}
-                      className="text-sm font-medium text-kesh-700 hover:underline"
+                      className="text-xs font-medium text-kesh-700 hover:underline whitespace-nowrap"
                     >
-                      Detail
+                      {ctaLabel}
                     </Link>
                   </td>
                 </tr>

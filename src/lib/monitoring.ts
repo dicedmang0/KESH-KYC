@@ -11,6 +11,13 @@ export type MonitoringCaseStatus =
   | 'CLOSED_FALSE_POSITIVE'
   | 'COMPLIANCE_APPROVED'
   | 'COMPLIANCE_REJECTED'
+  // New workflow statuses
+  | 'PENDING_COMPLIANCE_STAFF_REVIEW'
+  | 'PENDING_COMPLIANCE_MANAGER_REVIEW'
+  | 'STAFF_REVIEWED'
+  | 'MANAGER_APPROVED'
+  | 'MANAGER_REJECTED'
+  // Legacy statuses (kept for historical data display)
   | 'PENDING_DIRECTOR_REVIEW'
   | 'DIRECTOR_APPROVED'
   | 'DIRECTOR_REJECTED'
@@ -100,21 +107,21 @@ export type LinkedApplicationSummary = {
   customer_name?: string | null;
 };
 
-export type ComplianceReviewEntry = {
+export type StaffReviewEntry = {
   action?: string | null;
   notes?: string | null;
   reviewed_by?: string | null;
   reviewed_at?: string | null;
 };
 
-export type DirectorReviewEntry = {
-  decision?: string | null;
+export type ManagerReviewEntry = {
+  action?: string | null;
   notes?: string | null;
   reviewed_by?: string | null;
   reviewed_at?: string | null;
 };
 
-export type ComplianceReviewSummary = {
+export type ReviewSummary = {
   action: string | null;
   notes: string | null;
   reviewedAt: string | null;
@@ -124,14 +131,19 @@ export type ComplianceReviewSummary = {
 
 export type MonitoringCaseDetail = MonitoringCase & {
   triggers?: MonitoringTrigger[] | null;
-  compliance_review?: ComplianceReviewEntry | null;
-  director_review?: DirectorReviewEntry | null;
-  // Backend may also surface compliance review as flat columns — kept optional
-  // so the UI can read from either the nested object or these top-level fields.
-  compliance_action?: string | null;
-  compliance_notes?: string | null;
-  compliance_reviewed_by?: string | null;
-  compliance_reviewed_at?: string | null;
+  // Nested review objects
+  staff_review?: StaffReviewEntry | null;
+  manager_review?: ManagerReviewEntry | null;
+  // New flat columns
+  staff_action?: string | null;
+  staff_notes?: string | null;
+  staff_reviewed_by?: string | null;
+  staff_reviewed_at?: string | null;
+  manager_action?: string | null;
+  manager_notes?: string | null;
+  manager_reviewed_by?: string | null;
+  manager_reviewed_at?: string | null;
+  // Report tracking
   report_status?: MonitoringReportStatus | null;
   report_reference_no?: string | null;
   report_file_uri?: string | null;
@@ -183,22 +195,25 @@ export type ReportsQuery = {
   report_type?: string;
 };
 
-export type ComplianceReviewAction =
-  | 'CLOSE_FALSE_POSITIVE'
-  | 'NEED_CLARIFICATION'
-  | 'ESCALATE_TO_DIRECTOR'
-  | 'READY_TO_REPORT'
-  | 'RECOMMEND_REPORT';
+// New action types
+export type StaffReviewAction =
+  | 'ESCALATE_TO_MANAGER'
+  | 'REQUEST_CLARIFICATION'
+  | 'RECOMMEND_CLOSE_FALSE_POSITIVE';
 
-export type ComplianceReviewBody = {
-  action: ComplianceReviewAction;
+export type ManagerReviewAction =
+  | 'APPROVE_REPORT'
+  | 'CLOSE_FALSE_POSITIVE'
+  | 'REJECT'
+  | 'REQUEST_CLARIFICATION';
+
+export type StaffReviewBody = {
+  action: StaffReviewAction;
   notes: string;
 };
 
-export type DirectorDecision = 'APPROVED' | 'REJECTED' | 'REQUEST_MORE_INFO';
-
-export type DirectorReviewBody = {
-  decision: DirectorDecision;
+export type ManagerReviewBody = {
+  action: ManagerReviewAction;
   notes: string;
 };
 
@@ -241,15 +256,15 @@ export function evaluateTransfer(transferId: number | string) {
   });
 }
 
-export function complianceReview(id: number | string, body: ComplianceReviewBody) {
-  return apiFetch<MonitoringCaseDetail>(`/monitoring/cases/${id}/compliance-review`, {
+export function staffReview(id: number | string, body: StaffReviewBody) {
+  return apiFetch<MonitoringCaseDetail>(`/monitoring/cases/${id}/staff-review`, {
     method: 'PATCH',
     body,
   });
 }
 
-export function directorReview(id: number | string, body: DirectorReviewBody) {
-  return apiFetch<MonitoringCaseDetail>(`/monitoring/cases/${id}/director-review`, {
+export function managerReview(id: number | string, body: ManagerReviewBody) {
+  return apiFetch<MonitoringCaseDetail>(`/monitoring/cases/${id}/manager-review`, {
     method: 'PATCH',
     body,
   });
@@ -265,19 +280,38 @@ export function updateMonitoringReport(id: number | string, body: ReportUpdateBo
 // ── Display labels ────────────────────────────────────────────────────────────
 
 export const CASE_STATUS_LABELS: Record<string, string> = {
-  DETECTED: 'Terdeteksi',
+  DETECTED: 'Menunggu Review Compliance Staff',
   UNDER_COMPLIANCE_REVIEW: 'Review Compliance',
   NEED_CLARIFICATION: 'Butuh Klarifikasi',
   CLOSED_FALSE_POSITIVE: 'Ditutup / False Positive',
   COMPLIANCE_APPROVED: 'Disetujui Compliance',
   COMPLIANCE_REJECTED: 'Ditolak Compliance',
-  PENDING_DIRECTOR_REVIEW: 'Menunggu Review Dirut',
-  DIRECTOR_APPROVED: 'Disetujui Dirut',
-  DIRECTOR_REJECTED: 'Ditolak Dirut',
-  READY_TO_REPORT: 'Siap Dilaporkan',
+  PENDING_COMPLIANCE_STAFF_REVIEW: 'Menunggu Review Compliance Staff',
+  PENDING_COMPLIANCE_MANAGER_REVIEW: 'Menunggu Approval Compliance Manager',
+  STAFF_REVIEWED: 'Sudah Review Compliance Staff',
+  MANAGER_APPROVED: 'Disetujui Compliance Manager',
+  MANAGER_REJECTED: 'Ditolak Compliance Manager',
+  READY_TO_REPORT: 'Disetujui Compliance Manager',
   REPORTED: 'Sudah Dilaporkan',
   ARCHIVED: 'Diarsipkan',
+  // Legacy Director statuses — mapped to Compliance Manager wording (no "Dirut") for historical data.
+  PENDING_DIRECTOR_REVIEW: 'Menunggu Approval Compliance Manager',
+  DIRECTOR_APPROVED: 'Disetujui Compliance Manager',
+  DIRECTOR_REJECTED: 'Ditolak Compliance Manager',
 };
+
+// Status options shown in the monitoring list filter — current workflow only.
+// Legacy Director statuses are intentionally excluded so they never appear as filters.
+export const CASE_STATUS_FILTER_OPTIONS: string[] = [
+  'DETECTED',
+  'PENDING_COMPLIANCE_MANAGER_REVIEW',
+  'NEED_CLARIFICATION',
+  'READY_TO_REPORT',
+  'MANAGER_REJECTED',
+  'REPORTED',
+  'CLOSED_FALSE_POSITIVE',
+  'ARCHIVED',
+];
 
 export const REPORT_STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft',
@@ -306,26 +340,29 @@ export const TRIGGER_LABELS: Record<string, string> = {
   LTKM_HIGH_VALUE_TRANSFER: 'Transfer bernilai tinggi',
 };
 
-export const COMPLIANCE_ACTION_LABELS: Record<string, string> = {
-  CLOSE_FALSE_POSITIVE: 'Tutup sebagai False Positive',
-  NEED_CLARIFICATION: 'Butuh Klarifikasi',
-  ESCALATE_TO_DIRECTOR: 'Eskalasi ke Direktur Utama',
-  RECOMMEND_REPORT: 'Rekomendasikan Laporan',
-  READY_TO_REPORT: 'Siap Dilaporkan',
+export const STAFF_ACTION_LABELS: Record<string, string> = {
+  ESCALATE_TO_MANAGER: 'Lanjut ke Compliance Manager',
+  REQUEST_CLARIFICATION: 'Minta Klarifikasi',
+  RECOMMEND_CLOSE_FALSE_POSITIVE: 'Rekomendasikan False Positive',
 };
 
-export const DIRECTOR_DECISION_LABELS: Record<string, string> = {
-  APPROVED: 'Disetujui',
-  REJECTED: 'Ditolak',
-  REQUEST_MORE_INFO: 'Minta Informasi Tambahan',
+export const MANAGER_ACTION_LABELS: Record<string, string> = {
+  APPROVE_REPORT: 'Setujui untuk Pelaporan',
+  CLOSE_FALSE_POSITIVE: 'Tutup sebagai False Positive',
+  REJECT: 'Tolak',
+  REQUEST_CLARIFICATION: 'Minta Klarifikasi',
 };
 
 export function formatCaseStatus(status?: string | null): string {
   return (status && CASE_STATUS_LABELS[status]) || status || '—';
 }
 
-export function formatComplianceAction(action?: string | null): string {
-  return (action && COMPLIANCE_ACTION_LABELS[action]) || action || '-';
+export function formatStaffAction(action?: string | null): string {
+  return (action && STAFF_ACTION_LABELS[action]) || action || '-';
+}
+
+export function formatManagerAction(action?: string | null): string {
+  return (action && MANAGER_ACTION_LABELS[action]) || action || '-';
 }
 
 /** Backend may only send a numeric user id — label it so it isn't mistaken for something else. */
@@ -335,23 +372,20 @@ export function formatComplianceReviewer(reviewedBy?: string | null): string {
   return /^\d+$/.test(s) ? `User ID: ${s}` : s;
 }
 
-/**
- * Reads the compliance review from either the nested `compliance_review` object
- * or the flat `compliance_*` columns. Shared by the Review Compliance and
- * Review Direktur Utama sections so both stay in sync.
- */
-export function getComplianceReviewSummary(caseDetail: MonitoringCaseDetail): ComplianceReviewSummary {
-  const action = caseDetail.compliance_review?.action ?? caseDetail.compliance_action ?? null;
-  const notes = caseDetail.compliance_review?.notes ?? caseDetail.compliance_notes ?? null;
-  const reviewedAt = caseDetail.compliance_review?.reviewed_at ?? caseDetail.compliance_reviewed_at ?? null;
-  const reviewedBy = caseDetail.compliance_review?.reviewed_by ?? caseDetail.compliance_reviewed_by ?? null;
-  return {
-    action,
-    notes,
-    reviewedAt,
-    reviewedBy,
-    hasAny: !!(action || notes || reviewedAt || reviewedBy),
-  };
+export function getStaffReviewSummary(caseDetail: MonitoringCaseDetail): ReviewSummary {
+  const action = caseDetail.staff_review?.action ?? caseDetail.staff_action ?? null;
+  const notes = caseDetail.staff_review?.notes ?? caseDetail.staff_notes ?? null;
+  const reviewedAt = caseDetail.staff_review?.reviewed_at ?? caseDetail.staff_reviewed_at ?? null;
+  const reviewedBy = caseDetail.staff_review?.reviewed_by ?? caseDetail.staff_reviewed_by ?? null;
+  return { action, notes, reviewedAt, reviewedBy, hasAny: !!(action || notes || reviewedAt || reviewedBy) };
+}
+
+export function getManagerReviewSummary(caseDetail: MonitoringCaseDetail): ReviewSummary {
+  const action = caseDetail.manager_review?.action ?? caseDetail.manager_action ?? null;
+  const notes = caseDetail.manager_review?.notes ?? caseDetail.manager_notes ?? null;
+  const reviewedAt = caseDetail.manager_review?.reviewed_at ?? caseDetail.manager_reviewed_at ?? null;
+  const reviewedBy = caseDetail.manager_review?.reviewed_by ?? caseDetail.manager_reviewed_by ?? null;
+  return { action, notes, reviewedAt, reviewedBy, hasAny: !!(action || notes || reviewedAt || reviewedBy) };
 }
 
 export function formatReportStatus(status?: string | null): string {
