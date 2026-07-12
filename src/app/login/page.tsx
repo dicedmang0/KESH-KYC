@@ -60,6 +60,7 @@ export default function LoginPage() {
                 autoComplete="email"
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition-colors focus:border-kesh-700 focus:ring-2 focus:ring-kesh-700/15"
+                suppressHydrationWarning
                 required
               />
             </div>
@@ -72,6 +73,7 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition-colors focus:border-kesh-700 focus:ring-2 focus:ring-kesh-700/15"
+                suppressHydrationWarning
                 required
               />
             </div>
