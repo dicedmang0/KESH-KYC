@@ -14,6 +14,7 @@ import {
   ArrowLeftRight,
   ClipboardList,
   AlertTriangle,
+  MessageSquare,
   X,
 } from 'lucide-react';
 import { useAuth } from '@/app/providers';
@@ -34,6 +35,7 @@ const allItems: Item[] = [
   { href: '/users',      label: 'Manajemen Pengguna Jasa', icon: Users          },
   { href: '/kyc',        label: 'Verifikasi KYC/KYB',      icon: ShieldCheck    },
   { href: '/transfers',  label: 'Pencatatan Transfer',      icon: ArrowLeftRight },
+  { href: '/complaints', label: 'Pencatatan Pengaduan',     icon: MessageSquare  },
   { href: '/watchlist',  label: 'Daftar Pengawasan',        icon: ClipboardList  },
   { href: '/monitoring', label: 'Monitoring',               icon: AlertTriangle  },
   { href: '/reports',    label: 'Laporan',                  icon: FileBarChart   },
@@ -56,14 +58,14 @@ export default function Sidebar() {
   useEffect(() => { setMounted(true); }, []);
 
   const ROLE_MENU: Record<string, string[]> = {
-    SystemAdmin:    ['/dashboard', '/users', '/kyc', '/transfers', '/watchlist', '/monitoring', '/reports', '/settings'],
+    SystemAdmin:    ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist', '/monitoring', '/reports', '/settings'],
     BranchAdmin:    [],
-    ComplianceLead: ['/dashboard', '/kyc', '/watchlist', '/monitoring', '/reports'],
+    ComplianceLead: ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring', '/reports'],
     Director:       ['/dashboard', '/monitoring'],
-    FrontDesk:      ['/dashboard', '/users', '/kyc', '/transfers'],
-    Auditor:        ['/dashboard', '/kyc', '/monitoring', '/reports'],
+    FrontDesk:      ['/dashboard', '/users', '/kyc', '/transfers', '/complaints'],
+    Auditor:        ['/dashboard', '/kyc', '/complaints', '/monitoring', '/reports'],
     FinanceStaff:   ['/dashboard', '/transfers', '/reports'],
-    FinanceManager: ['/dashboard', '/transfers', '/reports'],
+    FinanceManager: ['/dashboard', '/transfers', '/complaints', '/reports'],
   };
 
   const allowedHrefs = new Set(ROLE_MENU[role ?? ''] ?? ['/dashboard']);
