@@ -105,7 +105,52 @@ type Document = {
 type EddRecord = {
   data?: Partial<EddFormData> | null;
   completed?: boolean | null;
+  edd_required?: boolean | null;
+  edd_completed?: boolean | null;
+  applicant_snapshot?: Record<string, unknown> | null;
+  high_risk_reasons?: Record<string, unknown> | null;
+  additional_information?: Record<string, unknown> | null;
+  beneficial_owner?: Record<string, unknown> | null;
+  officer_analysis?: Record<string, unknown> | null;
+  compliance_decision?: Record<string, unknown> | null;
+  director_decision?: Record<string, unknown> | null;
+  internal_checklist?: Record<string, unknown> | null;
   [key: string]: unknown;
+};
+
+type RbaUnmappedParameter = {
+  parameter?: string | null;
+  value?: string | number | null;
+  reason?: string | null;
+};
+
+type RbaComponentParameter = {
+  name?: string | null;
+  value?: string | number | null;
+  score?: number | null;
+  weight?: number | null;
+  contribution?: number | null;
+  source_sheet?: string | null;
+};
+
+type RbaComponent = {
+  weight?: number | null;
+  score?: number | null;
+  contribution?: number | null;
+  value?: string | number | null;
+  parameters?: RbaComponentParameter[];
+};
+
+type RiskRecord = {
+  risk_score?: number | null;
+  risk_level?: 'LOW' | 'MEDIUM' | 'HIGH' | string | null;
+  override_level?: string | null;
+  override_reason?: string | null;
+  rba_version?: string | null;
+  rba_score_v01?: number | null;
+  rba_calculation_status?: 'COMPLETE' | 'INCOMPLETE' | string | null;
+  rba_unmapped_parameters?: RbaUnmappedParameter[] | null;
+  rba_components?: Record<string, RbaComponent> | null;
 };
 
 // GET /applications/:id returns { application, person, business, documents, parties, risk, edd }
@@ -115,6 +160,7 @@ type DetailResponse = {
   business?: Business | null;
   documents: Document[];
   parties: Party[];
+  risk?: RiskRecord | null;
   edd?: EddRecord | null;
 };
 
@@ -237,6 +283,289 @@ function Row({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
+function getString(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
+function getStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
+function getBoolean(v: unknown): boolean {
+  return typeof v === 'boolean' ? v : false;
+}
+
+function hasEddPayload(record?: EddRecord | null): boolean {
+  if (!record) return false;
+  if (record.data && Object.keys(record.data).length > 0) return true;
+  return [
+    'applicant_snapshot',
+    'high_risk_reasons',
+    'additional_information',
+    'beneficial_owner',
+    'officer_analysis',
+    'compliance_decision',
+    'director_decision',
+    'internal_checklist',
+  ].some((key) => {
+    const value = record[key];
+    return !!value && typeof value === 'object' && Object.keys(value as Record<string, unknown>).length > 0;
+  });
+}
+
+function normalizeEddRecord(record?: EddRecord | null): Partial<EddFormData> | null {
+  if (!record || !hasEddPayload(record)) return null;
+  if (record.data && Object.keys(record.data).length > 0) return record.data;
+
+  const applicant = (record.applicant_snapshot ?? {}) as Record<string, unknown>;
+  const reasons = (record.high_risk_reasons ?? {}) as Record<string, unknown>;
+  const additional = (record.additional_information ?? {}) as Record<string, unknown>;
+  const bo = (record.beneficial_owner ?? {}) as Record<string, unknown>;
+  const analysis = (record.officer_analysis ?? {}) as Record<string, unknown>;
+  const compliance = (record.compliance_decision ?? {}) as Record<string, unknown>;
+  const director = (record.director_decision ?? {}) as Record<string, unknown>;
+  const checklist = (record.internal_checklist ?? {}) as Record<string, unknown>;
+
+  return {
+    nama_lengkap: getString(applicant.full_name),
+    nomor_identitas: getString(applicant.identity_number),
+    jenis_identitas: getString(applicant.identity_type),
+    alamat_domisili: getString(applicant.domicile_address),
+    pekerjaan_jenis_usaha: getString(applicant.occupation_or_business_type),
+    nomor_telepon: getString(applicant.phone_number),
+    kategori_pengguna: getString(applicant.customer_category),
+    nomor_referensi_cdd: getString(applicant.cdd_reference_no),
+
+    karakteristik_pengguna: getStringArray(reasons.customer_characteristics),
+    pola_transaksi: getStringArray(reasons.transaction_patterns),
+    hasil_screening_checks: getStringArray(reasons.screening_results),
+    klarifikasi_tambahan: getStringArray(reasons.additional_clarification_requests),
+    catatan_alasan_edd: getString(reasons.summary_notes),
+
+    tujuan_hubungan: getStringArray(additional.business_relationship_purposes),
+    tujuan_lainnya: getString(additional.business_relationship_purpose_other),
+    sumber_dana: getStringArray(additional.source_of_funds),
+    sumber_dana_lainnya: getString(additional.source_of_funds_other),
+    dokumen_sumber_dana: getStringArray(additional.source_of_funds_documents),
+    dokumen_sumber_dana_lainnya: getString(additional.source_of_funds_document_other),
+    sumber_kekayaan: getStringArray(additional.source_of_wealth),
+    sumber_kekayaan_lainnya: getString(additional.source_of_wealth_other),
+    dokumen_sumber_kekayaan: getStringArray(additional.source_of_wealth_documents),
+    dokumen_sumber_kekayaan_lainnya: getString(additional.source_of_wealth_document_other),
+
+    bertindak_untuk_pihak_lain: getBoolean(bo.acting_for_other_party),
+    nama_bo: getString(bo.name),
+    hubungan_bo: getString(bo.relationship),
+    nomor_identitas_bo: getString(bo.identity_number),
+    alamat_bo: getString(bo.address),
+    sumber_dana_kekayaan_bo: getString(bo.source_of_funds_and_wealth),
+    dokumen_bo: getStringArray(bo.documents),
+
+    konsistensi_data: getString(analysis.data_consistency),
+    penjelasan_konsistensi: getString(analysis.data_consistency_explanation),
+    kewajaran_transaksi: getString(analysis.transaction_reasonableness),
+    catatan_kewajaran: getString(analysis.transaction_reasonableness_notes),
+    evaluasi_sumber_dana: getString(analysis.source_of_funds_evaluation),
+    penjelasan_evaluasi: getString(analysis.source_of_funds_evaluation_explanation),
+    risiko_geografis: getString(analysis.geography_risk),
+    risiko_produk: getString(analysis.product_risk),
+    rangkuman_risiko: getString(analysis.overall_risk_summary),
+    rekomendasi_tindak_lanjut: getStringArray(analysis.follow_up_recommendations),
+
+    keputusan_kepatuhan: getString(compliance.decision),
+    alasan_keputusan_kepatuhan: getString(compliance.reason),
+    nama_pejabat_kepatuhan: getString(compliance.officer_name),
+    tanggal_kepatuhan: getString(compliance.date),
+
+    keputusan_direktur: getString(director.decision),
+    alasan_keputusan_direktur: getString(director.reason),
+    nama_direktur: getString(director.director_name),
+    tanggal_direktur: getString(director.date),
+
+    checklist_kelengkapan: getStringArray(checklist.completion_items),
+  };
+}
+
+function buildEddPayload(formData: EddFormData, complete: boolean) {
+  return {
+    complete,
+    applicant_snapshot: {
+      full_name: formData.nama_lengkap,
+      identity_number: formData.nomor_identitas,
+      identity_type: formData.jenis_identitas,
+      domicile_address: formData.alamat_domisili,
+      occupation_or_business_type: formData.pekerjaan_jenis_usaha,
+      phone_number: formData.nomor_telepon,
+      customer_category: formData.kategori_pengguna,
+      cdd_reference_no: formData.nomor_referensi_cdd,
+    },
+    high_risk_reasons: {
+      customer_characteristics: formData.karakteristik_pengguna,
+      transaction_patterns: formData.pola_transaksi,
+      screening_results: formData.hasil_screening_checks,
+      additional_clarification_requests: formData.klarifikasi_tambahan,
+      summary_notes: formData.catatan_alasan_edd,
+    },
+    additional_information: {
+      business_relationship_purposes: formData.tujuan_hubungan,
+      business_relationship_purpose_other: formData.tujuan_lainnya,
+      source_of_funds: formData.sumber_dana,
+      source_of_funds_other: formData.sumber_dana_lainnya,
+      source_of_funds_documents: formData.dokumen_sumber_dana,
+      source_of_funds_document_other: formData.dokumen_sumber_dana_lainnya,
+      source_of_wealth: formData.sumber_kekayaan,
+      source_of_wealth_other: formData.sumber_kekayaan_lainnya,
+      source_of_wealth_documents: formData.dokumen_sumber_kekayaan,
+      source_of_wealth_document_other: formData.dokumen_sumber_kekayaan_lainnya,
+    },
+    beneficial_owner: {
+      acting_for_other_party: formData.bertindak_untuk_pihak_lain,
+      name: formData.nama_bo,
+      relationship: formData.hubungan_bo,
+      identity_number: formData.nomor_identitas_bo,
+      address: formData.alamat_bo,
+      source_of_funds_and_wealth: formData.sumber_dana_kekayaan_bo,
+      documents: formData.dokumen_bo,
+    },
+    officer_analysis: {
+      data_consistency: formData.konsistensi_data,
+      data_consistency_explanation: formData.penjelasan_konsistensi,
+      transaction_reasonableness: formData.kewajaran_transaksi,
+      transaction_reasonableness_notes: formData.catatan_kewajaran,
+      source_of_funds_evaluation: formData.evaluasi_sumber_dana,
+      source_of_funds_evaluation_explanation: formData.penjelasan_evaluasi,
+      geography_risk: formData.risiko_geografis,
+      product_risk: formData.risiko_produk,
+      overall_risk_summary: formData.rangkuman_risiko,
+      follow_up_recommendations: formData.rekomendasi_tindak_lanjut,
+    },
+    compliance_decision: {
+      decision: formData.keputusan_kepatuhan,
+      reason: formData.alasan_keputusan_kepatuhan,
+      officer_name: formData.nama_pejabat_kepatuhan,
+      date: formData.tanggal_kepatuhan,
+    },
+    director_decision: {
+      decision: formData.keputusan_direktur,
+      reason: formData.alasan_keputusan_direktur,
+      director_name: formData.nama_direktur,
+      date: formData.tanggal_direktur,
+    },
+    internal_checklist: {
+      completion_items: formData.checklist_kelengkapan,
+    },
+  };
+}
+
+function riskLevelLabel(level?: string | null) {
+  if (level === 'LOW') return 'Rendah';
+  if (level === 'MEDIUM') return 'Menengah';
+  if (level === 'HIGH') return 'Tinggi';
+  return level || '—';
+}
+
+function riskLevelClass(level?: string | null) {
+  if (level === 'LOW') return 'bg-emerald-100 text-emerald-700';
+  if (level === 'MEDIUM') return 'bg-amber-100 text-amber-700';
+  if (level === 'HIGH') return 'bg-red-100 text-red-700';
+  return 'bg-slate-100 text-slate-600';
+}
+
+function formatScore(value?: number | null, digits = 2) {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+  return value.toLocaleString('id-ID', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+function RiskScoreCard({ risk }: { risk?: RiskRecord | null }) {
+  const effectiveLevel = risk?.override_level || risk?.risk_level || null;
+  const isComplete = risk?.rba_calculation_status === 'COMPLETE';
+  const components = risk?.rba_components ?? {};
+  const componentRows = [
+    { key: 'customer', label: 'Customer Risk' },
+    { key: 'product', label: 'Product / Layanan' },
+    { key: 'geography', label: 'Geografis' },
+    { key: 'distribution', label: 'Saluran Distribusi' },
+  ]
+    .map(({ key, label }) => ({ key, label, component: components[key] }))
+    .filter((row) => !!row.component);
+
+  return (
+    <div className="rounded-xl border p-4 space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Risk Based Approach</p>
+          <p className="mt-1 text-sm text-slate-500">Perhitungan risk score berdasarkan RBA V01.</p>
+        </div>
+        {risk ? (
+          <span className={`rounded px-2 py-0.5 text-xs font-semibold ${riskLevelClass(effectiveLevel)}`}>
+            {riskLevelLabel(effectiveLevel)}
+          </span>
+        ) : null}
+      </div>
+
+      {!risk ? (
+        <p className="text-sm text-slate-500">Risk belum dihitung. Submit aplikasi terlebih dahulu agar screening dan RBA berjalan.</p>
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">Status RBA</p>
+              <p className={`mt-1 text-sm font-semibold ${isComplete ? 'text-emerald-700' : 'text-amber-700'}`}>
+                {risk.rba_calculation_status || '—'}
+              </p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">RBA Score V01</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">{formatScore(risk.rba_score_v01)}</p>
+              <p className="text-xs text-slate-400">Skala 1–3</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">Risk Score</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">{risk.risk_score ?? '—'}</p>
+              <p className="text-xs text-slate-400">Skala 0–100</p>
+            </div>
+          </div>
+
+          {risk.rba_unmapped_parameters && risk.rba_unmapped_parameters.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Parameter RBA belum lengkap</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-amber-800">
+                {risk.rba_unmapped_parameters.map((item, idx) => (
+                  <li key={idx}>
+                    <span className="font-medium">{item.parameter || 'Parameter'}</span>
+                    {item.value != null && item.value !== '' ? `: ${item.value}` : ''}
+                    {item.reason ? ` — ${item.reason}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {componentRows.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Komponen RBA</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {componentRows.map(({ key, label, component }) => (
+                  <div key={key} className="rounded-lg border p-3 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-slate-700">{label}</span>
+                      <span className="text-xs text-slate-500">Bobot {formatScore(component?.weight ?? null, 2)}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Score: <span className="font-medium text-slate-700">{formatScore(component?.score ?? null)}</span>
+                      {' · '}Kontribusi: <span className="font-medium text-slate-700">{formatScore(component?.contribution ?? null)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -246,6 +575,7 @@ export default function UserDetailPage() {
   const [business, setBusiness] = useState<Business | null>(null);
   const [docs, setDocs] = useState<Document[]>([]);
   const [parties, setParties] = useState<Party[]>([]);
+  const [risk, setRisk] = useState<RiskRecord | null>(null);
   const [screening, setScreening] = useState<ScreeningResult | null>(null);
   const [precheck, setPrecheck] = useState<PrecheckResult | null>(null);
   const [eddData, setEddData] = useState<Partial<EddFormData>>({});
@@ -330,9 +660,16 @@ export default function UserDetailPage() {
       const appData = resp.application;
       if (!appData) throw new Error('Data aplikasi tidak ditemukan dalam response');
 
-      setApp(appData);
+      const appWithEdd: ApplicationDetail = {
+        ...appData,
+        edd_required: appData.edd_required ?? resp.edd?.edd_required ?? false,
+        edd_completed: appData.edd_completed ?? resp.edd?.edd_completed ?? resp.edd?.completed ?? false,
+      };
+
+      setApp(appWithEdd);
       setPerson(resp.person ?? null);
       setBusiness(resp.business ?? null);
+      setRisk(resp.risk ?? null);
 
       // Populate CDD form from person data (Individual only)
       if (appData.type === 'INDIVIDUAL' && resp.person) {
@@ -360,12 +697,16 @@ export default function UserDetailPage() {
       setDocs(resp.documents ?? []);
       setParties(resp.parties ?? []);
 
-      // Populate EDD from main response or dedicated endpoint
-      if (resp.edd?.data) {
-        setEddData(resp.edd.data);
-      } else if (appData.edd_required || resp.edd) {
+      // Populate EDD from main response or dedicated endpoint.
+      // Backend stores EDD as grouped JSON sections, while EddForm uses a flat shape.
+      const eddFromDetail = normalizeEddRecord(resp.edd);
+      if (eddFromDetail) setEddData(eddFromDetail);
+      else setEddData({});
+
+      if (appWithEdd.edd_required || resp.edd) {
         const eddResp = await apiFetch<EddRecord>(`/applications/${id}/edd`).catch(() => null);
-        if (eddResp?.data) setEddData(eddResp.data);
+        const eddFromEndpoint = normalizeEddRecord(eddResp);
+        if (eddFromEndpoint) setEddData(eddFromEndpoint);
       }
 
       // Only fetch screening after submission — DRAFT hasn't run screening yet
@@ -472,7 +813,7 @@ export default function UserDetailPage() {
     try {
       await apiFetch(`/applications/${id}/edd`, {
         method: 'PATCH',
-        body: { ...formData, complete },
+        body: buildEddPayload(formData, complete),
       });
       toast.success(complete ? 'EDD berhasil dilengkapi.' : 'Draft EDD berhasil disimpan.');
       await load();
@@ -511,6 +852,15 @@ export default function UserDetailPage() {
     }
   }
 
+  function handleKycDecisionError(e: unknown) {
+    const msg = getErrMsg(e, 'Gagal menyimpan data. Silakan coba lagi.');
+    if (userRole === 'OperationSupervisor' && (msg.includes('403') || msg.toLowerCase().includes('high') || msg.toLowerCase().includes('risk'))) {
+      toast.error('KYC/KYB high risk hanya dapat diputuskan oleh Lead Compliance.');
+    } else {
+      toast.error(msg);
+    }
+  }
+
   async function approve() {
     if (!id) return;
     setActionLoading(true);
@@ -522,7 +872,7 @@ export default function UserDetailPage() {
       toast.success('Aplikasi berhasil disetujui.');
       await load();
     } catch (e: unknown) {
-      toast.error(getErrMsg(e, 'Gagal menyimpan data. Silakan coba lagi.'));
+      handleKycDecisionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -545,7 +895,7 @@ export default function UserDetailPage() {
       setRejectReason('');
       await load();
     } catch (e: unknown) {
-      toast.error(getErrMsg(e, 'Gagal menyimpan data. Silakan coba lagi.'));
+      handleKycDecisionError(e);
     } finally {
       setActionLoading(false);
     }
@@ -775,17 +1125,20 @@ export default function UserDetailPage() {
 
   const cifNo = app.type === 'INDIVIDUAL' ? person?.cif_no : business?.cif_no;
 
-  const eddRequired = app.edd_required ?? false;
+  const effectiveRiskLevel = risk?.override_level || risk?.risk_level || null;
+  const isHighRisk = effectiveRiskLevel === 'HIGH';
+  const eddRequired = (app.edd_required ?? false) || isHighRisk;
   const eddCompleted = app.edd_completed ?? false;
   const approveBlocked = eddRequired && !eddCompleted;
 
-  // KYC final decision (approve/reject) is limited to compliance roles + admin.
-  // FrontDesk can create/input/submit KYC but cannot approve or reject.
-  const canDecideByRole = ['ComplianceStaff', 'ComplianceLead', 'SystemAdmin'].includes(userRole ?? '');
+  // KYC final decision: ComplianceLead (all risk), OperationSupervisor (LOW/MEDIUM only, backend enforces),
+  // Director and SystemAdmin (full). FrontDesk/Finance/Auditor cannot decide.
+  const canDecideByRole = ['ComplianceLead', 'SystemAdmin', 'Director', 'OperationSupervisor'].includes(userRole ?? '');
 
-  const canEditEdd = ['SystemAdmin', 'ComplianceLead'].includes(userRole ?? '');
-  const canViewEdd = ['SystemAdmin', 'ComplianceLead', 'Auditor'].includes(userRole ?? '');
-  const showEddSection = eddRequired || Object.keys(eddData).length > 0;
+  const canViewRisk = ['SystemAdmin', 'Director', 'ComplianceLead', 'OperationSupervisor', 'Auditor'].includes(userRole ?? '');
+  const canEditEdd = ['SystemAdmin', 'Director', 'ComplianceLead'].includes(userRole ?? '');
+  const canViewEdd = ['SystemAdmin', 'Director', 'ComplianceLead', 'Auditor'].includes(userRole ?? '');
+  const showEddSection = canViewEdd && (eddRequired || Object.keys(eddData).length > 0);
 
   return (
     <div className="space-y-5 p-6 max-w-3xl">
@@ -825,14 +1178,16 @@ export default function UserDetailPage() {
         </div>
       )}
 
-      {/* Action buttons */}
-      <div className="rounded-xl border p-4 space-y-3">
+      {/* Tindakan */}
+      <div className="rounded-xl border p-4 space-y-4">
         <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Tindakan</p>
-        <div className="flex flex-wrap gap-2">
+
+        {/* Button group — all actions in one unified row */}
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={runPrecheck}
             disabled={actionLoading}
-            className="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
           >
             Pra-Pemeriksaan
           </button>
@@ -841,40 +1196,25 @@ export default function UserDetailPage() {
             <button
               onClick={submit}
               disabled={actionLoading}
-              className="rounded-md bg-amber-600 px-3 py-1.5 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
+              className="rounded-lg bg-kesh-700 px-4 py-2 text-sm font-medium text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
             >
               Ajukan
             </button>
           )}
-        </div>
-
-        {missingIndivDocs.length > 0 && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-            Dokumen wajib belum lengkap:{' '}
-            {missingIndivDocs.map((t) => INDIVIDUAL_DOC_LABELS[t]).join(', ')}
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2">
 
           {canDecide && canDecideByRole && (
             <>
-              <div className="flex flex-col gap-1">
-                <button
-                  onClick={approve}
-                  disabled={actionLoading || approveBlocked}
-                  className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Setujui
-                </button>
-                {approveBlocked && (
-                  <p className="text-xs text-amber-700">Approve hanya bisa dilakukan setelah EDD selesai.</p>
-                )}
-              </div>
+              <button
+                onClick={approve}
+                disabled={actionLoading || approveBlocked}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                Setujui
+              </button>
               <button
                 onClick={() => setShowRejectInput(true)}
                 disabled={actionLoading}
-                className="rounded-md bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
                 Tolak…
               </button>
@@ -882,13 +1222,28 @@ export default function UserDetailPage() {
           )}
         </div>
 
+        {/* Helper text — rendered below button group, not inside row */}
+        {approveBlocked && canDecide && canDecideByRole && (
+          <p className="text-xs text-amber-700">
+            Approve hanya bisa dilakukan setelah EDD selesai.
+          </p>
+        )}
+
+        {/* Missing docs warning */}
+        {missingIndivDocs.length > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+            Dokumen wajib belum lengkap:{' '}
+            {missingIndivDocs.map((t) => INDIVIDUAL_DOC_LABELS[t]).join(', ')}
+          </div>
+        )}
+
         {/* Reject reason input */}
         {showRejectInput && (
-          <div className="flex gap-2 items-end">
-            <div className="flex-1">
+          <div className="flex flex-wrap gap-2 items-end">
+            <div className="flex-1 min-w-[220px]">
               <label className="text-xs text-slate-500">Alasan penolakan *</label>
               <input
-                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="Tuliskan alasan penolakan..."
@@ -897,29 +1252,29 @@ export default function UserDetailPage() {
             <button
               onClick={reject}
               disabled={actionLoading}
-              className="rounded-md bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
             >
               Konfirmasi Penolakan
             </button>
             <button
               onClick={() => { setShowRejectInput(false); setRejectReason(''); }}
-              className="rounded-md border px-3 py-2 text-sm hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
             >
               Batal
             </button>
           </div>
         )}
 
-        {/* Approved application notice */}
+        {/* Approved notice */}
         {app.status === 'APPROVED' && (
-          <div className="rounded-md p-3 text-sm bg-emerald-50 text-emerald-800">
+          <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
             <p className="font-medium">Aplikasi telah disetujui.</p>
           </div>
         )}
 
         {/* Precheck result */}
         {precheck && app.status !== 'APPROVED' && (
-          <div className={`rounded-md p-3 text-sm ${precheck.ready === false ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800'}`}>
+          <div className={`rounded-lg p-3 text-sm ${precheck.ready === false ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800'}`}>
             {precheck.ready === false ? (
               <>
                 <p className="font-medium">Belum siap untuk submit:</p>
@@ -933,6 +1288,8 @@ export default function UserDetailPage() {
           </div>
         )}
       </div>
+
+      {canViewRisk && <RiskScoreCard risk={risk} />}
 
       {/* Detail info */}
       {app.type === 'INDIVIDUAL' ? (

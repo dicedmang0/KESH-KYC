@@ -280,24 +280,24 @@ export function updateMonitoringReport(id: number | string, body: ReportUpdateBo
 // ── Display labels ────────────────────────────────────────────────────────────
 
 export const CASE_STATUS_LABELS: Record<string, string> = {
-  DETECTED: 'Menunggu Review Compliance Staff',
+  DETECTED: 'Menunggu Review Operation Supervisor',
   UNDER_COMPLIANCE_REVIEW: 'Review Compliance',
   NEED_CLARIFICATION: 'Butuh Klarifikasi',
   CLOSED_FALSE_POSITIVE: 'Ditutup / False Positive',
-  COMPLIANCE_APPROVED: 'Disetujui Compliance',
-  COMPLIANCE_REJECTED: 'Ditolak Compliance',
-  PENDING_COMPLIANCE_STAFF_REVIEW: 'Menunggu Review Compliance Staff',
-  PENDING_COMPLIANCE_MANAGER_REVIEW: 'Menunggu Approval Compliance Manager',
-  STAFF_REVIEWED: 'Sudah Review Compliance Staff',
-  MANAGER_APPROVED: 'Disetujui Compliance Manager',
-  MANAGER_REJECTED: 'Ditolak Compliance Manager',
-  READY_TO_REPORT: 'Disetujui Compliance Manager',
+  COMPLIANCE_APPROVED: 'Disetujui Lead Compliance',
+  COMPLIANCE_REJECTED: 'Ditolak Lead Compliance',
+  PENDING_COMPLIANCE_STAFF_REVIEW: 'Menunggu Review Operation Supervisor',
+  PENDING_COMPLIANCE_MANAGER_REVIEW: 'Menunggu Approval Lead Compliance',
+  STAFF_REVIEWED: 'Sudah Review Operation Supervisor',
+  MANAGER_APPROVED: 'Disetujui Lead Compliance',
+  MANAGER_REJECTED: 'Ditolak Lead Compliance',
+  READY_TO_REPORT: 'Disetujui Lead Compliance',
   REPORTED: 'Sudah Dilaporkan',
   ARCHIVED: 'Diarsipkan',
-  // Legacy Director statuses — mapped to Compliance Manager wording (no "Dirut") for historical data.
-  PENDING_DIRECTOR_REVIEW: 'Menunggu Approval Compliance Manager',
-  DIRECTOR_APPROVED: 'Disetujui Compliance Manager',
-  DIRECTOR_REJECTED: 'Ditolak Compliance Manager',
+  // Legacy Director statuses — mapped to Lead Compliance wording for historical data.
+  PENDING_DIRECTOR_REVIEW: 'Menunggu Approval Lead Compliance',
+  DIRECTOR_APPROVED: 'Disetujui Lead Compliance',
+  DIRECTOR_REJECTED: 'Ditolak Lead Compliance',
 };
 
 // Status options shown in the monitoring list filter — current workflow only.
@@ -341,7 +341,7 @@ export const TRIGGER_LABELS: Record<string, string> = {
 };
 
 export const STAFF_ACTION_LABELS: Record<string, string> = {
-  ESCALATE_TO_MANAGER: 'Lanjut ke Compliance Manager',
+  ESCALATE_TO_MANAGER: 'Lanjut ke Lead Compliance',
   REQUEST_CLARIFICATION: 'Minta Klarifikasi',
   RECOMMEND_CLOSE_FALSE_POSITIVE: 'Rekomendasikan False Positive',
 };

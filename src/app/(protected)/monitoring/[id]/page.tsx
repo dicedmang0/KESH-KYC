@@ -233,7 +233,7 @@ const REPORT_EDITABLE_STATUSES = new Set([
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const ALLOWED_ROLES = new Set(['SystemAdmin', 'ComplianceLead', 'ComplianceStaff', 'Auditor']);
+const ALLOWED_ROLES = new Set(['SystemAdmin', 'Director', 'ComplianceLead', 'Auditor']);
 
 export default function MonitoringDetailPage() {
   const params = useParams();
@@ -267,9 +267,9 @@ export default function MonitoringDetailPage() {
   const [repSubmitting, setRepSubmitting] = useState(false);
   const [repError, setRepError] = useState('');
 
-  const canStaffReview = role === 'ComplianceStaff' || role === 'SystemAdmin';
-  const canManagerReview = role === 'ComplianceLead' || role === 'SystemAdmin';
-  const canEditReport = role === 'ComplianceLead' || role === 'SystemAdmin';
+  const canStaffReview = role === 'SystemAdmin' || role === 'Director';
+  const canManagerReview = role === 'ComplianceLead' || role === 'SystemAdmin' || role === 'Director';
+  const canEditReport = role === 'ComplianceLead' || role === 'SystemAdmin' || role === 'Director';
 
   useEffect(() => {
     if (!id) return;
@@ -300,11 +300,11 @@ export default function MonitoringDetailPage() {
       const updated = await staffReview(id, { action: staffAction, notes: staffNotes });
       setDetail(updated);
       setStaffNotes('');
-      toast.success('Review Compliance Staff berhasil disimpan.');
+      toast.success('Review Operation Supervisor berhasil disimpan.');
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Gagal menyimpan review Compliance Staff.';
+      const msg = e instanceof Error ? e.message : 'Gagal menyimpan review Operation Supervisor.';
       setStaffError(msg);
-      toast.error('Gagal menyimpan review Compliance Staff.');
+      toast.error('Gagal menyimpan review Operation Supervisor.');
     } finally {
       setStaffSubmitting(false);
     }
@@ -318,11 +318,11 @@ export default function MonitoringDetailPage() {
       const updated = await managerReview(id, { action: managerAction, notes: managerNotes });
       setDetail(updated);
       setManagerNotes('');
-      toast.success('Approval Compliance Manager berhasil disimpan.');
+      toast.success('Approval Lead Compliance berhasil disimpan.');
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Gagal menyimpan approval Compliance Manager.';
+      const msg = e instanceof Error ? e.message : 'Gagal menyimpan approval Lead Compliance.';
       setManagerError(msg);
-      toast.error('Gagal menyimpan approval Compliance Manager.');
+      toast.error('Gagal menyimpan approval Lead Compliance.');
     } finally {
       setManagerSubmitting(false);
     }
@@ -532,8 +532,8 @@ export default function MonitoringDetailPage() {
         </Section>
       )}
 
-      {/* ── 4. Review Compliance Staff ──────────────────────────────────── */}
-      <Section title="Review Compliance Staff">
+      {/* ── 4. Review Operation Supervisor ─────────────────────────────── */}
+      <Section title="Review Operation Supervisor">
         {staffSummary.hasAny && (
           <div className="rounded-lg border bg-slate-50 p-3 space-y-2 text-sm">
             <p className="text-xs text-slate-500 font-medium">Review Terakhir</p>
@@ -571,7 +571,7 @@ export default function MonitoringDetailPage() {
                 value={staffNotes}
                 onChange={(e) => setStaffNotes(e.target.value)}
                 rows={3}
-                placeholder="Catatan review Compliance Staff…"
+                placeholder="Catatan review Operation Supervisor…"
                 className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-kesh-700 focus:ring-1 focus:ring-kesh-700/20"
               />
             </div>
@@ -587,16 +587,16 @@ export default function MonitoringDetailPage() {
             </button>
           </div>
         ) : canStaffReview && !staffActionable ? (
-          <p className="text-xs text-slate-400 italic">Status saat ini tidak memerlukan review Compliance Staff.</p>
+          <p className="text-xs text-slate-400 italic">Status saat ini tidak memerlukan review Operation Supervisor.</p>
         ) : (
           !staffSummary.hasAny && (
-            <p className="text-xs text-slate-400 italic">Belum ada review Compliance Staff.</p>
+            <p className="text-xs text-slate-400 italic">Belum ada review Operation Supervisor.</p>
           )
         )}
       </Section>
 
-      {/* ── 5. Approval Compliance Manager ─────────────────────────────── */}
-      <Section title="Approval Compliance Manager">
+      {/* ── 5. Approval Lead Compliance ────────────────────────────────── */}
+      <Section title="Approval Lead Compliance">
         {managerSummary.hasAny && (
           <div className="rounded-lg border bg-slate-50 p-3 space-y-2 text-sm">
             <p className="text-xs text-slate-500 font-medium">Approval Terakhir</p>
@@ -613,7 +613,7 @@ export default function MonitoringDetailPage() {
 
         {canManagerReview && managerActionable ? (
           <div className="space-y-3 pt-2">
-            <p className="text-xs font-medium text-slate-600">Approval Manager</p>
+            <p className="text-xs font-medium text-slate-600">Approval Lead Compliance</p>
             <div>
               <label className="block text-xs text-slate-500 mb-1">Aksi</label>
               <select
@@ -634,7 +634,7 @@ export default function MonitoringDetailPage() {
                 value={managerNotes}
                 onChange={(e) => setManagerNotes(e.target.value)}
                 rows={3}
-                placeholder="Catatan approval Compliance Manager…"
+                placeholder="Catatan approval Lead Compliance…"
                 className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-kesh-700 focus:ring-1 focus:ring-kesh-700/20"
               />
             </div>
@@ -650,10 +650,10 @@ export default function MonitoringDetailPage() {
             </button>
           </div>
         ) : canManagerReview && !managerActionable ? (
-          <p className="text-xs text-slate-400 italic">Menunggu eskalasi dari Compliance Staff untuk approval manager.</p>
+          <p className="text-xs text-slate-400 italic">Menunggu eskalasi dari Operation Supervisor untuk approval Lead Compliance.</p>
         ) : (
           !managerSummary.hasAny && (
-            <p className="text-xs text-slate-400 italic">Belum ada approval Compliance Manager.</p>
+            <p className="text-xs text-slate-400 italic">Belum ada approval Lead Compliance.</p>
           )
         )}
       </Section>

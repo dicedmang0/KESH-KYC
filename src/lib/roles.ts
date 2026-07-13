@@ -2,15 +2,15 @@
 // Shared display labels for backend role codes.
 
 export const ROLE_LABELS: Record<string, string> = {
-  SystemAdmin:     'Admin Sistem',
-  Director:        'Direktur',
-  BranchAdmin:     'Admin Cabang',
-  FrontDesk:       'Frontliner',
-  ComplianceStaff: 'Compliance Staff',
-  ComplianceLead:  'Compliance Manager',
-  Auditor:         'Auditor',
-  FinanceStaff:    'Staff Finance',
-  FinanceManager:  'Manager Finance',
+  SystemAdmin:         'Admin Sistem',
+  Director:            'Direktur',
+  ComplianceLead:      'Lead Compliance',
+  OperationSupervisor: 'Operation Supervisor',
+  FrontDesk:           'Frontline',
+  FinanceStaff:        'Finance Staff',
+  FinanceManager:      'Finance Manager',
+  Auditor:             'Auditor',
+  ComplianceStaff:     'Deprecated - Compliance Staff',
 };
 
 /** Human-readable label for a role code (falls back to the raw code). */

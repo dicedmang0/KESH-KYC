@@ -67,6 +67,11 @@ function NewApplicationPageInner() {
   const [i_company_address, setICompanyAddress] = useState("");
   const [i_income_range, setIIncomeRange] = useState("");
 
+  // ── RBA CDD fields ────────────────────────────────────────────────────────
+  const [i_source_of_funds, setISourceOfFunds] = useState("");
+  const [i_business_rel_purpose, setIBusinessRelPurpose] = useState("");
+  const [i_distribution_channel, setIDistChannel] = useState("");
+
   // ── Reference data ────────────────────────────────────────────────────────
   const [provinces, setProvinces] = useState<RefItem[]>([]);
   const [regencies, setRegencies] = useState<RefItem[]>([]);
@@ -76,6 +81,9 @@ function NewApplicationPageInner() {
   const [industryCategories, setIndustryCategories] = useState<RefItem[]>([]);
   const [incomeRanges, setIncomeRanges] = useState<RefItem[]>([]);
   const [occupations, setOccupations] = useState<RefItem[]>([]);
+  const [sofList, setSofList] = useState<RefItem[]>([]);
+  const [brpList, setBrpList] = useState<RefItem[]>([]);
+  const [distList, setDistList] = useState<RefItem[]>([]);
   const [regenciesLoading, setRegenciesLoading] = useState(false);
   const [districtsLoading, setDistrictsLoading] = useState(false);
   const [villagesLoading, setVillagesLoading] = useState(false);
@@ -86,15 +94,21 @@ function NewApplicationPageInner() {
     Promise.all([
       apiFetch<unknown>("/references/provinces"),
       apiFetch<unknown>("/references/nationalities"),
-      apiFetch<unknown>("/references/industry-categories"),
+      apiFetch<unknown>("/references/rba/industries"),
       apiFetch<unknown>("/references/monthly-income-ranges"),
-      apiFetch<unknown>("/references/occupations"),
-    ]).then(([prov, nat, ind, inc, occ]) => {
+      apiFetch<unknown>("/references/rba/occupations"),
+      apiFetch<unknown>("/references/rba/source-of-funds"),
+      apiFetch<unknown>("/references/rba/business-purposes"),
+      apiFetch<unknown>("/references/rba/distributions"),
+    ]).then(([prov, nat, ind, inc, occ, sof, bp, dist]) => {
       setProvinces(toRefList<RefItem>(prov));
       setNationalities(toRefList<RefItem>(nat));
       setIndustryCategories(toRefList<RefItem>(ind));
       setIncomeRanges(toRefList<RefItem>(inc));
       setOccupations(toRefList<RefItem>(occ));
+      setSofList(toRefList<RefItem>(sof));
+      setBrpList(toRefList<RefItem>(bp));
+      setDistList(toRefList<RefItem>(dist));
     }).catch(() => {});
   }, [kind]);
 
@@ -186,6 +200,9 @@ function NewApplicationPageInner() {
         company_name: i_company_name || null,
         company_address: i_company_address || null,
         monthly_income_range: i_income_range || null,
+        source_of_funds: i_source_of_funds || null,
+        business_relationship_purpose: i_business_rel_purpose || null,
+        distribution_channel: i_distribution_channel || null,
         signature_uri: null,
       };
 
@@ -538,6 +555,53 @@ function NewApplicationPageInner() {
                       onChange={(e) => setICompanyAddress(e.target.value)}
                       placeholder="Opsional"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* ── 5. Hubungan Bisnis (RBA) ─────────────────────────────── */}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-slate-600 border-b pb-1">Hubungan Bisnis (RBA)</p>
+                <p className="text-xs text-slate-500">Pilihan ini digunakan untuk perhitungan Risk Based Approach sesuai SOP.</p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-1">
+                    <label className="text-sm font-medium">Sumber Dana</label>
+                    <select
+                      className="rounded-md border bg-white px-3 py-2 text-sm"
+                      value={i_source_of_funds}
+                      onChange={(e) => setISourceOfFunds(e.target.value)}
+                    >
+                      <option value="">— Pilih —</option>
+                      {sofList.map((s) => (
+                        <option key={s.code} value={s.code}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-sm font-medium">Tujuan Hubungan Bisnis</label>
+                    <select
+                      className="rounded-md border bg-white px-3 py-2 text-sm"
+                      value={i_business_rel_purpose}
+                      onChange={(e) => setIBusinessRelPurpose(e.target.value)}
+                    >
+                      <option value="">— Pilih —</option>
+                      {brpList.map((p) => (
+                        <option key={p.code} value={p.code}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-sm font-medium">Saluran Distribusi</label>
+                    <select
+                      className="rounded-md border bg-white px-3 py-2 text-sm"
+                      value={i_distribution_channel}
+                      onChange={(e) => setIDistChannel(e.target.value)}
+                    >
+                      <option value="">— Pilih —</option>
+                      {distList.map((d) => (
+                        <option key={d.code} value={d.code}>{d.name}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>

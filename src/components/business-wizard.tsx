@@ -159,6 +159,34 @@ export default function BusinessWizard() {
   const [pic_identity_number, setPicIdNumber] = useState("");
   const [pic_identity_type, setPicIdType] = useState<"KTP" | "PASPOR">("KTP");
 
+  // RBA CDD fields
+  const [cdd_sof, setCddSof] = useState("");
+  const [cdd_brp, setCddBrp] = useState("");
+  const [cdd_dist, setCddDist] = useState("");
+
+  // RBA reference lists
+  const [rbaBusinessForms, setRbaBusinessForms] = useState<{ code: string; name: string }[]>([]);
+  const [rbaIndustries, setRbaIndustries] = useState<{ code: string; name: string }[]>([]);
+  const [rbaSofList, setRbaSofList] = useState<{ code: string; name: string }[]>([]);
+  const [rbaBrpList, setRbaBrpList] = useState<{ code: string; name: string }[]>([]);
+  const [rbaDistList, setRbaDistList] = useState<{ code: string; name: string }[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch<unknown>("/references/rba/business-forms"),
+      apiFetch<unknown>("/references/rba/industries"),
+      apiFetch<unknown>("/references/rba/source-of-funds"),
+      apiFetch<unknown>("/references/rba/business-purposes"),
+      apiFetch<unknown>("/references/rba/distributions"),
+    ]).then(([bf, ind, sof, bp, dist]) => {
+      setRbaBusinessForms(toRefList(bf));
+      setRbaIndustries(toRefList(ind));
+      setRbaSofList(toRefList(sof));
+      setRbaBrpList(toRefList(bp));
+      setRbaDistList(toRefList(dist));
+    }).catch(() => {});
+  }, []);
+
   async function saveCompany() {
     setErrCompany(null);
     setSubmitOK(null);
@@ -185,6 +213,9 @@ export default function BusinessWizard() {
         pic_position: pic_position || null,
         pic_identity_number: pic_identity_number || null,
         pic_identity_type: pic_identity_type || null,
+        source_of_funds: cdd_sof || null,
+        business_relationship_purpose: cdd_brp || null,
+        distribution_channel: cdd_dist || null,
       };
       const res = await apiFetch<{ id: number; status: AppStatus }>(
         "/applications/business",
@@ -469,15 +500,15 @@ export default function BusinessWizard() {
                   value={legal_form}
                   onChange={(e) => setLegalForm(e.target.value)}
                 >
-                  <option>PT</option>
-                  <option>CV</option>
-                  <option>FIRMA</option>
-                  <option>KOPERASI</option>
-                  <option>YAYASAN</option>
-                  <option>PERKUMPULAN</option>
-                  <option>PERORANGAN</option>
-                  <option>BUMN_BUMD</option>
-                  <option>LAINNYA</option>
+                  <option value="">— Pilih —</option>
+                  {rbaBusinessForms.length > 0
+                    ? rbaBusinessForms.map((f) => (
+                        <option key={f.code} value={f.code}>{f.name}</option>
+                      ))
+                    : ['PT','CV','FIRMA','KOPERASI','YAYASAN','PERKUMPULAN','PERORANGAN','BUMN_BUMD','LAINNYA'].map((f) => (
+                        <option key={f} value={f}>{f}</option>
+                      ))
+                  }
                 </select>
               </label>
             </div>
@@ -542,11 +573,19 @@ export default function BusinessWizard() {
               </label>
               <label className="grid gap-1 md:col-span-2">
                 <span className="text-sm font-medium">Bidang Usaha *</span>
-                <input
+                <select
                   className="rounded-md border px-3 py-2 text-sm"
                   value={business_activity}
                   onChange={(e) => setBizAct(e.target.value)}
-                />
+                >
+                  <option value="">— Pilih bidang usaha —</option>
+                  {rbaIndustries.map((i) => (
+                    <option key={i.code} value={i.name}>{i.name}</option>
+                  ))}
+                  {business_activity && !rbaIndustries.find((i) => i.name === business_activity) && (
+                    <option value={business_activity}>{business_activity}</option>
+                  )}
+                </select>
               </label>
             </div>
 
@@ -644,6 +683,53 @@ export default function BusinessWizard() {
                   >
                     <option value="KTP">KTP</option>
                     <option value="PASPOR">Paspor</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            {/* RBA */}
+            <div className="border-t pt-4">
+              <p className="mb-1 text-sm font-semibold text-slate-700">Informasi Hubungan Bisnis (RBA)</p>
+              <p className="mb-3 text-xs text-slate-500">Pilihan ini digunakan untuk perhitungan Risk Based Approach sesuai SOP.</p>
+              <div className="grid gap-4 md:grid-cols-3">
+                <label className="grid gap-1">
+                  <span className="text-sm font-medium">Sumber Dana</span>
+                  <select
+                    className="rounded-md border px-3 py-2 text-sm"
+                    value={cdd_sof}
+                    onChange={(e) => setCddSof(e.target.value)}
+                  >
+                    <option value="">— Pilih —</option>
+                    {rbaSofList.map((s) => (
+                      <option key={s.code} value={s.code}>{s.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-sm font-medium">Tujuan Hubungan Bisnis</span>
+                  <select
+                    className="rounded-md border px-3 py-2 text-sm"
+                    value={cdd_brp}
+                    onChange={(e) => setCddBrp(e.target.value)}
+                  >
+                    <option value="">— Pilih —</option>
+                    {rbaBrpList.map((p) => (
+                      <option key={p.code} value={p.code}>{p.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-sm font-medium">Saluran Distribusi</span>
+                  <select
+                    className="rounded-md border px-3 py-2 text-sm"
+                    value={cdd_dist}
+                    onChange={(e) => setCddDist(e.target.value)}
+                  >
+                    <option value="">— Pilih —</option>
+                    {rbaDistList.map((d) => (
+                      <option key={d.code} value={d.code}>{d.name}</option>
+                    ))}
                   </select>
                 </label>
               </div>

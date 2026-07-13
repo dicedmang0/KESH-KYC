@@ -7,12 +7,16 @@ import {
   getTransfer,
   getTransferSnapPreview,
   submitTransfer,
+  supervisorReviewTransfer,
+  financeReviewTransfer,
   decideTransfer,
   setTransferResult,
   formatTransferAmount,
   transferReference,
   formatDateTime,
   canSubmitTransfer,
+  canSupervisorReviewTransfer,
+  canFinanceReviewTransfer,
   canApproveTransfer,
   canUpdateTransferResult,
   type TransferDetail,
@@ -159,6 +163,34 @@ export default function TransferDetailPage() {
     }
   }
 
+  async function doSupervisorReview() {
+    if (!id) return;
+    setActionLoading(true);
+    setActionErr('');
+    try {
+      await supervisorReviewTransfer(id);
+      await reload();
+    } catch (e) {
+      handleActionError(e);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function doFinanceReview() {
+    if (!id) return;
+    setActionLoading(true);
+    setActionErr('');
+    try {
+      await financeReviewTransfer(id);
+      await reload();
+    } catch (e) {
+      handleActionError(e);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function doDecide(decision: 'APPROVE' | 'REJECT') {
     if (!id) return;
     if (decision === 'REJECT' && !rejectReason.trim()) {
@@ -248,10 +280,12 @@ export default function TransferDetailPage() {
 
   // Role + status conditions for action visibility
   const canSubmit = canSubmitTransfer(role) && row?.status === 'DRAFT';
-  const canDecide = canApproveTransfer(role) && row?.status === 'SUBMITTED';
+  const canSupervisorReview = canSupervisorReviewTransfer(role) && row?.status === 'SUBMITTED';
+  const canFinanceReview = canFinanceReviewTransfer(role) && row?.status === 'PENDING_FINANCE_STAFF_REVIEW';
+  const canDecide = canApproveTransfer(role) && row?.status === 'PENDING_FINANCE_MANAGER_APPROVAL';
   const canSetResult = canUpdateTransferResult(role) && row?.status === 'APPROVED';
-  const hasAnyAction = canSubmit || canDecide || canSetResult;
-  const canEvaluateMonitoring = role === 'ComplianceLead' || role === 'SystemAdmin';
+  const hasAnyAction = canSubmit || canSupervisorReview || canFinanceReview || canDecide || canSetResult;
+  const canEvaluateMonitoring = role === 'ComplianceLead' || role === 'SystemAdmin' || role === 'Director';
 
   async function doEvaluateMonitoring() {
     if (!id) return;
@@ -419,6 +453,24 @@ export default function TransferDetailPage() {
                     onClick={doSubmit}
                   >
                     Ajukan
+                  </button>
+                )}
+                {canSupervisorReview && (
+                  <button
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                    disabled={actionLoading}
+                    onClick={doSupervisorReview}
+                  >
+                    {actionLoading ? 'Menyimpan…' : 'Review Operation Supervisor'}
+                  </button>
+                )}
+                {canFinanceReview && (
+                  <button
+                    className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+                    disabled={actionLoading}
+                    onClick={doFinanceReview}
+                  >
+                    {actionLoading ? 'Menyimpan…' : 'Review Finance Staff'}
                   </button>
                 )}
                 {canDecide && (

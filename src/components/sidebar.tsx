@@ -55,15 +55,15 @@ export default function Sidebar() {
   useEffect(() => { setMounted(true); }, []);
 
   const ROLE_MENU: Record<string, string[]> = {
-    SystemAdmin:     ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist', '/monitoring', '/reports', '/settings'],
-    BranchAdmin:     [],
-    ComplianceLead:  ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring', '/reports'],
-    ComplianceStaff: ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring'],
-    Director:        ['/dashboard'],
-    FrontDesk:       ['/dashboard', '/users', '/kyc', '/transfers', '/complaints'],
-    Auditor:         ['/dashboard', '/kyc', '/complaints', '/monitoring', '/reports'],
-    FinanceStaff:    ['/dashboard', '/transfers', '/reports'],
-    FinanceManager:  ['/dashboard', '/transfers', '/complaints', '/reports'],
+    SystemAdmin:         ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist', '/monitoring', '/reports', '/settings'],
+    Director:            ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist', '/monitoring', '/reports', '/settings'],
+    ComplianceLead:      ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring', '/reports'],
+    OperationSupervisor: ['/dashboard', '/kyc', '/transfers'],
+    FrontDesk:           ['/dashboard', '/users', '/kyc', '/transfers', '/complaints'],
+    FinanceStaff:        ['/dashboard', '/transfers', '/reports'],
+    FinanceManager:      ['/dashboard', '/transfers', '/reports'],
+    Auditor:             ['/dashboard', '/kyc', '/complaints', '/monitoring', '/reports'],
+    ComplianceStaff:     ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring'],
   };
 
   const allowedHrefs = new Set(ROLE_MENU[role ?? ''] ?? ['/dashboard']);

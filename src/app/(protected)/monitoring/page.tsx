@@ -88,18 +88,16 @@ function SummaryCard({ label, value, loading }: { label: string; value: number; 
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const ALLOWED_ROLES = new Set(['SystemAdmin', 'ComplianceLead', 'ComplianceStaff', 'Auditor']);
+const ALLOWED_ROLES = new Set(['SystemAdmin', 'Director', 'ComplianceLead', 'Auditor']);
 
 export default function MonitoringPage() {
   const { token } = useAuth();
   const role = getRoleFromToken(token);
-  const isStaff = role === 'ComplianceStaff';
-  const canSeeReportsLink = role === 'SystemAdmin' || role === 'ComplianceLead' || role === 'Auditor';
+  const canSeeReportsLink = role === 'SystemAdmin' || role === 'Director' || role === 'ComplianceLead' || role === 'Auditor';
 
   // CTA label per role
   const ctaLabel =
-    role === 'ComplianceStaff' ? 'Review Compliance Staff' :
-    role === 'ComplianceLead'  ? 'Approval Compliance Manager' :
+    role === 'ComplianceLead' ? 'Approval Lead Compliance' :
     'Detail';
 
   // filters
@@ -123,15 +121,6 @@ export default function MonitoringPage() {
 
   // fetch summary once on mount
   useEffect(() => {
-    if (isStaff) {
-      getMonitoringCases({ limit: 1, page: 1, status: 'DETECTED' })
-        .then((res) => {
-          setSummary({ total: 0, staffPending: res.total, managerPending: 0, ready: 0, reported: 0 });
-        })
-        .catch(() => {})
-        .finally(() => setSummaryLoading(false));
-      return;
-    }
     Promise.all([
       getMonitoringCases({ limit: 1, page: 1 }),
       getMonitoringCases({ limit: 1, page: 1, status: 'DETECTED' }),
@@ -150,7 +139,7 @@ export default function MonitoringPage() {
       })
       .catch(() => {})
       .finally(() => setSummaryLoading(false));
-  }, [isStaff]);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -208,19 +197,13 @@ export default function MonitoringPage() {
       </div>
 
       {/* Summary cards */}
-      {isStaff ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <SummaryCard label="Menunggu Review Compliance Staff" value={summary.staffPending} loading={summaryLoading} />
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <SummaryCard label="Total Case" value={summary.total} loading={summaryLoading} />
-          <SummaryCard label="Menunggu Review Compliance Staff" value={summary.staffPending} loading={summaryLoading} />
-          <SummaryCard label="Menunggu Approval Compliance Manager" value={summary.managerPending} loading={summaryLoading} />
-          <SummaryCard label="Siap Lapor" value={summary.ready} loading={summaryLoading} />
-          <SummaryCard label="Terlapor" value={summary.reported} loading={summaryLoading} />
-        </div>
-      )}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <SummaryCard label="Total Case" value={summary.total} loading={summaryLoading} />
+        <SummaryCard label="Menunggu Review Operation Supervisor" value={summary.staffPending} loading={summaryLoading} />
+        <SummaryCard label="Menunggu Approval Lead Compliance" value={summary.managerPending} loading={summaryLoading} />
+        <SummaryCard label="Siap Lapor" value={summary.ready} loading={summaryLoading} />
+        <SummaryCard label="Terlapor" value={summary.reported} loading={summaryLoading} />
+      </div>
 
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-2">

@@ -16,25 +16,25 @@ type AdminUser = {
 
 const INTERNAL_ROLES = [
   'SystemAdmin',
-  'BranchAdmin',
-  'FrontDesk',
-  'ComplianceStaff',
+  'Director',
   'ComplianceLead',
-  'Auditor',
+  'OperationSupervisor',
+  'FrontDesk',
   'FinanceStaff',
   'FinanceManager',
+  'Auditor',
 ];
 
 const ROLE_LABELS: Record<string, string> = {
-  SystemAdmin:     'Admin Sistem',
-  Director:        'Direktur',
-  BranchAdmin:     'Admin Cabang',
-  FrontDesk:       'Frontliner',
-  ComplianceStaff: 'Compliance Staff',
-  ComplianceLead:  'Compliance Manager',
-  Auditor:         'Auditor',
-  FinanceStaff:    'Staff Finance',
-  FinanceManager:  'Manager Finance',
+  SystemAdmin:         'Admin Sistem',
+  Director:            'Direktur',
+  ComplianceLead:      'Lead Compliance',
+  OperationSupervisor: 'Operation Supervisor',
+  FrontDesk:           'Frontline',
+  FinanceStaff:        'Finance Staff',
+  FinanceManager:      'Finance Manager',
+  Auditor:             'Auditor',
+  ComplianceStaff:     'Deprecated - Compliance Staff',
 };
 
 export default function AdminManagementCard() {
@@ -48,7 +48,7 @@ export default function AdminManagementCard() {
   const [form, setForm] = useState({
     email: '',
     fullName: '',
-    role: 'BranchAdmin',
+    role: 'FrontDesk',
     branchId: '',
     password: '',
   });
@@ -88,7 +88,7 @@ export default function AdminManagementCard() {
       setForm({
         email: '',
         fullName: '',
-        role: 'BranchAdmin',
+        role: 'FrontDesk',
         branchId: '',
         password: '',
       });
@@ -257,6 +257,11 @@ export default function AdminManagementCard() {
                       {ROLE_LABELS[r] ?? r}
                     </option>
                   ))}
+                  {!INTERNAL_ROLES.includes(u.role) && (
+                    <option key={u.role} value={u.role} disabled>
+                      {ROLE_LABELS[u.role] ?? u.role}
+                    </option>
+                  )}
                 </select>
               </div>
               <div className="col-span-2">

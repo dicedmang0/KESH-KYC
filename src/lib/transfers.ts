@@ -4,28 +4,39 @@
 import { apiFetch } from "./api";
 
 // ── Transfer permission helpers ───────────────────────────────────────────────
-// FrontDesk (Frontliner) can create, edit draft, and submit.
-// FinanceManager and SystemAdmin can approve, reject, and update result.
+// Workflow: FrontDesk creates/submits → OperationSupervisor reviews → FinanceStaff reviews →
+//           FinanceManager approves → FinanceManager sets result.
+// SystemAdmin and Director have full access at every step.
 
 export function canCreateTransfer(role: string | null | undefined): boolean {
-  return role === 'FinanceStaff' || role === 'FrontDesk' || role === 'SystemAdmin';
+  return role === 'FrontDesk' || role === 'SystemAdmin' || role === 'Director';
 }
 
 export function canSubmitTransfer(role: string | null | undefined): boolean {
-  return role === 'FinanceStaff' || role === 'FrontDesk' || role === 'SystemAdmin';
+  return role === 'FrontDesk' || role === 'SystemAdmin' || role === 'Director';
+}
+
+export function canSupervisorReviewTransfer(role: string | null | undefined): boolean {
+  return role === 'OperationSupervisor' || role === 'SystemAdmin' || role === 'Director';
+}
+
+export function canFinanceReviewTransfer(role: string | null | undefined): boolean {
+  return role === 'FinanceStaff' || role === 'SystemAdmin' || role === 'Director';
 }
 
 export function canApproveTransfer(role: string | null | undefined): boolean {
-  return role === 'FinanceManager' || role === 'SystemAdmin';
+  return role === 'FinanceManager' || role === 'SystemAdmin' || role === 'Director';
 }
 
 export function canUpdateTransferResult(role: string | null | undefined): boolean {
-  return role === 'FinanceManager' || role === 'SystemAdmin';
+  return role === 'FinanceManager' || role === 'SystemAdmin' || role === 'Director';
 }
 
 export type TransferStatus =
   | "DRAFT"
   | "SUBMITTED"
+  | "PENDING_FINANCE_STAFF_REVIEW"
+  | "PENDING_FINANCE_MANAGER_APPROVAL"
   | "APPROVED"
   | "REJECTED"
   | "COMPLETED";
@@ -263,6 +274,14 @@ export function createTransfer(body: CreateTransferBody) {
 
 export function submitTransfer(id: number | string) {
   return apiFetch<TransferDetail>(`/transfers/${id}/submit`, { method: "POST" });
+}
+
+export function supervisorReviewTransfer(id: number | string) {
+  return apiFetch<TransferDetail>(`/transfers/${id}/supervisor-review`, { method: "POST" });
+}
+
+export function financeReviewTransfer(id: number | string) {
+  return apiFetch<TransferDetail>(`/transfers/${id}/finance-review`, { method: "POST" });
 }
 
 export function decideTransfer(id: number | string, body: DecideTransferBody) {
