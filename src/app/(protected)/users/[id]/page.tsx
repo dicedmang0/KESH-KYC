@@ -58,6 +58,12 @@ type Person = {
   company_name?: string | null;
   company_address?: string | null;
   monthly_income_range?: string | null;
+  source_of_funds?: string | null;
+  business_relationship_purpose?: string | null;
+  distribution_channel?: string | null;
+  // WIC minimum CDD fields
+  wic_transaction_purpose?: string | null;
+  wic_recipient_relationship?: string | null;
 };
 
 type WatchlistStatus = 'CLEAR' | 'NEAR_MATCH' | 'MATCH' | string;
@@ -209,6 +215,32 @@ const INDIVIDUAL_DOC_LABELS: Record<string, string> = {
   INDIVIDUAL_FACE_PHOTO: 'Foto Wajah Pengguna',
   INDIVIDUAL_FACE_WITH_KTP_PHOTO: 'Foto Wajah dengan KTP',
 };
+
+const WIC_REQUIRED_DOC_TYPES = [
+  'WIC_IDENTITY_DOCUMENT',
+  'WIC_SIGNATURE_BIOMETRIC',
+];
+
+const WIC_IDENTITY_DOC_ALIASES = [
+  'WIC_IDENTITY_DOCUMENT',
+  'INDIVIDUAL_KTP_PHOTO',
+  'KTP',
+  'SIM',
+  'PASPOR',
+];
+
+const WIC_SIGNATURE_DOC_ALIASES = [
+  'WIC_SIGNATURE_BIOMETRIC',
+  'WIC_SIGNATURE',
+  'SIGNATURE',
+  'BIOMETRIC',
+];
+
+const WIC_DOC_OPTIONS = [
+  { value: 'WIC_IDENTITY_DOCUMENT', label: 'Dokumen Identitas WIC (KTP/SIM/Paspor)', required: true },
+  { value: 'WIC_SIGNATURE_BIOMETRIC', label: 'Tanda Tangan / Biometrik WIC', required: true },
+  { value: 'WIC_SUPPORTING_DOCUMENT', label: 'Dokumen Pendukung Lainnya', required: false },
+];
 
 function getDocStatusInfo(d?: Document) {
   const hasFile = !!(d?.file_uri ?? d?.file_url);
@@ -635,7 +667,21 @@ export default function UserDetailPage() {
   const [cddCompanyAddress, setCddCompanyAddress] = useState('');
   const [cddIncomeRange, setCddIncomeRange] = useState('');
   const [cddOccupation, setCddOccupation] = useState('');
+  const [cddCifRelationshipType, setCddCifRelationshipType] = useState<'OUR_CUSTOMER' | 'WIC'>('OUR_CUSTOMER');
+  const [cddSourceOfFunds, setCddSourceOfFunds] = useState('');
+  const [cddBusinessPurpose, setCddBusinessPurpose] = useState('');
+  const [cddDistributionChannel, setCddDistributionChannel] = useState('');
   const [cddSaving, setCddSaving] = useState(false);
+
+  // WIC minimum CDD form state (SOP Walk-In Customer)
+  const [wicFullName, setWicFullName] = useState('');
+  const [wicIdentityType, setWicIdentityType] = useState('KTP');
+  const [wicIdentityNumber, setWicIdentityNumber] = useState('');
+  const [wicAddressIdentity, setWicAddressIdentity] = useState('');
+  const [wicPob, setWicPob] = useState('');
+  const [wicDob, setWicDob] = useState('');
+  const [wicTransactionPurpose, setWicTransactionPurpose] = useState('');
+  const [wicRecipientRelationship, setWicRecipientRelationship] = useState('');
 
   // Reference data for dropdowns
   const [provinces, setProvinces] = useState<RefItem[]>([]);
@@ -646,6 +692,9 @@ export default function UserDetailPage() {
   const [industryCategories, setIndustryCategories] = useState<RefItem[]>([]);
   const [incomeRanges, setIncomeRanges] = useState<RefItem[]>([]);
   const [occupations, setOccupations] = useState<RefItem[]>([]);
+  const [sourceOfFundsOptions, setSourceOfFundsOptions] = useState<RefItem[]>([]);
+  const [businessPurposeOptions, setBusinessPurposeOptions] = useState<RefItem[]>([]);
+  const [distributionOptions, setDistributionOptions] = useState<RefItem[]>([]);
   const [regenciesLoading, setRegenciesLoading] = useState(false);
   const [districtsLoading, setDistrictsLoading] = useState(false);
   const [villagesLoading, setVillagesLoading] = useState(false);
@@ -693,6 +742,19 @@ export default function UserDetailPage() {
         setCddCompanyAddress(p.company_address ?? '');
         setCddIncomeRange(p.monthly_income_range ?? '');
         setCddOccupation(p.occupation ?? '');
+        setCddCifRelationshipType(p.cif_relationship_type === 'WIC' ? 'WIC' : 'OUR_CUSTOMER');
+        setCddSourceOfFunds(p.source_of_funds ?? '');
+        setCddBusinessPurpose(p.business_relationship_purpose ?? '');
+        setCddDistributionChannel(p.distribution_channel ?? '');
+        // WIC minimum CDD prefill
+        setWicFullName(p.full_name ?? '');
+        setWicIdentityType(p.identity_type ?? 'KTP');
+        setWicIdentityNumber(p.identity_number ?? '');
+        setWicAddressIdentity(p.address_identity ?? '');
+        setWicPob(p.pob ?? '');
+        setWicDob((p.dob ?? '').slice(0, 10));
+        setWicTransactionPurpose(p.wic_transaction_purpose ?? '');
+        setWicRecipientRelationship(p.wic_recipient_relationship ?? '');
       }
       setDocs(resp.documents ?? []);
       setParties(resp.parties ?? []);
@@ -744,15 +806,21 @@ export default function UserDetailPage() {
     Promise.all([
       apiFetch<unknown>('/references/provinces'),
       apiFetch<unknown>('/references/nationalities'),
-      apiFetch<unknown>('/references/industry-categories'),
+      apiFetch<unknown>('/references/rba/industries'),
       apiFetch<unknown>('/references/monthly-income-ranges'),
-      apiFetch<unknown>('/references/occupations'),
-    ]).then(([prov, nat, ind, inc, occ]) => {
+      apiFetch<unknown>('/references/rba/occupations'),
+      apiFetch<unknown>('/references/rba/source-of-funds'),
+      apiFetch<unknown>('/references/rba/business-purposes'),
+      apiFetch<unknown>('/references/rba/distributions'),
+    ]).then(([prov, nat, ind, inc, occ, sof, purpose, dist]) => {
       setProvinces(toList<RefItem>(prov));
       setNationalities(toList<RefItem>(nat));
       setIndustryCategories(toList<RefItem>(ind));
       setIncomeRanges(toList<RefItem>(inc));
       setOccupations(toList<RefItem>(occ));
+      setSourceOfFundsOptions(toList<RefItem>(sof));
+      setBusinessPurposeOptions(toList<RefItem>(purpose));
+      setDistributionOptions(toList<RefItem>(dist));
     }).catch(() => {});
   }, [app?.type]);
 
@@ -854,8 +922,11 @@ export default function UserDetailPage() {
 
   function handleKycDecisionError(e: unknown) {
     const msg = getErrMsg(e, 'Gagal menyimpan data. Silakan coba lagi.');
-    if (userRole === 'OperationSupervisor' && (msg.includes('403') || msg.toLowerCase().includes('high') || msg.toLowerCase().includes('risk'))) {
+    const lowerMsg = msg.toLowerCase();
+    if (userRole === 'OperationSupervisor' && (msg.includes('403') || lowerMsg.includes('high') || lowerMsg.includes('risk'))) {
       toast.error('KYC/KYB high risk hanya dapat diputuskan oleh Lead Compliance.');
+    } else if (userRole === 'ComplianceLead' && (msg.includes('403') || lowerMsg.includes('low') || lowerMsg.includes('medium'))) {
+      toast.error('KYC/KYB low/medium risk hanya dapat diputuskan oleh Operation Supervisor.');
     } else {
       toast.error(msg);
     }
@@ -908,7 +979,10 @@ export default function UserDetailPage() {
     try {
       const form = new FormData();
       form.append('file', docFile);
-      form.append('doc_type', docType);
+      const effectiveDocType = isWic && !WIC_DOC_OPTIONS.some((opt) => opt.value === docType)
+        ? 'WIC_IDENTITY_DOCUMENT'
+        : docType;
+      form.append('doc_type', effectiveDocType);
       await apiUpload(`/applications/${id}/documents/upload`, form);
       setDocFile(null);
       setDocInputKey((k) => k + 1);
@@ -1051,6 +1125,38 @@ export default function UserDetailPage() {
           company_name: cddCompanyName || null,
           company_address: cddCompanyAddress || null,
           monthly_income_range: cddIncomeRange || null,
+          source_of_funds: cddSourceOfFunds || null,
+          business_relationship_purpose: cddBusinessPurpose || null,
+          distribution_channel: cddDistributionChannel || null,
+          cif_relationship_type: cddCifRelationshipType,
+        },
+      });
+      toast.success('Data berhasil disimpan.');
+      await load();
+    } catch (e: unknown) {
+      toast.error(getErrMsg(e, 'Gagal menyimpan data. Silakan coba lagi.'));
+    } finally {
+      setCddSaving(false);
+    }
+  }
+
+  // WIC minimum CDD save — only the SOP fields, no Our Customer / RBA payload.
+  async function saveWic() {
+    if (!id) return;
+    setCddSaving(true);
+    try {
+      await apiFetch(`/applications/${id}`, {
+        method: 'PATCH',
+        body: {
+          full_name: wicFullName || null,
+          identity_type: wicIdentityType || null,
+          identity_number: wicIdentityNumber || null,
+          address_identity: wicAddressIdentity || null,
+          pob: wicPob || null,
+          dob: wicDob || null,
+          wic_transaction_purpose: wicTransactionPurpose || null,
+          wic_recipient_relationship: wicRecipientRelationship || null,
+          cif_relationship_type: cddCifRelationshipType,
         },
       });
       toast.success('Data berhasil disimpan.');
@@ -1108,7 +1214,14 @@ export default function UserDetailPage() {
   const canSubmit = app.status === 'DRAFT';
   const canDecide = app.status === 'SUBMITTED' || app.status === 'IN_REVIEW';
 
-  // For INDIVIDUAL submit validation — check all 3 required docs are uploaded
+  const displayName = app.type === 'INDIVIDUAL' ? person?.full_name : business?.legal_name;
+
+  const cifNo = app.type === 'INDIVIDUAL' ? person?.cif_no : business?.cif_no;
+  const isWic = app.type === 'INDIVIDUAL' && person?.cif_relationship_type === 'WIC';
+  const displayCifNo = isWic ? 'Tidak diterbitkan (WIC)' : formatCif(cifNo);
+
+  // For INDIVIDUAL submit validation — WIC uses minimum CDD docs,
+  // while Our Customer uses full KYC photo docs.
   const uploadedDocTypeSet = new Set(
     docs
       .filter((d) => {
@@ -1118,12 +1231,15 @@ export default function UserDetailPage() {
       })
       .map((d) => d.doc_type)
   );
+  const hasUploadedDoc = (aliases: string[]) => aliases.some((t) => uploadedDocTypeSet.has(t));
   const missingIndivDocs = app.type === 'INDIVIDUAL' && canSubmit
-    ? INDIVIDUAL_REQUIRED_DOC_TYPES.filter((t) => !uploadedDocTypeSet.has(t))
+    ? isWic
+      ? [
+          ...(!hasUploadedDoc(WIC_IDENTITY_DOC_ALIASES) ? ['WIC_IDENTITY_DOCUMENT'] : []),
+          ...(!hasUploadedDoc(WIC_SIGNATURE_DOC_ALIASES) ? ['WIC_SIGNATURE_BIOMETRIC'] : []),
+        ]
+      : INDIVIDUAL_REQUIRED_DOC_TYPES.filter((t) => !uploadedDocTypeSet.has(t))
     : [];
-  const displayName = app.type === 'INDIVIDUAL' ? person?.full_name : business?.legal_name;
-
-  const cifNo = app.type === 'INDIVIDUAL' ? person?.cif_no : business?.cif_no;
 
   const effectiveRiskLevel = risk?.override_level || risk?.risk_level || null;
   const isHighRisk = effectiveRiskLevel === 'HIGH';
@@ -1131,13 +1247,18 @@ export default function UserDetailPage() {
   const eddCompleted = app.edd_completed ?? false;
   const approveBlocked = eddRequired && !eddCompleted;
 
-  // KYC final decision: ComplianceLead (all risk), OperationSupervisor (LOW/MEDIUM only, backend enforces),
-  // Director and SystemAdmin (full). FrontDesk/Finance/Auditor cannot decide.
-  const canDecideByRole = ['ComplianceLead', 'SystemAdmin', 'Director', 'OperationSupervisor'].includes(userRole ?? '');
+  // KYC final decision follows risk profiling:
+  // LOW/MEDIUM → Operation Supervisor. HIGH → Lead Compliance after EDD complete.
+  // Director and SystemAdmin remain full access. Frontline fills EDD for HIGH risk.
+  const isLowOrMediumRisk = effectiveRiskLevel === 'LOW' || effectiveRiskLevel === 'MEDIUM';
+  const isFullAccessRole = ['SystemAdmin', 'Director'].includes(userRole ?? '');
+  const canDecideByRole = isFullAccessRole
+    || (userRole === 'OperationSupervisor' && isLowOrMediumRisk)
+    || (userRole === 'ComplianceLead' && isHighRisk);
 
-  const canViewRisk = ['SystemAdmin', 'Director', 'ComplianceLead', 'OperationSupervisor', 'Auditor'].includes(userRole ?? '');
-  const canEditEdd = ['SystemAdmin', 'Director', 'ComplianceLead'].includes(userRole ?? '');
-  const canViewEdd = ['SystemAdmin', 'Director', 'ComplianceLead', 'Auditor'].includes(userRole ?? '');
+  const canViewRisk = ['SystemAdmin', 'Director', 'ComplianceLead', 'OperationSupervisor', 'FrontDesk', 'Auditor'].includes(userRole ?? '');
+  const canEditEdd = ['SystemAdmin', 'Director', 'FrontDesk'].includes(userRole ?? '');
+  const canViewEdd = ['SystemAdmin', 'Director', 'FrontDesk', 'ComplianceLead', 'Auditor'].includes(userRole ?? '');
   const showEddSection = canViewEdd && (eddRequired || Object.keys(eddData).length > 0);
 
   return (
@@ -1148,7 +1269,7 @@ export default function UserDetailPage() {
           <div className="flex items-baseline gap-2">
             {cifNo && (
               <span className="font-mono text-base font-bold text-kesh-700">
-                {formatCif(cifNo)}
+                {displayCifNo}
               </span>
             )}
             <h1 className="text-xl font-semibold">{displayName || '—'}</h1>
@@ -1233,7 +1354,9 @@ export default function UserDetailPage() {
         {missingIndivDocs.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
             Dokumen wajib belum lengkap:{' '}
-            {missingIndivDocs.map((t) => INDIVIDUAL_DOC_LABELS[t]).join(', ')}
+            {missingIndivDocs
+              .map((t) => INDIVIDUAL_DOC_LABELS[t] ?? WIC_DOC_OPTIONS.find((o) => o.value === t)?.label ?? t)
+              .join(', ')}
           </div>
         )}
 
@@ -1298,6 +1421,152 @@ export default function UserDetailPage() {
           <div className="rounded-xl border p-4 space-y-5">
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Informasi Individu</p>
 
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 space-y-2">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-500">Parameter CIF / Jenis Pengguna</span>
+                  <select
+                    value={cddCifRelationshipType}
+                    onChange={(e) => setCddCifRelationshipType(e.target.value as 'OUR_CUSTOMER' | 'WIC')}
+                    className="rounded-md border bg-white px-2 py-1.5 text-sm"
+                  >
+                    <option value="OUR_CUSTOMER">Our Customer</option>
+                    <option value="WIC">Walk-In Customer (WIC)</option>
+                  </select>
+                </label>
+                <div className="rounded-lg bg-white/70 p-3 text-xs text-slate-600">
+                  {cddCifRelationshipType === 'WIC' ? (
+                    <>
+                      <p className="font-semibold text-emerald-800">CDD Walk-In Customer (&lt; Rp100 juta)</p>
+                      <p className="mt-1">WIC tidak diterbitkan CIF dan limit transaksi maksimal Rp100.000.000.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-semibold text-emerald-800">Our Customer</p>
+                      <p className="mt-1">Customer normal akan menggunakan CIF untuk transaksi dan pelaporan.</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {cddCifRelationshipType === 'WIC' ? (
+              /* ── WIC minimum CDD layout (form SOP Walk-In Customer) ─── */
+              <>
+                {/* A. Identitas Minimum */}
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-slate-600 border-b pb-1">A. Identitas Minimum</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-slate-500">Nama Lengkap <span className="text-red-500">*</span></label>
+                      <input
+                        value={wicFullName}
+                        onChange={(e) => setWicFullName(e.target.value)}
+                        placeholder="Nama sesuai identitas"
+                        className="rounded-md border px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-slate-500">Jenis Identitas</label>
+                      <select
+                        value={wicIdentityType}
+                        onChange={(e) => setWicIdentityType(e.target.value)}
+                        className="rounded-md border bg-white px-2 py-1.5 text-sm"
+                      >
+                        <option value="KTP">KTP</option>
+                        <option value="SIM">SIM</option>
+                        <option value="PASPOR">Paspor</option>
+                        {wicIdentityType && !['KTP', 'SIM', 'PASPOR'].includes(wicIdentityType) && (
+                          <option value={wicIdentityType}>{wicIdentityType}</option>
+                        )}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-slate-500">Nomor Identitas <span className="text-red-500">*</span></label>
+                      <input
+                        value={wicIdentityNumber}
+                        onChange={(e) => setWicIdentityNumber(e.target.value)}
+                        placeholder="Nomor sesuai identitas"
+                        className="rounded-md border px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-slate-500">Tempat Lahir</label>
+                      <input
+                        value={wicPob}
+                        onChange={(e) => setWicPob(e.target.value)}
+                        placeholder="Tempat lahir"
+                        className="rounded-md border px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-slate-500">Tanggal Lahir</label>
+                      <input
+                        type="date"
+                        value={wicDob}
+                        onChange={(e) => setWicDob(e.target.value)}
+                        className="rounded-md border px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1 sm:col-span-2">
+                      <label className="text-xs text-slate-500">Alamat minimal sesuai identitas</label>
+                      <textarea
+                        value={wicAddressIdentity}
+                        onChange={(e) => setWicAddressIdentity(e.target.value)}
+                        placeholder="Tulis alamat sesuai identitas"
+                        rows={2}
+                        className="rounded-md border px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Tanda tangan / biometrik pengguna dilampirkan pada bagian Dokumen.
+                  </p>
+                </div>
+
+                {/* B. Tujuan Transaksi */}
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-slate-600 border-b pb-1">B. Tujuan Transaksi</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-slate-500">Tujuan Transaksi</label>
+                      <input
+                        value={wicTransactionPurpose}
+                        onChange={(e) => setWicTransactionPurpose(e.target.value)}
+                        placeholder="Contoh: transfer keluarga, pembayaran, dll."
+                        className="rounded-md border px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-slate-500">Hubungan dengan Penerima</label>
+                      <input
+                        value={wicRecipientRelationship}
+                        onChange={(e) => setWicRecipientRelationship(e.target.value)}
+                        placeholder="Contoh: keluarga, rekan usaha, dll."
+                        className="rounded-md border px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 border-t pt-3">
+                  <button
+                    type="button"
+                    onClick={saveWic}
+                    disabled={cddSaving}
+                    className="rounded-md bg-kesh-700 px-4 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
+                  >
+                    {cddSaving ? 'Menyimpan…' : 'Simpan Data'}
+                  </button>
+                </div>
+
+                <div className="border-t pt-2 space-y-2">
+                  <Row label="CIF Pengguna Jasa" value="Tidak diterbitkan (WIC)" />
+                  <Row label="Parameter CIF" value="WIC / Walk-In Customer" />
+                </div>
+              </>
+            ) : (
+              <>
             {/* 1. Data Pribadi */}
             <div className="space-y-3">
               <p className="text-xs font-semibold text-slate-600 border-b pb-1">Data Pribadi</p>
@@ -1522,6 +1791,9 @@ export default function UserDetailPage() {
                     {industryCategories.map((c) => (
                       <option key={c.code} value={c.code}>{c.name}</option>
                     ))}
+                    {cddIndustry && !industryCategories.find((c) => c.code === cddIndustry || c.name === cddIndustry) && (
+                      <option value={cddIndustry}>{cddIndustry}</option>
+                    )}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1">
@@ -1548,6 +1820,51 @@ export default function UserDetailPage() {
               </div>
             </div>
 
+
+            {/* 5. Hubungan Bisnis (RBA) */}
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-600 border-b pb-1">Hubungan Bisnis (RBA)</p>
+              <p className="text-xs text-slate-500">Pilihan ini digunakan untuk perhitungan Risk Based Approach sesuai SOP.</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Sumber Dana</label>
+                  <select value={cddSourceOfFunds} onChange={(e) => setCddSourceOfFunds(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-sm">
+                    <option value="">— Pilih sumber dana —</option>
+                    {sourceOfFundsOptions.map((o) => (
+                      <option key={o.code} value={o.code}>{o.name}</option>
+                    ))}
+                    {cddSourceOfFunds && !sourceOfFundsOptions.find((o) => o.code === cddSourceOfFunds || o.name === cddSourceOfFunds) && (
+                      <option value={cddSourceOfFunds}>{cddSourceOfFunds}</option>
+                    )}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Tujuan Hubungan Bisnis</label>
+                  <select value={cddBusinessPurpose} onChange={(e) => setCddBusinessPurpose(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-sm">
+                    <option value="">— Pilih tujuan —</option>
+                    {businessPurposeOptions.map((o) => (
+                      <option key={o.code} value={o.code}>{o.name}</option>
+                    ))}
+                    {cddBusinessPurpose && !businessPurposeOptions.find((o) => o.code === cddBusinessPurpose || o.name === cddBusinessPurpose) && (
+                      <option value={cddBusinessPurpose}>{cddBusinessPurpose}</option>
+                    )}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-slate-500">Saluran Distribusi</label>
+                  <select value={cddDistributionChannel} onChange={(e) => setCddDistributionChannel(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-sm">
+                    <option value="">— Pilih saluran —</option>
+                    {distributionOptions.map((o) => (
+                      <option key={o.code} value={o.code}>{o.name}</option>
+                    ))}
+                    {cddDistributionChannel && !distributionOptions.find((o) => o.code === cddDistributionChannel || o.name === cddDistributionChannel) && (
+                      <option value={cddDistributionChannel}>{cddDistributionChannel}</option>
+                    )}
+                  </select>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center gap-3 border-t pt-3">
               <button
                 type="button"
@@ -1560,12 +1877,42 @@ export default function UserDetailPage() {
             </div>
 
             <div className="border-t pt-2 space-y-2">
-              <Row label="CIF Pengguna Jasa" value={formatCif(person?.cif_no)} />
+              <Row label="CIF Pengguna Jasa" value={person?.cif_relationship_type === 'WIC' ? 'Tidak diterbitkan (WIC)' : formatCif(person?.cif_no)} />
               <Row label="Parameter CIF" value={getCifRelationshipLabel(person?.cif_relationship_type)} />
             </div>
+              </>
+            )}
           </div>
         ) : (
           /* ── Non-DRAFT: Read-only individual view ──────────────────── */
+          isWic ? (
+            /* WIC minimum CDD — read-only */
+            <div className="rounded-xl border p-4 space-y-2">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Informasi Individu (WIC)</p>
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                <p className="font-semibold">CDD Walk-In Customer (&lt; Rp100 juta)</p>
+                <p className="mt-1">WIC tidak diterbitkan CIF dan transaksi dibatasi maksimal Rp100.000.000.</p>
+              </div>
+
+              <p className="text-xs font-semibold text-slate-600 border-b pb-1 mb-2">A. Identitas Minimum</p>
+              <Row label="Nama Lengkap" value={person?.full_name} />
+              <Row label="Jenis Identitas" value={person?.identity_type} />
+              <Row label="Nomor Identitas" value={person?.identity_number} />
+              <Row label="Alamat sesuai Identitas" value={person?.address_identity} />
+              <Row label="Tempat Lahir" value={person?.pob} />
+              <Row label="Tanggal Lahir" value={person?.dob} />
+
+              <p className="text-xs font-semibold text-slate-600 border-b pb-1 mb-2 mt-4">B. Tujuan Transaksi</p>
+              <Row label="Tujuan Transaksi" value={person?.wic_transaction_purpose} />
+              <Row label="Hubungan dengan Penerima" value={person?.wic_recipient_relationship} />
+
+              <div className="border-t pt-2 mt-4 space-y-2">
+                <Row label="CIF Pengguna Jasa" value="Tidak diterbitkan (WIC)" />
+                <Row label="Parameter CIF" value="WIC / Walk-In Customer" />
+              </div>
+            </div>
+          ) : (
+          /* Our Customer — read-only full view */
           <div className="rounded-xl border p-4 space-y-2">
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Informasi Individu</p>
 
@@ -1611,6 +1958,7 @@ export default function UserDetailPage() {
               <Row label="Parameter CIF" value={getCifRelationshipLabel(person?.cif_relationship_type)} />
             </div>
           </div>
+          )
         )
       ) : (
         <div className="rounded-xl border p-4 space-y-2">
@@ -1658,142 +2006,253 @@ export default function UserDetailPage() {
 
       {/* Documents */}
       {app.type === 'INDIVIDUAL' ? (
-        /* ── Individual: 3 required document cards ──────────────────────── */
         <div className="rounded-xl border p-4 space-y-4">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Dokumen</p>
 
-          {/* Hidden KTP file input */}
-          <input
-            ref={ktpInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadKtpFile(f); }}
-          />
+          {isWic ? (
+            <>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                Dokumen WIC mengikuti format CDD Walk-In Customer: dokumen identitas dan tanda tangan/biometrik. Foto wajah dan foto wajah dengan KTP tidak diwajibkan untuk WIC.
+              </div>
 
-          <div className="space-y-3">
-            {/* 1. Foto KTP */}
-            {(() => {
-              const doc = docs.find((d) => d.doc_type === 'INDIVIDUAL_KTP_PHOTO');
-              const { uploadedLike, statusLabel, statusCls } = getDocStatusInfo(doc);
-              return (
-                <div className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-700">Foto KTP</p>
-                    <p className="text-xs text-slate-400 font-mono">INDIVIDUAL_KTP_PHOTO</p>
-                  </div>
-                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
-                  {doc && (
-                    <button type="button" onClick={() => viewDocument(doc.id)} className="text-xs text-kesh-700 underline hover:text-kesh-600">Lihat</button>
-                  )}
-                  {canSubmit && (
-                    <>
-                      <button
-                        type="button"
-                        disabled={ktpUploading}
-                        onClick={() => ktpInputRef.current?.click()}
-                        className="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50 disabled:opacity-50"
-                      >
-                        {ktpUploading ? 'Mengunggah…' : uploadedLike ? 'Upload Ulang' : 'Upload'}
-                      </button>
+              <div className="space-y-3">
+                {WIC_DOC_OPTIONS.map((opt) => {
+                  const aliases = opt.value === 'WIC_IDENTITY_DOCUMENT'
+                    ? WIC_IDENTITY_DOC_ALIASES
+                    : opt.value === 'WIC_SIGNATURE_BIOMETRIC'
+                      ? WIC_SIGNATURE_DOC_ALIASES
+                      : [opt.value];
+                  const doc = docs.find((d) => aliases.includes(d.doc_type));
+                  const { uploadedLike, statusLabel, statusCls } = getDocStatusInfo(doc);
+                  const filename = doc?.extracted_json?.original_name ?? doc?.original_name;
+                  return (
+                    <div key={opt.value} className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700">
+                          {opt.label} {opt.required && <span className="text-red-500">*</span>}
+                        </p>
+                        <p className="text-xs text-slate-400 font-mono">{opt.value}</p>
+                        {filename && <p className="mt-0.5 text-xs text-slate-500 truncate">{filename}</p>}
+                      </div>
+                      <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
                       {doc && (
+                        <button type="button" onClick={() => viewDocument(doc.id)} className="text-xs text-kesh-700 underline hover:text-kesh-600">Lihat</button>
+                      )}
+                      {canSubmit && doc && (
                         <button type="button" onClick={() => deleteDocument(doc.id)} className="text-xs text-red-600 hover:underline">Hapus</button>
                       )}
-                    </>
-                  )}
-                </div>
-              );
-            })()}
+                    </div>
+                  );
+                })}
+              </div>
 
-            {/* 2. Foto Wajah Pengguna */}
-            {(() => {
-              const doc = docs.find((d) => d.doc_type === 'INDIVIDUAL_FACE_PHOTO');
-              const { uploadedLike, statusLabel, statusCls } = getDocStatusInfo(doc);
-              return (
-                <div className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-700">Foto Wajah Pengguna</p>
-                    <p className="text-xs text-slate-400 font-mono">INDIVIDUAL_FACE_PHOTO</p>
-                  </div>
-                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
-                  {doc && (
-                    <button type="button" onClick={() => viewDocument(doc.id)} className="text-xs text-kesh-700 underline hover:text-kesh-600">Lihat</button>
-                  )}
-                  {canSubmit && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setWebcamTarget('INDIVIDUAL_FACE_PHOTO')}
-                        className="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50"
+              {canSubmit && (
+                <form onSubmit={uploadDocument} className="border-t pt-3 space-y-2">
+                  <p className="text-xs font-medium text-slate-600">Upload Dokumen WIC / Pendukung</p>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-slate-500">Tipe</label>
+                      <select
+                        value={WIC_DOC_OPTIONS.some((o) => o.value === docType) ? docType : 'WIC_IDENTITY_DOCUMENT'}
+                        onChange={(e) => setDocType(e.target.value)}
+                        className="rounded-md border bg-white px-2 py-1.5 text-sm"
                       >
-                        {uploadedLike ? 'Ambil Ulang' : 'Ambil Foto'}
-                      </button>
-                      {doc && (
-                        <button type="button" onClick={() => deleteDocument(doc.id)} className="text-xs text-red-600 hover:underline">Hapus</button>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* 3. Foto Wajah dengan KTP */}
-            {(() => {
-              const doc = docs.find((d) => d.doc_type === 'INDIVIDUAL_FACE_WITH_KTP_PHOTO');
-              const { uploadedLike, statusLabel, statusCls } = getDocStatusInfo(doc);
-              return (
-                <div className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-700">Foto Wajah dengan KTP</p>
-                    <p className="text-xs text-slate-400 font-mono">INDIVIDUAL_FACE_WITH_KTP_PHOTO</p>
+                        {WIC_DOC_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-slate-500">File *</label>
+                      <input
+                        key={docInputKey}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,application/pdf"
+                        required
+                        onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+                        className="text-sm"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={docUploading || !docFile}
+                      className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
+                    >
+                      {docUploading ? 'Mengunggah…' : 'Unggah'}
+                    </button>
                   </div>
-                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
-                  {doc && (
-                    <button type="button" onClick={() => viewDocument(doc.id)} className="text-xs text-kesh-700 underline hover:text-kesh-600">Lihat</button>
-                  )}
-                  {canSubmit && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setWebcamTarget('INDIVIDUAL_FACE_WITH_KTP_PHOTO')}
-                        className="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50"
-                      >
-                        {uploadedLike ? 'Ambil Ulang' : 'Ambil Foto dengan KTP'}
-                      </button>
-                      {doc && (
-                        <button type="button" onClick={() => deleteDocument(doc.id)} className="text-xs text-red-600 hover:underline">Hapus</button>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
+                </form>
+              )}
 
-          {/* Extra docs outside the 3 required types (legacy / admin uploads) */}
-          {docs.filter((d) => !INDIVIDUAL_REQUIRED_DOC_TYPES.includes(d.doc_type)).length > 0 && (
-            <div className="pt-2 border-t space-y-1.5">
-              <p className="text-xs font-medium text-slate-500">Dokumen Lainnya</p>
-              <ul className="space-y-1.5">
-                {docs
-                  .filter((d) => !INDIVIDUAL_REQUIRED_DOC_TYPES.includes(d.doc_type))
-                  .map((d) => {
-                    const filename = d.extracted_json?.original_name ?? d.original_name;
-                    const { statusLabel, statusCls } = getDocStatusInfo(d);
-                    return (
-                      <li key={String(d.id)} className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="font-medium text-slate-700">{d.doc_type}</span>
-                        <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
-                        {filename && <span className="text-slate-500">— {filename}</span>}
-                        <button type="button" onClick={() => viewDocument(d.id)} className="text-kesh-700 underline text-xs hover:text-kesh-600">Lihat</button>
-                        {canSubmit && (
-                          <button type="button" onClick={() => deleteDocument(d.id)} className="ml-auto text-xs text-red-600 hover:underline">Hapus</button>
-                        )}
-                      </li>
-                    );
-                  })}
-              </ul>
-            </div>
+              {docs.filter((d) => ![
+                ...WIC_IDENTITY_DOC_ALIASES,
+                ...WIC_SIGNATURE_DOC_ALIASES,
+                'WIC_SUPPORTING_DOCUMENT',
+              ].includes(d.doc_type)).length > 0 && (
+                <div className="pt-2 border-t space-y-1.5">
+                  <p className="text-xs font-medium text-slate-500">Dokumen Lainnya</p>
+                  <ul className="space-y-1.5">
+                    {docs
+                      .filter((d) => ![
+                        ...WIC_IDENTITY_DOC_ALIASES,
+                        ...WIC_SIGNATURE_DOC_ALIASES,
+                        'WIC_SUPPORTING_DOCUMENT',
+                      ].includes(d.doc_type))
+                      .map((d) => {
+                        const filename = d.extracted_json?.original_name ?? d.original_name;
+                        const { statusLabel, statusCls } = getDocStatusInfo(d);
+                        return (
+                          <li key={String(d.id)} className="flex flex-wrap items-center gap-2 text-sm">
+                            <span className="font-medium text-slate-700">{d.doc_type}</span>
+                            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
+                            {filename && <span className="text-slate-500">— {filename}</span>}
+                            <button type="button" onClick={() => viewDocument(d.id)} className="text-kesh-700 underline text-xs hover:text-kesh-600">Lihat</button>
+                            {canSubmit && (
+                              <button type="button" onClick={() => deleteDocument(d.id)} className="ml-auto text-xs text-red-600 hover:underline">Hapus</button>
+                            )}
+                          </li>
+                        );
+                      })}
+                  </ul>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Hidden KTP file input */}
+              <input
+                ref={ktpInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadKtpFile(f); }}
+              />
+
+              <div className="space-y-3">
+                {/* 1. Foto KTP */}
+                {(() => {
+                  const doc = docs.find((d) => d.doc_type === 'INDIVIDUAL_KTP_PHOTO');
+                  const { uploadedLike, statusLabel, statusCls } = getDocStatusInfo(doc);
+                  return (
+                    <div className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700">Foto KTP</p>
+                        <p className="text-xs text-slate-400 font-mono">INDIVIDUAL_KTP_PHOTO</p>
+                      </div>
+                      <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
+                      {doc && (
+                        <button type="button" onClick={() => viewDocument(doc.id)} className="text-xs text-kesh-700 underline hover:text-kesh-600">Lihat</button>
+                      )}
+                      {canSubmit && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={ktpUploading}
+                            onClick={() => ktpInputRef.current?.click()}
+                            className="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            {ktpUploading ? 'Mengunggah…' : uploadedLike ? 'Upload Ulang' : 'Upload'}
+                          </button>
+                          {doc && (
+                            <button type="button" onClick={() => deleteDocument(doc.id)} className="text-xs text-red-600 hover:underline">Hapus</button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* 2. Foto Wajah Pengguna */}
+                {(() => {
+                  const doc = docs.find((d) => d.doc_type === 'INDIVIDUAL_FACE_PHOTO');
+                  const { uploadedLike, statusLabel, statusCls } = getDocStatusInfo(doc);
+                  return (
+                    <div className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700">Foto Wajah Pengguna</p>
+                        <p className="text-xs text-slate-400 font-mono">INDIVIDUAL_FACE_PHOTO</p>
+                      </div>
+                      <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
+                      {doc && (
+                        <button type="button" onClick={() => viewDocument(doc.id)} className="text-xs text-kesh-700 underline hover:text-kesh-600">Lihat</button>
+                      )}
+                      {canSubmit && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setWebcamTarget('INDIVIDUAL_FACE_PHOTO')}
+                            className="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50"
+                          >
+                            {uploadedLike ? 'Ambil Ulang' : 'Ambil Foto'}
+                          </button>
+                          {doc && (
+                            <button type="button" onClick={() => deleteDocument(doc.id)} className="text-xs text-red-600 hover:underline">Hapus</button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* 3. Foto Wajah dengan KTP */}
+                {(() => {
+                  const doc = docs.find((d) => d.doc_type === 'INDIVIDUAL_FACE_WITH_KTP_PHOTO');
+                  const { uploadedLike, statusLabel, statusCls } = getDocStatusInfo(doc);
+                  return (
+                    <div className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700">Foto Wajah dengan KTP</p>
+                        <p className="text-xs text-slate-400 font-mono">INDIVIDUAL_FACE_WITH_KTP_PHOTO</p>
+                      </div>
+                      <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
+                      {doc && (
+                        <button type="button" onClick={() => viewDocument(doc.id)} className="text-xs text-kesh-700 underline hover:text-kesh-600">Lihat</button>
+                      )}
+                      {canSubmit && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setWebcamTarget('INDIVIDUAL_FACE_WITH_KTP_PHOTO')}
+                            className="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50"
+                          >
+                            {uploadedLike ? 'Ambil Ulang' : 'Ambil Foto dengan KTP'}
+                          </button>
+                          {doc && (
+                            <button type="button" onClick={() => deleteDocument(doc.id)} className="text-xs text-red-600 hover:underline">Hapus</button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Extra docs outside the 3 required types (legacy / admin uploads) */}
+              {docs.filter((d) => !INDIVIDUAL_REQUIRED_DOC_TYPES.includes(d.doc_type)).length > 0 && (
+                <div className="pt-2 border-t space-y-1.5">
+                  <p className="text-xs font-medium text-slate-500">Dokumen Lainnya</p>
+                  <ul className="space-y-1.5">
+                    {docs
+                      .filter((d) => !INDIVIDUAL_REQUIRED_DOC_TYPES.includes(d.doc_type))
+                      .map((d) => {
+                        const filename = d.extracted_json?.original_name ?? d.original_name;
+                        const { statusLabel, statusCls } = getDocStatusInfo(d);
+                        return (
+                          <li key={String(d.id)} className="flex flex-wrap items-center gap-2 text-sm">
+                            <span className="font-medium text-slate-700">{d.doc_type}</span>
+                            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>{statusLabel}</span>
+                            {filename && <span className="text-slate-500">— {filename}</span>}
+                            <button type="button" onClick={() => viewDocument(d.id)} className="text-kesh-700 underline text-xs hover:text-kesh-600">Lihat</button>
+                            {canSubmit && (
+                              <button type="button" onClick={() => deleteDocument(d.id)} className="ml-auto text-xs text-red-600 hover:underline">Hapus</button>
+                            )}
+                          </li>
+                        );
+                      })}
+                  </ul>
+                </div>
+              )}
+            </>
           )}
         </div>
       ) : (

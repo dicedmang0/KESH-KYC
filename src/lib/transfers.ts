@@ -55,6 +55,7 @@ export type TransferListRow = {
   // Enriched sender fields (backend now joins the sender application/CIF).
   sender_name?: string | null;
   sender_cif_no?: string | null;
+  sender_cif_relationship_type?: string | null;
   sender_type?: string | null;
   amount: string; // pg NUMERIC → string
   currency: string;
@@ -195,11 +196,13 @@ export type SetTransferResultBody = {
 /** Amount limits enforced by the backend (validated client-side too). */
 export const TRANSFER_MIN_AMOUNT = 10000;
 export const TRANSFER_MAX_AMOUNT = 500000000;
+export const WIC_TRANSFER_MAX_AMOUNT = 100000000;
 
 export type SenderSearchItem = {
   application_id: number | string;
   display_name?: string | null;
   cif_no?: string | null;
+  cif_relationship_type?: string | null;
   application_type?: string | null;
   status?: string | null;
 };
