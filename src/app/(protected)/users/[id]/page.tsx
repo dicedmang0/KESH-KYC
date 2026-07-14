@@ -497,6 +497,19 @@ function buildEddPayload(formData: EddFormData, complete: boolean, userRole?: st
     },
     internal_checklist: {
       completion_items: formData.checklist_kelengkapan,
+      cdd_form_completed: formData.checklist_kelengkapan.includes('FORM_CDD'),
+      additional_cdd_completed: formData.checklist_kelengkapan.includes('FORM_CDD_TAMBAHAN'),
+      edd_form_completed: formData.checklist_kelengkapan.includes('FORM_EDD'),
+      source_of_funds_document_completed: formData.checklist_kelengkapan.includes('DOK_SUMBER_DANA'),
+      source_of_wealth_document_completed: formData.checklist_kelengkapan.includes('DOK_SUMBER_KEKAYAAN'),
+      beneficial_owner_document_completed: formData.checklist_kelengkapan.includes('DOK_BO'),
+      dttot_pppspm_screening_completed: formData.checklist_kelengkapan.includes('HASIL_SCREENING'),
+      edd_interview_notes_completed:
+        formData.checklist_kelengkapan.includes('NOTULEN_WAWANCARA') ||
+        formData.checklist_kelengkapan.includes('NOTULEN_WAWANCARA_EDD'),
+      business_location_photo_completed:
+        formData.checklist_kelengkapan.includes('FOTO_LOKASI') ||
+        formData.checklist_kelengkapan.includes('FOTO_LOKASI_USAHA'),
     },
   };
 
