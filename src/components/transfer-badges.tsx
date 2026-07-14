@@ -14,10 +14,10 @@ const STATUS_STYLES: Record<TransferStatus, string> = {
 
 const STATUS_LABELS: Record<TransferStatus, string> = {
   DRAFT: "Draft",
-  SUBMITTED: "Diajukan",
-  PENDING_FINANCE_STAFF_REVIEW: "Review Finance Staff",
+  SUBMITTED: "Menunggu Review Operation Supervisor",
+  PENDING_FINANCE_STAFF_REVIEW: "Menunggu Review Finance Staff",
   PENDING_FINANCE_MANAGER_APPROVAL: "Menunggu Approval Finance Manager",
-  APPROVED: "Disetujui",
+  APPROVED: "Disetujui (Legacy)",
   REJECTED: "Ditolak",
   COMPLETED: "Selesai",
 };

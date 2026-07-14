@@ -283,7 +283,7 @@ export default function TransferDetailPage() {
   const canSupervisorReview = canSupervisorReviewTransfer(role) && row?.status === 'SUBMITTED';
   const canFinanceReview = canFinanceReviewTransfer(role) && row?.status === 'PENDING_FINANCE_STAFF_REVIEW';
   const canDecide = canApproveTransfer(role) && row?.status === 'PENDING_FINANCE_MANAGER_APPROVAL';
-  const canSetResult = canUpdateTransferResult(role) && row?.status === 'APPROVED';
+  const canSetResult = canUpdateTransferResult(role) && row?.status === 'COMPLETED' && row?.result !== 'SUCCESS';
   const hasAnyAction = canSubmit || canSupervisorReview || canFinanceReview || canDecide || canSetResult;
   const canEvaluateMonitoring = role === 'ComplianceLead' || role === 'SystemAdmin' || role === 'Director';
 
@@ -461,7 +461,7 @@ export default function TransferDetailPage() {
                     disabled={actionLoading}
                     onClick={doSupervisorReview}
                   >
-                    {actionLoading ? 'Menyimpan…' : 'Review Operation Supervisor'}
+                    {actionLoading ? 'Menyimpan…' : 'Review & Setujui Layer 1'}
                   </button>
                 )}
                 {canFinanceReview && (
@@ -480,7 +480,7 @@ export default function TransferDetailPage() {
                       disabled={actionLoading}
                       onClick={() => { setPanel(panel === 'approve' ? 'none' : 'approve'); setActionErr(''); }}
                     >
-                      Setujui
+                      Review & Setujui Final
                     </button>
                     <button
                       className="rounded-lg bg-red-600 px-3 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
@@ -506,7 +506,7 @@ export default function TransferDetailPage() {
               {canDecide && panel === 'approve' && (
                 <div className="rounded-lg border p-3 space-y-2">
                   <div>
-                    <label className="text-xs text-muted-foreground">Catatan keputusan (opsional)</label>
+                    <label className="text-xs text-muted-foreground">Catatan keputusan final (opsional)</label>
                     <textarea
                       rows={3}
                       className={inputCls}
@@ -519,7 +519,7 @@ export default function TransferDetailPage() {
                     disabled={actionLoading}
                     onClick={() => doDecide('APPROVE')}
                   >
-                    {actionLoading ? 'Menyimpan…' : 'Konfirmasi Setujui'}
+                    {actionLoading ? 'Menyimpan…' : 'Konfirmasi Setujui Final'}
                   </button>
                 </div>
               )}
@@ -536,7 +536,7 @@ export default function TransferDetailPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground">Catatan keputusan (opsional)</label>
+                    <label className="text-xs text-muted-foreground">Catatan keputusan final (opsional)</label>
                     <textarea
                       rows={3}
                       className={inputCls}

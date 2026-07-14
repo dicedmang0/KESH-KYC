@@ -169,11 +169,17 @@ export type CreateTransferBody = {
   additional_info?: Record<string, unknown>;
 };
 
-export type DecideTransferBody = {
-  decision: "APPROVE" | "REJECT";
+export type TransferReviewAction = "APPROVE" | "REJECT";
+
+export type TransferReviewBody = {
+  action?: TransferReviewAction;
+  notes?: string;
+  decision?: TransferReviewAction;
   decision_notes?: string;
   reject_reason?: string;
 };
+
+export type DecideTransferBody = TransferReviewBody;
 
 export type SetTransferResultBody = {
   result: "SUCCESS" | "FAILED";
@@ -279,18 +285,52 @@ export function submitTransfer(id: number | string) {
   return apiFetch<TransferDetail>(`/transfers/${id}/submit`, { method: "POST" });
 }
 
-export function supervisorReviewTransfer(id: number | string) {
-  return apiFetch<TransferDetail>(`/transfers/${id}/supervisor-review`, { method: "POST" });
+function toActionPayload(body: TransferReviewBody = { action: "APPROVE" }) {
+  const action = body.action ?? body.decision ?? "APPROVE";
+  const notes = body.notes ?? body.decision_notes ?? body.reject_reason;
+
+  return {
+    action,
+    ...(notes ? { notes } : {}),
+  };
 }
 
-export function financeReviewTransfer(id: number | string) {
-  return apiFetch<TransferDetail>(`/transfers/${id}/finance-review`, { method: "POST" });
+export function supervisorReviewTransfer(
+  id: number | string,
+  body: TransferReviewBody = { action: "APPROVE" },
+) {
+  return apiFetch<TransferDetail>(`/transfers/${id}/supervisor-review`, {
+    method: "POST",
+    body: toActionPayload(body),
+  });
+}
+
+export function financeReviewTransfer(
+  id: number | string,
+  body: TransferReviewBody = { action: "APPROVE" },
+) {
+  return apiFetch<TransferDetail>(`/transfers/${id}/finance-review`, {
+    method: "POST",
+    body: toActionPayload(body),
+  });
+}
+
+function toDecisionPayload(body: DecideTransferBody | TransferReviewBody) {
+  const decision = body.decision ?? body.action ?? "APPROVE";
+  const decision_notes = body.decision_notes ?? body.notes;
+  const reject_reason = body.reject_reason ?? body.notes;
+
+  return {
+    decision,
+    ...(decision_notes ? { decision_notes } : {}),
+    ...(decision === "REJECT" && reject_reason ? { reject_reason } : {}),
+  };
 }
 
 export function decideTransfer(id: number | string, body: DecideTransferBody) {
   return apiFetch<TransferDetail>(`/transfers/${id}/decision`, {
     method: "POST",
-    body,
+    body: toDecisionPayload(body),
   });
 }
 

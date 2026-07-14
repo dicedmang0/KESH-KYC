@@ -76,11 +76,12 @@ export default function TransfersPage() {
           onChange={(e) => setStatus(e.target.value)}
         >
           <option value="">Semua</option>
-          <option value="DRAFT">DRAFT</option>
-          <option value="SUBMITTED">SUBMITTED</option>
-          <option value="APPROVED">APPROVED</option>
-          <option value="REJECTED">REJECTED</option>
-          <option value="COMPLETED">COMPLETED</option>
+          <option value="DRAFT">Draft</option>
+          <option value="SUBMITTED">Menunggu Review Operation Supervisor</option>
+          <option value="PENDING_FINANCE_STAFF_REVIEW">Menunggu Review Finance Staff</option>
+          <option value="PENDING_FINANCE_MANAGER_APPROVAL">Menunggu Approval Finance Manager</option>
+          <option value="REJECTED">Ditolak</option>
+          <option value="COMPLETED">Selesai</option>
         </select>
       </div>
 

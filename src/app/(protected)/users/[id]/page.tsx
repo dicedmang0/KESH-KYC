@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { apiFetch, apiUpload, getRoleFromToken } from '@/lib/api';
 import { toast } from '@/lib/toast';
-import { formatCif } from '@/lib/utils';
+import { formatCif, isLainnya } from '@/lib/utils';
+import LainnyaField from '@/components/lainnya-field';
 import EddForm, { DEFAULT_EDD, type EddFormData } from '@/components/EddForm';
 import WebcamCapture from '@/components/WebcamCapture';
 
@@ -61,6 +62,13 @@ type Person = {
   source_of_funds?: string | null;
   business_relationship_purpose?: string | null;
   distribution_channel?: string | null;
+  // "Lainnya" free-text companions (backend *_other columns).
+  occupation_other?: string | null;
+  industry_category_other?: string | null;
+  source_of_funds_other?: string | null;
+  business_relationship_purpose_other?: string | null;
+  wic_transaction_purpose_other?: string | null;
+  wic_recipient_relationship_other?: string | null;
   // WIC minimum CDD fields
   wic_transaction_purpose?: string | null;
   wic_recipient_relationship?: string | null;
@@ -215,11 +223,6 @@ const INDIVIDUAL_DOC_LABELS: Record<string, string> = {
   INDIVIDUAL_FACE_PHOTO: 'Foto Wajah Pengguna',
   INDIVIDUAL_FACE_WITH_KTP_PHOTO: 'Foto Wajah dengan KTP',
 };
-
-const WIC_REQUIRED_DOC_TYPES = [
-  'WIC_IDENTITY_DOCUMENT',
-  'WIC_SIGNATURE_BIOMETRIC',
-];
 
 const WIC_IDENTITY_DOC_ALIASES = [
   'WIC_IDENTITY_DOCUMENT',
@@ -378,6 +381,10 @@ function normalizeEddRecord(record?: EddRecord | null): Partial<EddFormData> | n
     tujuan_lainnya: getString(additional.business_relationship_purpose_other),
     sumber_dana: getStringArray(additional.source_of_funds),
     sumber_dana_lainnya: getString(additional.source_of_funds_other),
+    source_of_funds: getString(additional.source_of_funds),
+    source_of_funds_other: getString(additional.source_of_funds_other),
+    business_relationship_purpose: getString(additional.business_relationship_purpose),
+    business_relationship_purpose_other: getString(additional.business_relationship_purpose_other),
     dokumen_sumber_dana: getStringArray(additional.source_of_funds_documents),
     dokumen_sumber_dana_lainnya: getString(additional.source_of_funds_document_other),
     sumber_kekayaan: getStringArray(additional.source_of_wealth),
@@ -418,8 +425,8 @@ function normalizeEddRecord(record?: EddRecord | null): Partial<EddFormData> | n
   };
 }
 
-function buildEddPayload(formData: EddFormData, complete: boolean) {
-  return {
+function buildEddPayload(formData: EddFormData, complete: boolean, userRole?: string | null) {
+  const payload = {
     complete,
     applicant_snapshot: {
       full_name: formData.nama_lengkap,
@@ -440,9 +447,14 @@ function buildEddPayload(formData: EddFormData, complete: boolean) {
     },
     additional_information: {
       business_relationship_purposes: formData.tujuan_hubungan,
-      business_relationship_purpose_other: formData.tujuan_lainnya,
-      source_of_funds: formData.sumber_dana,
-      source_of_funds_other: formData.sumber_dana_lainnya,
+      business_relationship_purpose: formData.business_relationship_purpose,
+      business_relationship_purpose_other: formData.business_relationship_purpose === 'Lainnya'
+        ? formData.business_relationship_purpose_other
+        : '',
+      source_of_funds: formData.source_of_funds,
+      source_of_funds_other: formData.source_of_funds === 'Pendapatan lain/Lainnya'
+        ? formData.source_of_funds_other
+        : '',
       source_of_funds_documents: formData.dokumen_sumber_dana,
       source_of_funds_document_other: formData.dokumen_sumber_dana_lainnya,
       source_of_wealth: formData.sumber_kekayaan,
@@ -487,6 +499,26 @@ function buildEddPayload(formData: EddFormData, complete: boolean) {
       completion_items: formData.checklist_kelengkapan,
     },
   };
+
+  const role = userRole ?? '';
+  if (role === 'FrontDesk') {
+    return {
+      complete,
+      applicant_snapshot: payload.applicant_snapshot,
+      high_risk_reasons: payload.high_risk_reasons,
+      additional_information: payload.additional_information,
+    };
+  }
+  if (role === 'ComplianceLead') {
+    return {
+      complete,
+      beneficial_owner: payload.beneficial_owner,
+      officer_analysis: payload.officer_analysis,
+      compliance_decision: payload.compliance_decision,
+      internal_checklist: payload.internal_checklist,
+    };
+  }
+  return payload;
 }
 
 function riskLevelLabel(level?: string | null) {
@@ -663,13 +695,17 @@ export default function UserDetailPage() {
   const [cddApartment, setCddApartment] = useState('');
   const [cddLandmark, setCddLandmark] = useState('');
   const [cddIndustry, setCddIndustry] = useState('');
+  const [cddIndustryOther, setCddIndustryOther] = useState('');
   const [cddCompanyName, setCddCompanyName] = useState('');
   const [cddCompanyAddress, setCddCompanyAddress] = useState('');
   const [cddIncomeRange, setCddIncomeRange] = useState('');
   const [cddOccupation, setCddOccupation] = useState('');
+  const [cddOccupationOther, setCddOccupationOther] = useState('');
   const [cddCifRelationshipType, setCddCifRelationshipType] = useState<'OUR_CUSTOMER' | 'WIC'>('OUR_CUSTOMER');
   const [cddSourceOfFunds, setCddSourceOfFunds] = useState('');
+  const [cddSourceOfFundsOther, setCddSourceOfFundsOther] = useState('');
   const [cddBusinessPurpose, setCddBusinessPurpose] = useState('');
+  const [cddBusinessPurposeOther, setCddBusinessPurposeOther] = useState('');
   const [cddDistributionChannel, setCddDistributionChannel] = useState('');
   const [cddSaving, setCddSaving] = useState(false);
 
@@ -738,13 +774,17 @@ export default function UserDetailPage() {
         setCddApartment(p.apartment_block ?? '');
         setCddLandmark(p.address_landmark ?? '');
         setCddIndustry(p.industry_category ?? '');
+        setCddIndustryOther(p.industry_category_other ?? '');
         setCddCompanyName(p.company_name ?? '');
         setCddCompanyAddress(p.company_address ?? '');
         setCddIncomeRange(p.monthly_income_range ?? '');
         setCddOccupation(p.occupation ?? '');
+        setCddOccupationOther(p.occupation_other ?? '');
         setCddCifRelationshipType(p.cif_relationship_type === 'WIC' ? 'WIC' : 'OUR_CUSTOMER');
         setCddSourceOfFunds(p.source_of_funds ?? '');
+        setCddSourceOfFundsOther(p.source_of_funds_other ?? '');
         setCddBusinessPurpose(p.business_relationship_purpose ?? '');
+        setCddBusinessPurposeOther(p.business_relationship_purpose_other ?? '');
         setCddDistributionChannel(p.distribution_channel ?? '');
         // WIC minimum CDD prefill
         setWicFullName(p.full_name ?? '');
@@ -881,7 +921,7 @@ export default function UserDetailPage() {
     try {
       await apiFetch(`/applications/${id}/edd`, {
         method: 'PATCH',
-        body: buildEddPayload(formData, complete),
+        body: buildEddPayload(formData, complete, userRole),
       });
       toast.success(complete ? 'EDD berhasil dilengkapi.' : 'Draft EDD berhasil disimpan.');
       await load();
@@ -1036,6 +1076,10 @@ export default function UserDetailPage() {
   async function addParty(e: React.FormEvent) {
     e.preventDefault();
     if (!id) return;
+    if (partyIdNumber.length > 16) {
+      toast.error('Nomor Identitas maksimal 16 karakter.');
+      return;
+    }
     setPartyLoading(true);
     try {
       await apiFetch(`/applications/${id}/parties`, {
@@ -1095,6 +1139,20 @@ export default function UserDetailPage() {
     } else {
       setCddPassportErr('');
     }
+
+    // "Lainnya" companions — required when the related dropdown is "Lainnya".
+    const lainnyaChecks: Array<[boolean, string]> = [
+      [isLainnya(cddOccupation) && !cddOccupationOther.trim(), 'Keterangan Pekerjaan Lainnya wajib diisi.'],
+      [isLainnya(cddIndustry) && !cddIndustryOther.trim(), 'Keterangan Industri Lainnya wajib diisi.'],
+      [isLainnya(cddSourceOfFunds) && !cddSourceOfFundsOther.trim(), 'Keterangan Sumber Dana Lainnya wajib diisi.'],
+      [isLainnya(cddBusinessPurpose) && !cddBusinessPurposeOther.trim(), 'Keterangan Tujuan Hubungan Bisnis Lainnya wajib diisi.'],
+    ];
+    for (const [invalid, message] of lainnyaChecks) {
+      if (invalid) {
+        toast.error(message);
+        valid = false;
+      }
+    }
     return valid;
   }
 
@@ -1121,12 +1179,16 @@ export default function UserDetailPage() {
           address_landmark: cddLandmark || null,
           nationality: cddNationality || null,
           occupation: cddOccupation || null,
+          occupation_other: isLainnya(cddOccupation) ? cddOccupationOther || null : null,
           industry_category: cddIndustry || null,
+          industry_category_other: isLainnya(cddIndustry) ? cddIndustryOther || null : null,
           company_name: cddCompanyName || null,
           company_address: cddCompanyAddress || null,
           monthly_income_range: cddIncomeRange || null,
           source_of_funds: cddSourceOfFunds || null,
+          source_of_funds_other: isLainnya(cddSourceOfFunds) ? cddSourceOfFundsOther || null : null,
           business_relationship_purpose: cddBusinessPurpose || null,
+          business_relationship_purpose_other: isLainnya(cddBusinessPurpose) ? cddBusinessPurposeOther || null : null,
           distribution_channel: cddDistributionChannel || null,
           cif_relationship_type: cddCifRelationshipType,
         },
@@ -1257,7 +1319,7 @@ export default function UserDetailPage() {
     || (userRole === 'ComplianceLead' && isHighRisk);
 
   const canViewRisk = ['SystemAdmin', 'Director', 'ComplianceLead', 'OperationSupervisor', 'FrontDesk', 'Auditor'].includes(userRole ?? '');
-  const canEditEdd = ['SystemAdmin', 'Director', 'FrontDesk'].includes(userRole ?? '');
+  const canEditEdd = ['SystemAdmin', 'Director', 'FrontDesk', 'ComplianceLead'].includes(userRole ?? '');
   const canViewEdd = ['SystemAdmin', 'Director', 'FrontDesk', 'ComplianceLead', 'Auditor'].includes(userRole ?? '');
   const showEddSection = canViewEdd && (eddRequired || Object.keys(eddData).length > 0);
 
@@ -1774,7 +1836,7 @@ export default function UserDetailPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-500">Pekerjaan</label>
-                  <select value={cddOccupation} onChange={(e) => setCddOccupation(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-sm">
+                  <select value={cddOccupation} onChange={(e) => { const v = e.target.value; setCddOccupation(v); if (!isLainnya(v)) setCddOccupationOther(''); }} className="rounded-md border bg-white px-2 py-1.5 text-sm">
                     <option value="">— Pilih pekerjaan —</option>
                     {occupations.map((o) => (
                       <option key={o.code} value={o.name}>{o.name}</option>
@@ -1783,10 +1845,18 @@ export default function UserDetailPage() {
                       <option value={cddOccupation}>{cddOccupation}</option>
                     )}
                   </select>
+                  <LainnyaField
+                    when={cddOccupation}
+                    value={cddOccupationOther}
+                    onChange={setCddOccupationOther}
+                    label="Keterangan Pekerjaan Lainnya"
+                    labelClassName="text-xs text-slate-500"
+                    inputClassName="rounded-md border px-2 py-1.5 text-sm"
+                  />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-500">Industri / Kegiatan Usaha</label>
-                  <select value={cddIndustry} onChange={(e) => setCddIndustry(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-sm">
+                  <select value={cddIndustry} onChange={(e) => { const v = e.target.value; setCddIndustry(v); if (!isLainnya(v)) setCddIndustryOther(''); }} className="rounded-md border bg-white px-2 py-1.5 text-sm">
                     <option value="">— Pilih industri —</option>
                     {industryCategories.map((c) => (
                       <option key={c.code} value={c.code}>{c.name}</option>
@@ -1795,6 +1865,14 @@ export default function UserDetailPage() {
                       <option value={cddIndustry}>{cddIndustry}</option>
                     )}
                   </select>
+                  <LainnyaField
+                    when={cddIndustry}
+                    value={cddIndustryOther}
+                    onChange={setCddIndustryOther}
+                    label="Keterangan Industri Lainnya"
+                    labelClassName="text-xs text-slate-500"
+                    inputClassName="rounded-md border px-2 py-1.5 text-sm"
+                  />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-500">Penghasilan / Bulan</label>
@@ -1828,7 +1906,7 @@ export default function UserDetailPage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-500">Sumber Dana</label>
-                  <select value={cddSourceOfFunds} onChange={(e) => setCddSourceOfFunds(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-sm">
+                  <select value={cddSourceOfFunds} onChange={(e) => { const v = e.target.value; setCddSourceOfFunds(v); if (!isLainnya(v)) setCddSourceOfFundsOther(''); }} className="rounded-md border bg-white px-2 py-1.5 text-sm">
                     <option value="">— Pilih sumber dana —</option>
                     {sourceOfFundsOptions.map((o) => (
                       <option key={o.code} value={o.code}>{o.name}</option>
@@ -1837,10 +1915,18 @@ export default function UserDetailPage() {
                       <option value={cddSourceOfFunds}>{cddSourceOfFunds}</option>
                     )}
                   </select>
+                  <LainnyaField
+                    when={cddSourceOfFunds}
+                    value={cddSourceOfFundsOther}
+                    onChange={setCddSourceOfFundsOther}
+                    label="Keterangan Sumber Dana Lainnya"
+                    labelClassName="text-xs text-slate-500"
+                    inputClassName="rounded-md border px-2 py-1.5 text-sm"
+                  />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-500">Tujuan Hubungan Bisnis</label>
-                  <select value={cddBusinessPurpose} onChange={(e) => setCddBusinessPurpose(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-sm">
+                  <select value={cddBusinessPurpose} onChange={(e) => { const v = e.target.value; setCddBusinessPurpose(v); if (!isLainnya(v)) setCddBusinessPurposeOther(''); }} className="rounded-md border bg-white px-2 py-1.5 text-sm">
                     <option value="">— Pilih tujuan —</option>
                     {businessPurposeOptions.map((o) => (
                       <option key={o.code} value={o.code}>{o.name}</option>
@@ -1849,6 +1935,14 @@ export default function UserDetailPage() {
                       <option value={cddBusinessPurpose}>{cddBusinessPurpose}</option>
                     )}
                   </select>
+                  <LainnyaField
+                    when={cddBusinessPurpose}
+                    value={cddBusinessPurposeOther}
+                    onChange={setCddBusinessPurposeOther}
+                    label="Keterangan Tujuan Hubungan Bisnis Lainnya"
+                    labelClassName="text-xs text-slate-500"
+                    inputClassName="rounded-md border px-2 py-1.5 text-sm"
+                  />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-500">Saluran Distribusi</label>
@@ -2023,7 +2117,7 @@ export default function UserDetailPage() {
                       ? WIC_SIGNATURE_DOC_ALIASES
                       : [opt.value];
                   const doc = docs.find((d) => aliases.includes(d.doc_type));
-                  const { uploadedLike, statusLabel, statusCls } = getDocStatusInfo(doc);
+                  const { statusLabel, statusCls } = getDocStatusInfo(doc);
                   const filename = doc?.extracted_json?.original_name ?? doc?.original_name;
                   return (
                     <div key={opt.value} className="rounded-lg border p-3 flex flex-wrap items-center gap-3">
@@ -2396,8 +2490,10 @@ export default function UserDetailPage() {
                   <input
                     value={partyIdNumber}
                     onChange={(e) => setPartyIdNumber(e.target.value)}
+                    maxLength={16}
                     className="rounded-md border px-2 py-1.5 text-sm"
                   />
+                  <p className="text-xs text-slate-400">Maksimal 16 karakter.</p>
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-slate-500">Tanggal Lahir</label>
@@ -2535,6 +2631,7 @@ export default function UserDetailPage() {
           <EddForm
             initialData={{ ...DEFAULT_EDD, ...eddData }}
             canEdit={canEditEdd}
+            userRole={userRole}
             eddCompleted={eddCompleted}
             saving={eddSaving}
             saveError=""

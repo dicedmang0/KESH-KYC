@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export type EddFormData = {
   nama_lengkap: string;
@@ -20,6 +20,10 @@ export type EddFormData = {
   tujuan_lainnya: string;
   sumber_dana: string[];
   sumber_dana_lainnya: string;
+  source_of_funds: string;
+  source_of_funds_other: string;
+  business_relationship_purpose: string;
+  business_relationship_purpose_other: string;
   dokumen_sumber_dana: string[];
   dokumen_sumber_dana_lainnya: string;
   sumber_kekayaan: string[];
@@ -72,6 +76,10 @@ export const DEFAULT_EDD: EddFormData = {
   tujuan_lainnya: '',
   sumber_dana: [],
   sumber_dana_lainnya: '',
+  source_of_funds: '',
+  source_of_funds_other: '',
+  business_relationship_purpose: '',
+  business_relationship_purpose_other: '',
   dokumen_sumber_dana: [],
   dokumen_sumber_dana_lainnya: '',
   sumber_kekayaan: [],
@@ -109,6 +117,7 @@ export const DEFAULT_EDD: EddFormData = {
 interface EddFormProps {
   initialData?: Partial<EddFormData>;
   canEdit: boolean;
+  userRole?: string | null;
   eddCompleted: boolean;
   saving: boolean;
   saveError: string;
@@ -340,14 +349,22 @@ function RadioGroup({
 export default function EddForm({
   initialData,
   canEdit,
+  userRole,
   eddCompleted,
   saving,
   saveError,
   onSaveDraft,
   onComplete,
 }: EddFormProps) {
+  const initialDataKey = JSON.stringify(initialData ?? {});
   const [d, setD] = useState<EddFormData>({ ...DEFAULT_EDD, ...initialData });
   const [openSections, setOpenSections] = useState<Set<number>>(new Set([0]));
+  const [validationError, setValidationError] = useState('');
+
+  useEffect(() => {
+    setD({ ...DEFAULT_EDD, ...initialData });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDataKey]);
 
   const set = <K extends keyof EddFormData>(k: K, v: EddFormData[K]) =>
     setD((prev) => ({ ...prev, [k]: v }));
@@ -362,31 +379,80 @@ export default function EddForm({
 
   const isOpen = (i: number) => openSections.has(i);
 
-  const disabled = !canEdit;
+  const role = userRole ?? '';
+  const isFullAccessRole = role === 'SystemAdmin' || role === 'Director';
+  const canEditFrontSections = canEdit && (isFullAccessRole || role === 'FrontDesk');
+  const canEditComplianceSections = canEdit && (isFullAccessRole || role === 'ComplianceLead');
+  const frontDisabled = !canEditFrontSections;
+  const complianceDisabled = !canEditComplianceSections;
+  const canSaveDraft = canEditFrontSections || canEditComplianceSections;
+  const canCompleteEdd = canEditComplianceSections;
+
+  const validateAdditionalInfo = (complete: boolean) => {
+    if (!d.source_of_funds) return 'Sumber Dana wajib dipilih.';
+    if (d.source_of_funds === 'Pendapatan lain/Lainnya' && !d.source_of_funds_other.trim()) {
+      return 'Keterangan Sumber Dana Lainnya wajib diisi.';
+    }
+    if (!d.business_relationship_purpose) return 'Tujuan Hubungan Usaha wajib dipilih.';
+    if (d.business_relationship_purpose === 'Lainnya' && !d.business_relationship_purpose_other.trim()) {
+      return 'Keterangan Tujuan Hubungan Usaha Lainnya wajib diisi.';
+    }
+    if (complete && frontDisabled && complianceDisabled) return 'Anda tidak memiliki akses untuk melengkapi EDD.';
+    return '';
+  };
+
+  const handleSaveDraft = () => {
+    const err = canEditFrontSections ? validateAdditionalInfo(false) : '';
+    if (err) {
+      setValidationError(err);
+      return;
+    }
+    setValidationError('');
+    onSaveDraft(d);
+  };
+
+  const handleComplete = () => {
+    const err = validateAdditionalInfo(true);
+    if (err) {
+      setValidationError(err);
+      return;
+    }
+    setValidationError('');
+    onComplete(d);
+  };
 
   return (
     <div className="space-y-3">
       {saveError && (
         <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{saveError}</div>
       )}
+      {validationError && (
+        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{validationError}</div>
+      )}
+      {role === 'FrontDesk' && (
+        <div className="rounded-md bg-blue-50 p-3 text-xs text-blue-700">Frontline hanya dapat mengisi bagian I sampai III.</div>
+      )}
+      {role === 'ComplianceLead' && (
+        <div className="rounded-md bg-amber-50 p-3 text-xs text-amber-700">Lead Compliance mengisi bagian IV sampai VII. Bagian I sampai III hanya dapat dilihat.</div>
+      )}
 
       {/* I. Data Dasar Pengguna Jasa */}
       <AccSection title="I. Data Dasar Pengguna Jasa" index={0} open={isOpen(0)} onToggle={toggleSection}>
         <div className="grid gap-3 sm:grid-cols-2">
-          <TextField label="Nama Lengkap" value={d.nama_lengkap} onChange={(v) => set('nama_lengkap', v)} disabled={disabled} />
-          <TextField label="Nomor Identitas" value={d.nomor_identitas} onChange={(v) => set('nomor_identitas', v)} disabled={disabled} />
-          <TextField label="Jenis Identitas" value={d.jenis_identitas} onChange={(v) => set('jenis_identitas', v)} disabled={disabled} placeholder="KTP / SIM / Paspor" />
-          <TextField label="Nomor Telepon" value={d.nomor_telepon} onChange={(v) => set('nomor_telepon', v)} disabled={disabled} />
-          <TextField label="Pekerjaan / Jenis Usaha" value={d.pekerjaan_jenis_usaha} onChange={(v) => set('pekerjaan_jenis_usaha', v)} disabled={disabled} />
-          <TextField label="Nomor Referensi CDD" value={d.nomor_referensi_cdd} onChange={(v) => set('nomor_referensi_cdd', v)} disabled={disabled} />
+          <TextField label="Nama Lengkap" value={d.nama_lengkap} onChange={(v) => set('nama_lengkap', v)} disabled={frontDisabled} />
+          <TextField label="Nomor Identitas" value={d.nomor_identitas} onChange={(v) => set('nomor_identitas', v)} disabled={frontDisabled} />
+          <TextField label="Jenis Identitas" value={d.jenis_identitas} onChange={(v) => set('jenis_identitas', v)} disabled={frontDisabled} placeholder="KTP / SIM / Paspor" />
+          <TextField label="Nomor Telepon" value={d.nomor_telepon} onChange={(v) => set('nomor_telepon', v)} disabled={frontDisabled} />
+          <TextField label="Pekerjaan / Jenis Usaha" value={d.pekerjaan_jenis_usaha} onChange={(v) => set('pekerjaan_jenis_usaha', v)} disabled={frontDisabled} />
+          <TextField label="Nomor Referensi CDD" value={d.nomor_referensi_cdd} onChange={(v) => set('nomor_referensi_cdd', v)} disabled={frontDisabled} />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <TextAreaField label="Alamat Domisili" value={d.alamat_domisili} onChange={(v) => set('alamat_domisili', v)} disabled={disabled} rows={2} />
+          <TextAreaField label="Alamat Domisili" value={d.alamat_domisili} onChange={(v) => set('alamat_domisili', v)} disabled={frontDisabled} rows={2} />
           <SelectField
             label="Kategori Pengguna Jasa"
             value={d.kategori_pengguna}
             onChange={(v) => set('kategori_pengguna', v)}
-            disabled={disabled}
+            disabled={frontDisabled}
             options={[
               { value: 'PERORANGAN', label: 'Perorangan' },
               { value: 'BADAN_USAHA', label: 'Badan Usaha' },
@@ -402,7 +468,7 @@ export default function EddForm({
             label="A. Karakteristik Pengguna Jasa"
             selected={d.karakteristik_pengguna}
             onChange={(v) => set('karakteristik_pengguna', v)}
-            disabled={disabled}
+            disabled={frontDisabled}
             options={[
               { value: 'PEP', label: 'PEP / keluarga / rekan dekat' },
               { value: 'USAHA_BERISIKO', label: 'Pekerjaan / jenis usaha berisiko tinggi' },
@@ -415,7 +481,7 @@ export default function EddForm({
             label="B. Pola Transaksi"
             selected={d.pola_transaksi}
             onChange={(v) => set('pola_transaksi', v)}
-            disabled={disabled}
+            disabled={frontDisabled}
             options={[
               { value: 'NILAI_BESAR_BERULANG', label: 'Transaksi berulang nilai besar dalam jangka pendek' },
               { value: 'PERUBAHAN_MENDADAK', label: 'Perubahan mendadak frekuensi / nilai transaksi' },
@@ -428,7 +494,7 @@ export default function EddForm({
             label="C. Hasil Screening"
             selected={d.hasil_screening_checks}
             onChange={(v) => set('hasil_screening_checks', v)}
-            disabled={disabled}
+            disabled={frontDisabled}
             options={[
               { value: 'NEAR_MATCH_DTTOT', label: 'Near match DTTOT' },
               { value: 'NEAR_MATCH_PPPSPM', label: 'Near match PPPSPM' },
@@ -440,7 +506,7 @@ export default function EddForm({
             label="D. Permintaan Klarifikasi Tambahan"
             selected={d.klarifikasi_tambahan}
             onChange={(v) => set('klarifikasi_tambahan', v)}
-            disabled={disabled}
+            disabled={frontDisabled}
             options={[
               { value: 'CDD_TIDAK_LENGKAP', label: 'Form CDD tidak lengkap' },
               { value: 'DOKUMEN_DIRAGUKAN', label: 'Dokumen identitas / pendukung diragukan' },
@@ -452,7 +518,7 @@ export default function EddForm({
           label="Catatan Ringkas Alasan EDD"
           value={d.catatan_alasan_edd}
           onChange={(v) => set('catatan_alasan_edd', v)}
-          disabled={disabled}
+          disabled={frontDisabled}
           rows={3}
           placeholder="Jelaskan secara ringkas mengapa pengguna jasa ini masuk kategori high risk..."
         />
@@ -461,53 +527,62 @@ export default function EddForm({
       {/* III. Informasi Tambahan */}
       <AccSection title="III. Informasi Tambahan yang Wajib Dikumpulkan" index={2} open={isOpen(2)} onToggle={toggleSection}>
         <div className="space-y-5">
-          {/* A. Tujuan */}
+          {/* A. Tujuan Hubungan Usaha */}
           <div className="space-y-2">
-            <CheckGroup
-              label="A. Tujuan Hubungan Usaha / Transaksi"
-              selected={d.tujuan_hubungan}
-              onChange={(v) => set('tujuan_hubungan', v)}
-              disabled={disabled}
+            <SelectField
+              label="A. Tujuan Hubungan Usaha"
+              value={d.business_relationship_purpose}
+              onChange={(v) => {
+                set('business_relationship_purpose', v);
+                if (v !== 'Lainnya') set('business_relationship_purpose_other', '');
+              }}
+              disabled={frontDisabled}
               options={[
-                { value: 'KIRIM_KELUARGA', label: 'Pengiriman uang keluarga' },
-                { value: 'PEMBAYARAN_USAHA', label: 'Pembayaran usaha / kewajiban dagang' },
-                { value: 'PEMBELIAN', label: 'Pembelian barang / jasa' },
-                { value: 'PIHAK_KETIGA', label: 'Penyaluran dana melalui pihak ketiga' },
-                { value: 'TUJUAN_LAINNYA', label: 'Lainnya' },
+                { value: 'Penyaluran Dana Melalui Pihak Ketiga', label: 'Penyaluran Dana Melalui Pihak Ketiga' },
+                { value: 'Kegiatan usaha atau transaksi bisnis', label: 'Kegiatan usaha atau transaksi bisnis' },
+                { value: 'Kebutuhan pribadi, pembayaran rutin, atau transfer keluarga', label: 'Kebutuhan pribadi, pembayaran rutin, atau transfer keluarga' },
+                { value: 'Lainnya', label: 'Lainnya' },
               ]}
             />
-            {d.tujuan_hubungan.includes('TUJUAN_LAINNYA') && (
+            {d.business_relationship_purpose === 'Lainnya' && (
               <TextField
-                label="Sebutkan tujuan lainnya"
-                value={d.tujuan_lainnya}
-                onChange={(v) => set('tujuan_lainnya', v)}
-                disabled={disabled}
+                label="Keterangan Tujuan Hubungan Usaha Lainnya"
+                value={d.business_relationship_purpose_other}
+                onChange={(v) => set('business_relationship_purpose_other', v)}
+                disabled={frontDisabled}
+                required
+                placeholder="Tuliskan keterangan tujuan hubungan usaha lainnya"
               />
             )}
           </div>
 
           {/* B. Sumber Dana */}
           <div className="space-y-2">
-            <CheckGroup
+            <SelectField
               label="B. Sumber Dana"
-              selected={d.sumber_dana}
-              onChange={(v) => set('sumber_dana', v)}
-              disabled={disabled}
+              value={d.source_of_funds}
+              onChange={(v) => {
+                set('source_of_funds', v);
+                if (v !== 'Pendapatan lain/Lainnya') set('source_of_funds_other', '');
+              }}
+              disabled={frontDisabled}
               options={[
-                { value: 'GAJI', label: 'Gaji / pendapatan tetap' },
-                { value: 'HASIL_USAHA', label: 'Hasil usaha' },
-                { value: 'PINJAMAN', label: 'Pinjaman' },
-                { value: 'PENJUALAN_ASET', label: 'Penjualan aset' },
-                { value: 'HADIAH', label: 'Hadiah / hibah' },
-                { value: 'SUMBER_DANA_LAINNYA', label: 'Lainnya' },
+                { value: 'Pendapatan lain/Lainnya', label: 'Pendapatan lain/Lainnya' },
+                { value: 'Investasi', label: 'Investasi' },
+                { value: 'Hibah', label: 'Hibah' },
+                { value: 'Hasil usaha', label: 'Hasil usaha' },
+                { value: 'Gaji', label: 'Gaji' },
+                { value: 'Warisan', label: 'Warisan' },
               ]}
             />
-            {d.sumber_dana.includes('SUMBER_DANA_LAINNYA') && (
+            {d.source_of_funds === 'Pendapatan lain/Lainnya' && (
               <TextField
-                label="Sebutkan sumber dana lainnya"
-                value={d.sumber_dana_lainnya}
-                onChange={(v) => set('sumber_dana_lainnya', v)}
-                disabled={disabled}
+                label="Keterangan Sumber Dana Lainnya"
+                value={d.source_of_funds_other}
+                onChange={(v) => set('source_of_funds_other', v)}
+                disabled={frontDisabled}
+                required
+                placeholder="Tuliskan keterangan sumber dana lainnya"
               />
             )}
             <div className="pl-4 border-l-2 border-slate-200 space-y-2">
@@ -515,7 +590,7 @@ export default function EddForm({
                 label="Dokumen Pendukung Sumber Dana"
                 selected={d.dokumen_sumber_dana}
                 onChange={(v) => set('dokumen_sumber_dana', v)}
-                disabled={disabled}
+                disabled={frontDisabled}
                 options={[
                   { value: 'SLIP_GAJI', label: 'Slip gaji' },
                   { value: 'REKENING_KORAN', label: 'Rekening koran 3 bulan terakhir' },
@@ -530,7 +605,7 @@ export default function EddForm({
                   label="Sebutkan dokumen lainnya"
                   value={d.dokumen_sumber_dana_lainnya}
                   onChange={(v) => set('dokumen_sumber_dana_lainnya', v)}
-                  disabled={disabled}
+                  disabled={frontDisabled}
                 />
               )}
             </div>
@@ -542,7 +617,7 @@ export default function EddForm({
               label="C. Sumber Kekayaan"
               selected={d.sumber_kekayaan}
               onChange={(v) => set('sumber_kekayaan', v)}
-              disabled={disabled}
+              disabled={frontDisabled}
               options={[
                 { value: 'USAHA_PRIBADI', label: 'Usaha pribadi' },
                 { value: 'WARISAN', label: 'Warisan' },
@@ -556,7 +631,7 @@ export default function EddForm({
                 label="Sebutkan sumber kekayaan lainnya"
                 value={d.sumber_kekayaan_lainnya}
                 onChange={(v) => set('sumber_kekayaan_lainnya', v)}
-                disabled={disabled}
+                disabled={frontDisabled}
               />
             )}
             <div className="pl-4 border-l-2 border-slate-200 space-y-2">
@@ -564,7 +639,7 @@ export default function EddForm({
                 label="Dokumen Pendukung Sumber Kekayaan"
                 selected={d.dokumen_sumber_kekayaan}
                 onChange={(v) => set('dokumen_sumber_kekayaan', v)}
-                disabled={disabled}
+                disabled={frontDisabled}
                 options={[
                   { value: 'LAPORAN_KEUANGAN', label: 'Laporan keuangan usaha' },
                   { value: 'DOK_KEPEMILIKAN_ASET', label: 'Dokumen kepemilikan aset' },
@@ -577,7 +652,7 @@ export default function EddForm({
                   label="Sebutkan dokumen lainnya"
                   value={d.dokumen_sumber_kekayaan_lainnya}
                   onChange={(v) => set('dokumen_sumber_kekayaan_lainnya', v)}
-                  disabled={disabled}
+                  disabled={frontDisabled}
                 />
               )}
             </div>
@@ -592,7 +667,7 @@ export default function EddForm({
             type="checkbox"
             checked={d.bertindak_untuk_pihak_lain}
             onChange={(e) => set('bertindak_untuk_pihak_lain', e.target.checked)}
-            disabled={disabled}
+            disabled={complianceDisabled}
             className="h-4 w-4 rounded border-slate-300 accent-kesh-700"
           />
           <span className="font-medium text-slate-700">Pengguna jasa bertindak untuk pihak lain (ada Beneficial Owner)</span>
@@ -601,23 +676,23 @@ export default function EddForm({
         {d.bertindak_untuk_pihak_lain && (
           <div className="space-y-4 pl-6 border-l-2 border-slate-200">
             <div className="grid gap-3 sm:grid-cols-2">
-              <TextField label="Nama Beneficial Owner" value={d.nama_bo} onChange={(v) => set('nama_bo', v)} disabled={disabled} />
-              <TextField label="Hubungan dengan Pengguna Jasa" value={d.hubungan_bo} onChange={(v) => set('hubungan_bo', v)} disabled={disabled} />
-              <TextField label="Nomor Identitas BO" value={d.nomor_identitas_bo} onChange={(v) => set('nomor_identitas_bo', v)} disabled={disabled} />
-              <TextField label="Alamat BO" value={d.alamat_bo} onChange={(v) => set('alamat_bo', v)} disabled={disabled} />
+              <TextField label="Nama Beneficial Owner" value={d.nama_bo} onChange={(v) => set('nama_bo', v)} disabled={complianceDisabled} />
+              <TextField label="Hubungan dengan Pengguna Jasa" value={d.hubungan_bo} onChange={(v) => set('hubungan_bo', v)} disabled={complianceDisabled} />
+              <TextField label="Nomor Identitas BO" value={d.nomor_identitas_bo} onChange={(v) => set('nomor_identitas_bo', v)} disabled={complianceDisabled} />
+              <TextField label="Alamat BO" value={d.alamat_bo} onChange={(v) => set('alamat_bo', v)} disabled={complianceDisabled} />
             </div>
             <TextAreaField
               label="Sumber Dana & Kekayaan BO"
               value={d.sumber_dana_kekayaan_bo}
               onChange={(v) => set('sumber_dana_kekayaan_bo', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               rows={2}
             />
             <CheckGroup
               label="Dokumen Pendukung BO"
               selected={d.dokumen_bo}
               onChange={(v) => set('dokumen_bo', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               options={[
                 { value: 'IDENTITAS_BO', label: 'Dokumen identitas BO' },
                 { value: 'NPWP_BO', label: 'NPWP BO (jika tersedia)' },
@@ -637,7 +712,7 @@ export default function EddForm({
               label="1. Konsistensi Data CDD & EDD"
               value={d.konsistensi_data}
               onChange={(v) => set('konsistensi_data', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               options={[
                 { value: 'KONSISTEN', label: 'Konsisten' },
                 { value: 'TIDAK_KONSISTEN', label: 'Tidak konsisten' },
@@ -648,7 +723,7 @@ export default function EddForm({
                 label="Penjelasan ketidakkonsistenan"
                 value={d.penjelasan_konsistensi}
                 onChange={(v) => set('penjelasan_konsistensi', v)}
-                disabled={disabled}
+                disabled={complianceDisabled}
                 rows={2}
               />
             )}
@@ -659,7 +734,7 @@ export default function EddForm({
               label="2. Kewajaran Transaksi terhadap Profil Pengguna Jasa"
               value={d.kewajaran_transaksi}
               onChange={(v) => set('kewajaran_transaksi', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               options={[
                 { value: 'WAJAR', label: 'Wajar' },
                 { value: 'TIDAK_WAJAR', label: 'Tidak wajar' },
@@ -669,7 +744,7 @@ export default function EddForm({
               label="Catatan"
               value={d.catatan_kewajaran}
               onChange={(v) => set('catatan_kewajaran', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               rows={2}
             />
           </div>
@@ -679,7 +754,7 @@ export default function EddForm({
               label="3. Evaluasi Pekerjaan / Sumber Dana / Kekayaan"
               value={d.evaluasi_sumber_dana}
               onChange={(v) => set('evaluasi_sumber_dana', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               options={[
                 { value: 'MEMADAI', label: 'Memadai' },
                 { value: 'TIDAK_MEMADAI', label: 'Tidak memadai' },
@@ -689,7 +764,7 @@ export default function EddForm({
               label="Penjelasan"
               value={d.penjelasan_evaluasi}
               onChange={(v) => set('penjelasan_evaluasi', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               rows={2}
             />
           </div>
@@ -699,7 +774,7 @@ export default function EddForm({
               label="4. Risiko Geografis"
               value={d.risiko_geografis}
               onChange={(v) => set('risiko_geografis', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               options={[
                 { value: 'RENDAH', label: 'Rendah' },
                 { value: 'MENENGAH', label: 'Menengah' },
@@ -710,7 +785,7 @@ export default function EddForm({
               label="5. Risiko Produk / Layanan"
               value={d.risiko_produk}
               onChange={(v) => set('risiko_produk', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               options={[
                 { value: 'RENDAH', label: 'Rendah' },
                 { value: 'MENENGAH', label: 'Menengah' },
@@ -721,7 +796,7 @@ export default function EddForm({
               label="6. Rangkuman Risiko Keseluruhan"
               value={d.rangkuman_risiko}
               onChange={(v) => set('rangkuman_risiko', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               options={[
                 { value: 'LOW', label: 'Low' },
                 { value: 'MEDIUM', label: 'Medium' },
@@ -734,7 +809,7 @@ export default function EddForm({
             label="7. Rekomendasi Tindak Lanjut"
             selected={d.rekomendasi_tindak_lanjut}
             onChange={(v) => set('rekomendasi_tindak_lanjut', v)}
-            disabled={disabled}
+            disabled={complianceDisabled}
             options={[
               { value: 'LANJUTKAN', label: 'Melanjutkan hubungan usaha / transaksi' },
               { value: 'DOKUMEN_TAMBAHAN', label: 'Meminta dokumen tambahan' },
@@ -756,7 +831,7 @@ export default function EddForm({
               label="Keputusan"
               value={d.keputusan_kepatuhan}
               onChange={(v) => set('keputusan_kepatuhan', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               options={[
                 { value: 'DISETUJUI', label: 'Disetujui' },
                 { value: 'DITOLAK', label: 'Ditolak' },
@@ -768,12 +843,12 @@ export default function EddForm({
               label="Alasan Keputusan"
               value={d.alasan_keputusan_kepatuhan}
               onChange={(v) => set('alasan_keputusan_kepatuhan', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               rows={2}
             />
             <div className="grid gap-3 sm:grid-cols-2">
-              <TextField label="Nama Pejabat Unit Kepatuhan" value={d.nama_pejabat_kepatuhan} onChange={(v) => set('nama_pejabat_kepatuhan', v)} disabled={disabled} />
-              <DateField label="Tanggal" value={d.tanggal_kepatuhan} onChange={(v) => set('tanggal_kepatuhan', v)} disabled={disabled} />
+              <TextField label="Nama Pejabat Unit Kepatuhan" value={d.nama_pejabat_kepatuhan} onChange={(v) => set('nama_pejabat_kepatuhan', v)} disabled={complianceDisabled} />
+              <DateField label="Tanggal" value={d.tanggal_kepatuhan} onChange={(v) => set('tanggal_kepatuhan', v)} disabled={complianceDisabled} />
             </div>
           </div>
 
@@ -783,7 +858,7 @@ export default function EddForm({
               label="Keputusan"
               value={d.keputusan_direktur}
               onChange={(v) => set('keputusan_direktur', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               options={[
                 { value: 'DISETUJUI', label: 'Disetujui' },
                 { value: 'DITOLAK', label: 'Ditolak' },
@@ -795,12 +870,12 @@ export default function EddForm({
               label="Alasan Keputusan"
               value={d.alasan_keputusan_direktur}
               onChange={(v) => set('alasan_keputusan_direktur', v)}
-              disabled={disabled}
+              disabled={complianceDisabled}
               rows={2}
             />
             <div className="grid gap-3 sm:grid-cols-2">
-              <TextField label="Nama Direktur" value={d.nama_direktur} onChange={(v) => set('nama_direktur', v)} disabled={disabled} />
-              <DateField label="Tanggal" value={d.tanggal_direktur} onChange={(v) => set('tanggal_direktur', v)} disabled={disabled} />
+              <TextField label="Nama Direktur" value={d.nama_direktur} onChange={(v) => set('nama_direktur', v)} disabled={complianceDisabled} />
+              <DateField label="Tanggal" value={d.tanggal_direktur} onChange={(v) => set('tanggal_direktur', v)} disabled={complianceDisabled} />
             </div>
           </div>
         </div>
@@ -811,7 +886,7 @@ export default function EddForm({
         <CheckGroup
           selected={d.checklist_kelengkapan}
           onChange={(v) => set('checklist_kelengkapan', v)}
-          disabled={disabled}
+          disabled={complianceDisabled}
           options={[
             { value: 'FORM_CDD', label: 'Form CDD terisi lengkap' },
             { value: 'FORM_CDD_TAMBAHAN', label: 'Form CDD tambahan (jika ada)' },
@@ -827,11 +902,11 @@ export default function EddForm({
       </AccSection>
 
       {/* Action buttons */}
-      {canEdit && (
+      {canSaveDraft && (
         <div className="flex flex-wrap items-center gap-3 pt-2">
           <button
             type="button"
-            onClick={() => onSaveDraft(d)}
+            onClick={handleSaveDraft}
             disabled={saving}
             className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-50 transition-colors"
           >
@@ -839,8 +914,8 @@ export default function EddForm({
           </button>
           <button
             type="button"
-            onClick={() => onComplete(d)}
-            disabled={saving || eddCompleted}
+            onClick={handleComplete}
+            disabled={saving || eddCompleted || !canCompleteEdd}
             className="rounded-md bg-kesh-700 px-4 py-2 text-sm font-medium text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
           >
             {eddCompleted ? 'EDD Sudah Lengkap' : saving ? 'Menyimpan…' : 'Simpan & Lengkapi EDD'}

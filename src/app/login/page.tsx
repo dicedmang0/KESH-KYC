@@ -86,6 +86,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
+              suppressHydrationWarning
               disabled={loading}
               className="w-full rounded-lg bg-kesh-700 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-kesh-600 disabled:opacity-60"
             >

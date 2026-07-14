@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/app/providers";
 import { apiFetch } from "@/lib/api";
 import BusinessWizard from "@/components/business-wizard";
+import LainnyaField from "@/components/lainnya-field";
+import { isLainnya } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -82,14 +84,19 @@ function NewApplicationPageInner() {
 
   // ── Pekerjaan ─────────────────────────────────────────────────────────────
   const [i_occupation, setIOccupation] = useState("");
+  const [i_occupation_other, setIOccupationOther] = useState("");
   const [i_industry, setIIndustry] = useState("");
+  const [i_industry_other, setIIndustryOther] = useState("");
   const [i_company_name, setICompanyName] = useState("");
   const [i_company_address, setICompanyAddress] = useState("");
   const [i_income_range, setIIncomeRange] = useState("");
 
   // ── RBA CDD fields ────────────────────────────────────────────────────────
   const [i_source_of_funds, setISourceOfFunds] = useState("");
+  const [i_source_of_funds_other, setISourceOfFundsOther] = useState("");
   const [i_business_rel_purpose, setIBusinessRelPurpose] = useState("");
+  const [i_business_rel_purpose_other, setIBusinessRelPurposeOther] =
+    useState("");
   const [i_distribution_channel, setIDistChannel] = useState("");
 
   // ── Reference data ────────────────────────────────────────────────────────
@@ -235,6 +242,32 @@ function NewApplicationPageInner() {
     } else {
       setIPassportErr("");
     }
+
+    // "Lainnya" companions — required when the related dropdown is "Lainnya".
+    const lainnyaChecks: Array<[boolean, string]> = [
+      [
+        isLainnya(i_occupation) && !i_occupation_other.trim(),
+        "Keterangan Pekerjaan Lainnya wajib diisi.",
+      ],
+      [
+        isLainnya(i_industry) && !i_industry_other.trim(),
+        "Keterangan Industri Lainnya wajib diisi.",
+      ],
+      [
+        isLainnya(i_source_of_funds) && !i_source_of_funds_other.trim(),
+        "Keterangan Sumber Dana Lainnya wajib diisi.",
+      ],
+      [
+        isLainnya(i_business_rel_purpose) && !i_business_rel_purpose_other.trim(),
+        "Keterangan Tujuan Hubungan Bisnis Lainnya wajib diisi.",
+      ],
+    ];
+    for (const [invalid, message] of lainnyaChecks) {
+      if (invalid) {
+        toast.error(message);
+        ok = false;
+      }
+    }
     return ok;
   }
 
@@ -297,6 +330,9 @@ function NewApplicationPageInner() {
             email: i_email || null,
             gender: i_gender,
             occupation: i_occupation || null,
+            occupation_other: isLainnya(i_occupation)
+              ? i_occupation_other || null
+              : null,
             province_code: i_province_code || null,
             city_code: i_city_code || null,
             district_code: i_district_code || null,
@@ -307,11 +343,20 @@ function NewApplicationPageInner() {
             apartment_block: i_apartment || null,
             address_landmark: i_landmark || null,
             industry_category: i_industry || null,
+            industry_category_other: isLainnya(i_industry)
+              ? i_industry_other || null
+              : null,
             company_name: i_company_name || null,
             company_address: i_company_address || null,
             monthly_income_range: i_income_range || null,
             source_of_funds: i_source_of_funds || null,
+            source_of_funds_other: isLainnya(i_source_of_funds)
+              ? i_source_of_funds_other || null
+              : null,
             business_relationship_purpose: i_business_rel_purpose || null,
+            business_relationship_purpose_other: isLainnya(i_business_rel_purpose)
+              ? i_business_rel_purpose_other || null
+              : null,
             distribution_channel: i_distribution_channel || null,
             signature_uri: null,
             cif_relationship_type: i_cif_relationship_type,
@@ -959,7 +1004,11 @@ function NewApplicationPageInner() {
                         <select
                           className="rounded-md border bg-white px-3 py-2 text-sm"
                           value={i_occupation}
-                          onChange={(e) => setIOccupation(e.target.value)}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setIOccupation(v);
+                            if (!isLainnya(v)) setIOccupationOther("");
+                          }}
                         >
                           <option value="">— Pilih pekerjaan —</option>
                           {occupations.map((o) => (
@@ -976,6 +1025,12 @@ function NewApplicationPageInner() {
                               </option>
                             )}
                         </select>
+                        <LainnyaField
+                          when={i_occupation}
+                          value={i_occupation_other}
+                          onChange={setIOccupationOther}
+                          label="Keterangan Pekerjaan Lainnya"
+                        />
                       </div>
                       <div className="grid gap-1">
                         <label className="text-sm font-medium">
@@ -984,7 +1039,11 @@ function NewApplicationPageInner() {
                         <select
                           className="rounded-md border bg-white px-3 py-2 text-sm"
                           value={i_industry}
-                          onChange={(e) => setIIndustry(e.target.value)}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setIIndustry(v);
+                            if (!isLainnya(v)) setIIndustryOther("");
+                          }}
                         >
                           <option value="">— Pilih industri —</option>
                           {industryCategories.map((c) => (
@@ -993,6 +1052,12 @@ function NewApplicationPageInner() {
                             </option>
                           ))}
                         </select>
+                        <LainnyaField
+                          when={i_industry}
+                          value={i_industry_other}
+                          onChange={setIIndustryOther}
+                          label="Keterangan Industri Lainnya"
+                        />
                       </div>
                       <div className="grid gap-1">
                         <label className="text-sm font-medium">
@@ -1059,7 +1124,11 @@ function NewApplicationPageInner() {
                         <select
                           className="rounded-md border bg-white px-3 py-2 text-sm"
                           value={i_source_of_funds}
-                          onChange={(e) => setISourceOfFunds(e.target.value)}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setISourceOfFunds(v);
+                            if (!isLainnya(v)) setISourceOfFundsOther("");
+                          }}
                         >
                           <option value="">— Pilih —</option>
                           {sofList.map((s) => (
@@ -1068,6 +1137,12 @@ function NewApplicationPageInner() {
                             </option>
                           ))}
                         </select>
+                        <LainnyaField
+                          when={i_source_of_funds}
+                          value={i_source_of_funds_other}
+                          onChange={setISourceOfFundsOther}
+                          label="Keterangan Sumber Dana Lainnya"
+                        />
                       </div>
                       <div className="grid gap-1">
                         <label className="text-sm font-medium">
@@ -1076,9 +1151,11 @@ function NewApplicationPageInner() {
                         <select
                           className="rounded-md border bg-white px-3 py-2 text-sm"
                           value={i_business_rel_purpose}
-                          onChange={(e) =>
-                            setIBusinessRelPurpose(e.target.value)
-                          }
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setIBusinessRelPurpose(v);
+                            if (!isLainnya(v)) setIBusinessRelPurposeOther("");
+                          }}
                         >
                           <option value="">— Pilih —</option>
                           {brpList.map((p) => (
@@ -1087,6 +1164,12 @@ function NewApplicationPageInner() {
                             </option>
                           ))}
                         </select>
+                        <LainnyaField
+                          when={i_business_rel_purpose}
+                          value={i_business_rel_purpose_other}
+                          onChange={setIBusinessRelPurposeOther}
+                          label="Keterangan Tujuan Hubungan Bisnis Lainnya"
+                        />
                       </div>
                       <div className="grid gap-1">
                         <label className="text-sm font-medium">

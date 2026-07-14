@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, apiUpload } from "@/lib/api";
 import { toast } from "@/lib/toast";
-import { formatCif } from "@/lib/utils";
+import { formatCif, isLainnya } from "@/lib/utils";
+import LainnyaField from "@/components/lainnya-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -139,6 +140,7 @@ export default function BusinessWizard() {
   // ----- STEP 1: Identitas Badan Usaha + PIC -----
   const [legal_name, setLegalName] = useState("");
   const [legal_form, setLegalForm] = useState("PT");
+  const [legal_form_other, setLegalFormOther] = useState("");
   const [deed_number, setDeedNumber] = useState("");
   const [incorporation_place, setIncorpPlace] = useState("Indonesia");
   const [incorporation_date, setIncorpDate] = useState("");
@@ -146,10 +148,15 @@ export default function BusinessWizard() {
   const [izin_usaha, setIzinUsaha] = useState("");
   const [npwp, setNpwp] = useState("");
   const [address_line, setAddr] = useState("");
+  // Alamat Kedudukan — dropdown provinsi/kota (mirror Individual CDD). city/province
+  // menyimpan nama terpilih untuk kolom teks wajib di backend.
   const [city, setCity] = useState("");
   const [province, setProvince] = useState("");
+  const [business_province_code, setBizProvinceCode] = useState("");
+  const [business_city_code, setBizCityCode] = useState("");
   const [postal_code, setPostal] = useState("");
   const [business_activity, setBizAct] = useState("");
+  const [business_activity_other, setBizActOther] = useState("");
   const [industry_code, setKbli] = useState("");
   const [phone, setPhone] = useState("");
   const [company_email, setCompanyEmail] = useState("");
@@ -159,9 +166,18 @@ export default function BusinessWizard() {
   const [pic_identity_number, setPicIdNumber] = useState("");
   const [pic_identity_type, setPicIdType] = useState<"KTP" | "PASPOR">("KTP");
 
+  // Field-level validation messages (Step 1)
+  const [npwpErr, setNpwpErr] = useState("");
+  const [deedErr, setDeedErr] = useState("");
+  const [picIdErr, setPicIdErr] = useState("");
+
+  const isPT = legal_form === "PT";
+
   // RBA CDD fields
   const [cdd_sof, setCddSof] = useState("");
+  const [cdd_sof_other, setCddSofOther] = useState("");
   const [cdd_brp, setCddBrp] = useState("");
+  const [cdd_brp_other, setCddBrpOther] = useState("");
   const [cdd_dist, setCddDist] = useState("");
 
   // RBA reference lists
@@ -171,6 +187,11 @@ export default function BusinessWizard() {
   const [rbaBrpList, setRbaBrpList] = useState<{ code: string; name: string }[]>([]);
   const [rbaDistList, setRbaDistList] = useState<{ code: string; name: string }[]>([]);
 
+  // Alamat Kedudukan reference lists (province/city dropdown, mirror Individual CDD)
+  const [provinces, setProvinces] = useState<{ code: string; name: string }[]>([]);
+  const [regencies, setRegencies] = useState<{ code: string; name: string }[]>([]);
+  const [regenciesLoading, setRegenciesLoading] = useState(false);
+
   useEffect(() => {
     Promise.all([
       apiFetch<unknown>("/references/rba/business-forms"),
@@ -178,23 +199,81 @@ export default function BusinessWizard() {
       apiFetch<unknown>("/references/rba/source-of-funds"),
       apiFetch<unknown>("/references/rba/business-purposes"),
       apiFetch<unknown>("/references/rba/distributions"),
-    ]).then(([bf, ind, sof, bp, dist]) => {
+      apiFetch<unknown>("/references/provinces"),
+    ]).then(([bf, ind, sof, bp, dist, prov]) => {
       setRbaBusinessForms(toRefList(bf));
       setRbaIndustries(toRefList(ind));
       setRbaSofList(toRefList(sof));
       setRbaBrpList(toRefList(bp));
       setRbaDistList(toRefList(dist));
+      setProvinces(toRefList(prov));
     }).catch(() => {});
   }, []);
+
+  // Cascade: load regencies when province changes
+  useEffect(() => {
+    if (!business_province_code) {
+      setRegencies([]);
+      return;
+    }
+    setRegenciesLoading(true);
+    apiFetch<unknown>(
+      `/references/regencies?province_code=${encodeURIComponent(business_province_code)}`,
+    )
+      .then((r) => setRegencies(toRefList(r)))
+      .catch(() => setRegencies([]))
+      .finally(() => setRegenciesLoading(false));
+  }, [business_province_code]);
+
+  function validateCompany(): boolean {
+    let ok = true;
+    // B.5 NPWP Badan Usaha — wajib 15 digit angka.
+    if (!/^\d{15}$/.test(npwp)) {
+      setNpwpErr("NPWP Badan Usaha wajib 15 digit angka.");
+      ok = false;
+    } else {
+      setNpwpErr("");
+    }
+    // B.1 Nomor Akta Pendirian — wajib hanya untuk badan usaha PT.
+    if (isPT && !deed_number.trim()) {
+      setDeedErr("Nomor Akta Pendirian wajib diisi untuk badan usaha PT.");
+      ok = false;
+    } else {
+      setDeedErr("");
+    }
+    // B.2 Nomor Identitas PIC — maksimal 16 karakter.
+    if (pic_identity_number.length > 16) {
+      setPicIdErr("Maksimal 16 karakter.");
+      ok = false;
+    } else {
+      setPicIdErr("");
+    }
+    // A. "Lainnya" companions — wajib diisi saat dropdown bernilai "Lainnya".
+    const lainnyaChecks: Array<[boolean, string]> = [
+      [isLainnya(legal_form) && !legal_form_other.trim(), "Keterangan Bentuk Badan Usaha Lainnya wajib diisi."],
+      [isLainnya(business_activity) && !business_activity_other.trim(), "Keterangan Bidang Usaha Lainnya wajib diisi."],
+      [isLainnya(cdd_sof) && !cdd_sof_other.trim(), "Keterangan Sumber Dana Lainnya wajib diisi."],
+      [isLainnya(cdd_brp) && !cdd_brp_other.trim(), "Keterangan Tujuan Hubungan Bisnis Lainnya wajib diisi."],
+    ];
+    for (const [invalid, message] of lainnyaChecks) {
+      if (invalid) {
+        toast.error(message);
+        ok = false;
+      }
+    }
+    return ok;
+  }
 
   async function saveCompany() {
     setErrCompany(null);
     setSubmitOK(null);
+    if (!validateCompany()) return;
     setSaving(true);
     try {
       const body = {
         legal_name,
         legal_form,
+        legal_form_other: isLainnya(legal_form) ? legal_form_other || null : null,
         deed_number: deed_number || null,
         incorporation_place,
         incorporation_date,
@@ -202,10 +281,17 @@ export default function BusinessWizard() {
         business_license_number: izin_usaha || null,
         npwp,
         address_line,
+        // Kolom teks wajib backend diisi dari nama dropdown terpilih.
         city,
         province,
+        // Alamat Kedudukan — dropdown provinsi/kota (mirror Individual CDD).
+        business_province_code: business_province_code || null,
+        business_province_name: province || null,
+        business_city_code: business_city_code || null,
+        business_city_name: city || null,
         postal_code,
         business_activity,
+        business_activity_other: isLainnya(business_activity) ? business_activity_other || null : null,
         industry_code: industry_code || null,
         phone,
         company_email: company_email || null,
@@ -214,7 +300,9 @@ export default function BusinessWizard() {
         pic_identity_number: pic_identity_number || null,
         pic_identity_type: pic_identity_type || null,
         source_of_funds: cdd_sof || null,
+        source_of_funds_other: isLainnya(cdd_sof) ? cdd_sof_other || null : null,
         business_relationship_purpose: cdd_brp || null,
+        business_relationship_purpose_other: isLainnya(cdd_brp) ? cdd_brp_other || null : null,
         distribution_channel: cdd_dist || null,
       };
       const res = await apiFetch<{ id: number; status: AppStatus }>(
@@ -285,6 +373,11 @@ export default function BusinessWizard() {
 
   async function addParty() {
     if (!appId) return;
+    if (p_id_number.length > 16) {
+      setErrParties("Nomor Identitas maksimal 16 karakter.");
+      toast.error("Nomor Identitas maksimal 16 karakter.");
+      return;
+    }
     setErrParties(null);
     setSaving(true);
     try {
@@ -493,12 +586,16 @@ export default function BusinessWizard() {
                   onChange={(e) => setLegalName(e.target.value)}
                 />
               </label>
-              <label className="grid gap-1">
+              <div className="grid gap-1">
                 <span className="text-sm font-medium">Bentuk Badan Usaha *</span>
                 <select
                   className="rounded-md border px-3 py-2 text-sm"
                   value={legal_form}
-                  onChange={(e) => setLegalForm(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setLegalForm(v);
+                    if (!isLainnya(v)) setLegalFormOther("");
+                  }}
                 >
                   <option value="">— Pilih —</option>
                   {rbaBusinessForms.length > 0
@@ -510,19 +607,30 @@ export default function BusinessWizard() {
                       ))
                   }
                 </select>
-              </label>
+                <LainnyaField
+                  when={legal_form}
+                  value={legal_form_other}
+                  onChange={setLegalFormOther}
+                  label="Keterangan Bentuk Badan Usaha Lainnya"
+                />
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
               <label className="grid gap-1 md:col-span-2">
                 <span className="text-sm font-medium">
                   Nomor Akta Pendirian &amp; Perubahan Terakhir
+                  {isPT && <span className="text-red-500"> *</span>}
                 </span>
                 <input
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className={`rounded-md border px-3 py-2 text-sm${deedErr ? " border-red-400" : ""}`}
                   value={deed_number}
-                  onChange={(e) => setDeedNumber(e.target.value)}
+                  onChange={(e) => {
+                    setDeedNumber(e.target.value);
+                    setDeedErr("");
+                  }}
                 />
+                {deedErr && <p className="text-xs text-red-600">{deedErr}</p>}
               </label>
               <label className="grid gap-1">
                 <span className="text-sm font-medium">Tanggal Pendirian *</span>
@@ -553,12 +661,19 @@ export default function BusinessWizard() {
                 />
               </label>
               <label className="grid gap-1">
-                <span className="text-sm font-medium">NPWP *</span>
+                <span className="text-sm font-medium">NPWP Badan Usaha *</span>
                 <input
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className={`rounded-md border px-3 py-2 text-sm${npwpErr ? " border-red-400" : ""}`}
                   value={npwp}
-                  onChange={(e) => setNpwp(e.target.value)}
+                  onChange={(e) => {
+                    setNpwp(e.target.value.replace(/\D/g, ""));
+                    setNpwpErr("");
+                  }}
+                  maxLength={15}
+                  inputMode="numeric"
+                  placeholder="15 digit angka"
                 />
+                {npwpErr && <p className="text-xs text-red-600">{npwpErr}</p>}
               </label>
             </div>
 
@@ -571,12 +686,16 @@ export default function BusinessWizard() {
                   onChange={(e) => setKbli(e.target.value)}
                 />
               </label>
-              <label className="grid gap-1 md:col-span-2">
+              <div className="grid gap-1 md:col-span-2">
                 <span className="text-sm font-medium">Bidang Usaha *</span>
                 <select
                   className="rounded-md border px-3 py-2 text-sm"
                   value={business_activity}
-                  onChange={(e) => setBizAct(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBizAct(v);
+                    if (!isLainnya(v)) setBizActOther("");
+                  }}
                 >
                   <option value="">— Pilih bidang usaha —</option>
                   {rbaIndustries.map((i) => (
@@ -586,7 +705,13 @@ export default function BusinessWizard() {
                     <option value={business_activity}>{business_activity}</option>
                   )}
                 </select>
-              </label>
+                <LainnyaField
+                  when={business_activity}
+                  value={business_activity_other}
+                  onChange={setBizActOther}
+                  label="Keterangan Bidang Usaha Lainnya"
+                />
+              </div>
             </div>
 
             <label className="grid gap-1">
@@ -601,20 +726,49 @@ export default function BusinessWizard() {
 
             <div className="grid gap-4 md:grid-cols-3">
               <label className="grid gap-1">
-                <span className="text-sm font-medium">Kota *</span>
-                <input
-                  className="rounded-md border px-3 py-2 text-sm"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                />
+                <span className="text-sm font-medium">Provinsi *</span>
+                <select
+                  className="rounded-md border bg-white px-3 py-2 text-sm"
+                  value={business_province_code}
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    setBizProvinceCode(code);
+                    setProvince(provinces.find((p) => p.code === code)?.name || "");
+                    setBizCityCode("");
+                    setCity("");
+                  }}
+                >
+                  <option value="">— Pilih Provinsi —</option>
+                  {provinces.map((p) => (
+                    <option key={p.code} value={p.code}>{p.name}</option>
+                  ))}
+                </select>
               </label>
               <label className="grid gap-1">
-                <span className="text-sm font-medium">Provinsi *</span>
-                <input
-                  className="rounded-md border px-3 py-2 text-sm"
-                  value={province}
-                  onChange={(e) => setProvince(e.target.value)}
-                />
+                <span className="text-sm font-medium">Kota / Kabupaten *</span>
+                <select
+                  className="rounded-md border bg-white px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                  value={business_city_code}
+                  disabled={!business_province_code || regenciesLoading}
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    setBizCityCode(code);
+                    setCity(regencies.find((r) => r.code === code)?.name || "");
+                  }}
+                >
+                  {regenciesLoading ? (
+                    <option disabled>Memuat...</option>
+                  ) : business_province_code && regencies.length === 0 ? (
+                    <option disabled>Data kota/kabupaten belum tersedia untuk provinsi ini.</option>
+                  ) : (
+                    <>
+                      <option value="">— Pilih Kota/Kabupaten —</option>
+                      {regencies.map((r) => (
+                        <option key={r.code} value={r.code}>{r.name}</option>
+                      ))}
+                    </>
+                  )}
+                </select>
               </label>
               <label className="grid gap-1">
                 <span className="text-sm font-medium">Kode Pos *</span>
@@ -669,10 +823,19 @@ export default function BusinessWizard() {
                 <label className="grid gap-1">
                   <span className="text-sm font-medium">Nomor Identitas</span>
                   <input
-                    className="rounded-md border px-3 py-2 text-sm"
+                    className={`rounded-md border px-3 py-2 text-sm${picIdErr ? " border-red-400" : ""}`}
                     value={pic_identity_number}
-                    onChange={(e) => setPicIdNumber(e.target.value)}
+                    onChange={(e) => {
+                      setPicIdNumber(e.target.value);
+                      setPicIdErr("");
+                    }}
+                    maxLength={16}
                   />
+                  {picIdErr ? (
+                    <p className="text-xs text-red-600">{picIdErr}</p>
+                  ) : (
+                    <p className="text-xs text-slate-400">Maksimal 16 karakter.</p>
+                  )}
                 </label>
                 <label className="grid gap-1">
                   <span className="text-sm font-medium">Jenis Identitas</span>
@@ -693,32 +856,52 @@ export default function BusinessWizard() {
               <p className="mb-1 text-sm font-semibold text-slate-700">Informasi Hubungan Bisnis (RBA)</p>
               <p className="mb-3 text-xs text-slate-500">Pilihan ini digunakan untuk perhitungan Risk Based Approach sesuai SOP.</p>
               <div className="grid gap-4 md:grid-cols-3">
-                <label className="grid gap-1">
+                <div className="grid gap-1">
                   <span className="text-sm font-medium">Sumber Dana</span>
                   <select
                     className="rounded-md border px-3 py-2 text-sm"
                     value={cdd_sof}
-                    onChange={(e) => setCddSof(e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCddSof(v);
+                      if (!isLainnya(v)) setCddSofOther("");
+                    }}
                   >
                     <option value="">— Pilih —</option>
                     {rbaSofList.map((s) => (
                       <option key={s.code} value={s.code}>{s.name}</option>
                     ))}
                   </select>
-                </label>
-                <label className="grid gap-1">
+                  <LainnyaField
+                    when={cdd_sof}
+                    value={cdd_sof_other}
+                    onChange={setCddSofOther}
+                    label="Keterangan Sumber Dana Lainnya"
+                  />
+                </div>
+                <div className="grid gap-1">
                   <span className="text-sm font-medium">Tujuan Hubungan Bisnis</span>
                   <select
                     className="rounded-md border px-3 py-2 text-sm"
                     value={cdd_brp}
-                    onChange={(e) => setCddBrp(e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCddBrp(v);
+                      if (!isLainnya(v)) setCddBrpOther("");
+                    }}
                   >
                     <option value="">— Pilih —</option>
                     {rbaBrpList.map((p) => (
                       <option key={p.code} value={p.code}>{p.name}</option>
                     ))}
                   </select>
-                </label>
+                  <LainnyaField
+                    when={cdd_brp}
+                    value={cdd_brp_other}
+                    onChange={setCddBrpOther}
+                    label="Keterangan Tujuan Hubungan Bisnis Lainnya"
+                  />
+                </div>
                 <label className="grid gap-1">
                   <span className="text-sm font-medium">Saluran Distribusi</span>
                   <select
@@ -810,7 +993,9 @@ export default function BusinessWizard() {
                       className="rounded-md border px-3 py-2 text-sm"
                       value={p_id_number}
                       onChange={(e) => setPIdNumber(e.target.value)}
+                      maxLength={16}
                     />
+                    <span className="text-xs text-slate-400">Maksimal 16 karakter.</span>
                   </label>
                   <label className="grid gap-1">
                     <span className="text-sm font-medium">Tgl Lahir</span>
