@@ -182,7 +182,7 @@ export default function BusinessWizard() {
 
   // RBA reference lists
   const [rbaBusinessForms, setRbaBusinessForms] = useState<{ code: string; name: string }[]>([]);
-  const [rbaIndustries, setRbaIndustries] = useState<{ code: string; name: string }[]>([]);
+  const [industryCategories, setIndustryCategories] = useState<{ code: string; name: string }[]>([]);
   const [rbaSofList, setRbaSofList] = useState<{ code: string; name: string }[]>([]);
   const [rbaBrpList, setRbaBrpList] = useState<{ code: string; name: string }[]>([]);
   const [rbaDistList, setRbaDistList] = useState<{ code: string; name: string }[]>([]);
@@ -195,14 +195,14 @@ export default function BusinessWizard() {
   useEffect(() => {
     Promise.all([
       apiFetch<unknown>("/references/rba/business-forms"),
-      apiFetch<unknown>("/references/rba/industries"),
+      apiFetch<unknown>("/references/industry-categories"),
       apiFetch<unknown>("/references/rba/source-of-funds"),
       apiFetch<unknown>("/references/rba/business-purposes"),
       apiFetch<unknown>("/references/rba/distributions"),
       apiFetch<unknown>("/references/provinces"),
     ]).then(([bf, ind, sof, bp, dist, prov]) => {
       setRbaBusinessForms(toRefList(bf));
-      setRbaIndustries(toRefList(ind));
+      setIndustryCategories(toRefList(ind));
       setRbaSofList(toRefList(sof));
       setRbaBrpList(toRefList(bp));
       setRbaDistList(toRefList(dist));
@@ -698,10 +698,10 @@ export default function BusinessWizard() {
                   }}
                 >
                   <option value="">— Pilih bidang usaha —</option>
-                  {rbaIndustries.map((i) => (
+                  {industryCategories.map((i) => (
                     <option key={i.code} value={i.name}>{i.name}</option>
                   ))}
-                  {business_activity && !rbaIndustries.find((i) => i.name === business_activity) && (
+                  {business_activity && !industryCategories.find((i) => i.name === business_activity) && (
                     <option value={business_activity}>{business_activity}</option>
                   )}
                 </select>
@@ -710,6 +710,7 @@ export default function BusinessWizard() {
                   value={business_activity_other}
                   onChange={setBizActOther}
                   label="Keterangan Bidang Usaha Lainnya"
+                  placeholder="Tuliskan bidang usaha lainnya"
                 />
               </div>
             </div>

@@ -9,7 +9,7 @@ import LainnyaField from '@/components/lainnya-field';
 import EddForm, { DEFAULT_EDD, type EddFormData } from '@/components/EddForm';
 import WebcamCapture from '@/components/WebcamCapture';
 
-type Status = 'DRAFT' | 'SUBMITTED' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED';
+type Status = 'DRAFT' | 'SUBMITTED' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'REVISION_REQUIRED';
 
 type ApplicationDetail = {
   id: number | string;
@@ -19,6 +19,9 @@ type ApplicationDetail = {
   submitted_at?: string | null;
   edd_required?: boolean | null;
   edd_completed?: boolean | null;
+  revision_reason?: string | null;
+  revision_requested_by?: string | null;
+  revision_requested_at?: string | null;
 };
 
 type Person = {
@@ -307,6 +310,7 @@ const STATUS_COLOR: Record<Status, string> = {
   IN_REVIEW: 'bg-blue-100 text-blue-700',
   APPROVED: 'bg-emerald-100 text-emerald-700',
   REJECTED: 'bg-red-100 text-red-700',
+  REVISION_REQUIRED: 'bg-orange-100 text-orange-700',
 };
 
 function Row({ label, value }: { label: string; value?: string | null }) {
@@ -859,7 +863,7 @@ export default function UserDetailPage() {
     Promise.all([
       apiFetch<unknown>('/references/provinces'),
       apiFetch<unknown>('/references/nationalities'),
-      apiFetch<unknown>('/references/rba/industries'),
+      apiFetch<unknown>('/references/industry-categories'),
       apiFetch<unknown>('/references/monthly-income-ranges'),
       apiFetch<unknown>('/references/rba/occupations'),
       apiFetch<unknown>('/references/rba/source-of-funds'),
@@ -964,7 +968,7 @@ export default function UserDetailPage() {
     setActionLoading(true);
     try {
       await apiFetch(`/applications/${id}/submit`, { method: 'PATCH' });
-      toast.success('Aplikasi berhasil disubmit.');
+      toast.success(app?.status === 'REVISION_REQUIRED' ? 'Aplikasi berhasil diajukan ulang.' : 'Aplikasi berhasil disubmit.');
       await load();
     } catch (e: unknown) {
       toast.error(getErrMsg(e, 'Gagal submit aplikasi. Silakan coba lagi.'));
@@ -991,7 +995,7 @@ export default function UserDetailPage() {
     try {
       await apiFetch(`/applications/${id}/decision`, {
         method: 'PATCH',
-        body: { decision: 'APPROVED' },
+        body: { action: 'APPROVED' },
       });
       toast.success('Aplikasi berhasil disetujui.');
       await load();
@@ -1005,16 +1009,16 @@ export default function UserDetailPage() {
   async function reject() {
     if (!id) return;
     if (!rejectReason.trim()) {
-      toast.error('Alasan penolakan wajib diisi.');
+      toast.error('Alasan perbaikan wajib diisi.');
       return;
     }
     setActionLoading(true);
     try {
       await apiFetch(`/applications/${id}/decision`, {
         method: 'PATCH',
-        body: { decision: 'REJECTED', reason: rejectReason.trim() },
+        body: { action: 'REJECTED', revision_reason: rejectReason.trim() },
       });
-      toast.success('Aplikasi berhasil ditolak.');
+      toast.success('Aplikasi dikembalikan untuk perbaikan.');
       setShowRejectInput(false);
       setRejectReason('');
       await load();
@@ -1286,7 +1290,7 @@ export default function UserDetailPage() {
   if (err) return <p className="p-6 text-sm text-red-600">{err}</p>;
   if (!app) return <p className="p-6 text-sm text-slate-500">Data tidak ditemukan.</p>;
 
-  const canSubmit = app.status === 'DRAFT';
+  const canSubmit = app.status === 'DRAFT' || app.status === 'REVISION_REQUIRED';
   const canDecide = app.status === 'SUBMITTED' || app.status === 'IN_REVIEW';
 
   const displayName = app.type === 'INDIVIDUAL' ? person?.full_name : business?.legal_name;
@@ -1352,7 +1356,7 @@ export default function UserDetailPage() {
           <p className="text-xs text-slate-400 mt-0.5">Aplikasi #{app.id ?? id}</p>
           <div className="mt-1 flex items-center gap-2">
             <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[app.status] ?? 'bg-slate-100 text-slate-700'}`}>
-              {{ DRAFT: 'Draft', SUBMITTED: 'Diajukan', IN_REVIEW: 'Dalam Review', APPROVED: 'Disetujui', REJECTED: 'Ditolak' }[app.status] ?? app.status}
+              {{ DRAFT: 'Draft', SUBMITTED: 'Diajukan', IN_REVIEW: 'Dalam Review', APPROVED: 'Disetujui', REJECTED: 'Ditolak', REVISION_REQUIRED: 'Perlu Perbaikan' }[app.status] ?? app.status}
             </span>
             <span className="text-xs text-slate-500">{{ INDIVIDUAL: 'Individu', BUSINESS: 'Perusahaan' }[app.type] ?? app.type}</span>
           </div>
@@ -1361,6 +1365,24 @@ export default function UserDetailPage() {
           Kembali
         </button>
       </div>
+
+      {/* Revision banner */}
+      {app.status === 'REVISION_REQUIRED' && (
+        <div className="rounded-md border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800 space-y-1">
+          <p className="font-semibold">Aplikasi dikembalikan untuk perbaikan data.</p>
+          {app.revision_reason && (
+            <p>Alasan: <span className="font-medium">{app.revision_reason}</span></p>
+          )}
+          {app.revision_requested_by && (
+            <p className="text-xs text-orange-700">Dikembalikan oleh: {app.revision_requested_by}</p>
+          )}
+          {app.revision_requested_at && (
+            <p className="text-xs text-orange-700">
+              Tanggal: {new Date(app.revision_requested_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* EDD banner */}
       {eddRequired && !eddCompleted && (
@@ -1394,7 +1416,7 @@ export default function UserDetailPage() {
               disabled={actionLoading}
               className="rounded-lg bg-kesh-700 px-4 py-2 text-sm font-medium text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
             >
-              Ajukan
+              {app.status === 'REVISION_REQUIRED' ? 'Ajukan Ulang' : 'Ajukan'}
             </button>
           )}
 
@@ -1410,9 +1432,9 @@ export default function UserDetailPage() {
               <button
                 onClick={() => setShowRejectInput(true)}
                 disabled={actionLoading}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
               >
-                Tolak…
+                Kembalikan untuk Revisi…
               </button>
             </>
           )}
@@ -1439,20 +1461,20 @@ export default function UserDetailPage() {
         {showRejectInput && (
           <div className="flex flex-wrap gap-2 items-end">
             <div className="flex-1 min-w-[220px]">
-              <label className="text-xs text-slate-500">Alasan penolakan *</label>
+              <label className="text-xs text-slate-500">Alasan Perbaikan *</label>
               <input
                 className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Tuliskan alasan penolakan..."
+                placeholder="Tuliskan alasan yang perlu diperbaiki..."
               />
             </div>
             <button
               onClick={reject}
               disabled={actionLoading}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
             >
-              Konfirmasi Penolakan
+              Kembalikan
             </button>
             <button
               onClick={() => { setShowRejectInput(false); setRejectReason(''); }}
@@ -1883,6 +1905,7 @@ export default function UserDetailPage() {
                     value={cddIndustryOther}
                     onChange={setCddIndustryOther}
                     label="Keterangan Industri Lainnya"
+                    placeholder="Tuliskan bidang usaha lainnya"
                     labelClassName="text-xs text-slate-500"
                     inputClassName="rounded-md border px-2 py-1.5 text-sm"
                   />

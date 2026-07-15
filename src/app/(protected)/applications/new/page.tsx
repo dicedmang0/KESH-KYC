@@ -121,7 +121,7 @@ function NewApplicationPageInner() {
     Promise.all([
       apiFetch<unknown>("/references/provinces"),
       apiFetch<unknown>("/references/nationalities"),
-      apiFetch<unknown>("/references/rba/industries"),
+      apiFetch<unknown>("/references/industry-categories"),
       apiFetch<unknown>("/references/monthly-income-ranges"),
       apiFetch<unknown>("/references/rba/occupations"),
       apiFetch<unknown>("/references/rba/source-of-funds"),
@@ -1057,6 +1057,7 @@ function NewApplicationPageInner() {
                           value={i_industry_other}
                           onChange={setIIndustryOther}
                           label="Keterangan Industri Lainnya"
+                          placeholder="Tuliskan bidang usaha lainnya"
                         />
                       </div>
                       <div className="grid gap-1">

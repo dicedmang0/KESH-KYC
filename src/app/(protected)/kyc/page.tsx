@@ -23,7 +23,7 @@ import { Pagination } from "@/components/pagination";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type AppType = "INDIVIDUAL" | "BUSINESS";
-type Status = "DRAFT" | "SUBMITTED" | "IN_REVIEW" | "APPROVED" | "REJECTED";
+type Status = "DRAFT" | "SUBMITTED" | "IN_REVIEW" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
 
 type Item = {
   id: number | string;
@@ -46,7 +46,7 @@ type ApiRes = {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const STATUS_OPTIONS: (Status | "ALL")[] = [
-  "ALL", "DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED", "REJECTED",
+  "ALL", "DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED", "REJECTED", "REVISION_REQUIRED",
 ];
 
 const STATUS_LABELS: Record<Status | "ALL", string> = {
@@ -56,6 +56,7 @@ const STATUS_LABELS: Record<Status | "ALL", string> = {
   IN_REVIEW: "Dalam Review",
   APPROVED: "Disetujui",
   REJECTED: "Ditolak",
+  REVISION_REQUIRED: "Perlu Perbaikan",
 };
 
 const STATUS_DISPLAY: Record<Status, string> = {
@@ -64,6 +65,7 @@ const STATUS_DISPLAY: Record<Status, string> = {
   IN_REVIEW: "Dalam Review",
   APPROVED: "Disetujui",
   REJECTED: "Ditolak",
+  REVISION_REQUIRED: "Perlu Perbaikan",
 };
 
 const APP_TYPE_LABELS: Record<AppType, string> = {
@@ -80,6 +82,7 @@ function StatusBadge({ s }: { s: Status }) {
     IN_REVIEW: "bg-blue-100 text-blue-700",
     APPROVED: "bg-emerald-100 text-emerald-700",
     REJECTED: "bg-red-100 text-red-700",
+    REVISION_REQUIRED: "bg-orange-100 text-orange-700",
   };
   return (
     <Badge className={`border-0 text-xs font-medium ${colorMap[s]}`}>
