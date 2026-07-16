@@ -341,6 +341,11 @@ export default function BusinessWizard() {
 
   const isOwnerRole = p_role === "SHAREHOLDER" || p_role === "BO";
 
+  // Porsi saham pengurus utama (entity-level, opsional 0–100).
+  const [directorSharePct, setDirectorSharePct] = useState("");
+  const [commissionerSharePct, setCommissionerSharePct] = useState("");
+  const [shareErr, setShareErr] = useState("");
+
   const [canContinue, setCanContinue] = useState(false);
 
   function recomputeParties(rows: PartyRow[]) {
@@ -420,6 +425,46 @@ export default function BusinessWizard() {
     } catch (e: unknown) {
       setErrParties(e instanceof Error ? e.message : "Gagal menghapus pihak");
     }
+  }
+
+  // Validate optional share portions: empty allowed, otherwise numeric 0–100.
+  function validateShares(): boolean {
+    const check = (v: string) => {
+      if (v.trim() === "") return true;
+      const n = Number(v);
+      return !Number.isNaN(n) && n >= 0 && n <= 100;
+    };
+    if (!check(directorSharePct) || !check(commissionerSharePct)) {
+      setShareErr("Porsi saham harus berupa angka antara 0 dan 100.");
+      return false;
+    }
+    setShareErr("");
+    return true;
+  }
+
+  // Persist the entity-level share portions, then advance to Step 3.
+  async function saveSharesThenNext() {
+    if (!validateShares()) return;
+    if (appId) {
+      setSaving(true);
+      try {
+        await apiFetch(`/applications/${appId}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            director_share_percentage: directorSharePct.trim() === "" ? null : Number(directorSharePct),
+            commissioner_share_percentage: commissionerSharePct.trim() === "" ? null : Number(commissionerSharePct),
+          }),
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Gagal menyimpan porsi saham";
+        setErrParties(msg);
+        toast.error(msg);
+        setSaving(false);
+        return;
+      }
+      setSaving(false);
+    }
+    setStep(3);
   }
 
   useEffect(() => {
@@ -1169,6 +1214,49 @@ export default function BusinessWizard() {
               </Table>
             </div>
 
+            {/* Porsi saham pengurus utama (opsional) */}
+            <div className="rounded-xl border p-4 space-y-3">
+              <p className="text-sm font-semibold text-slate-700">Porsi Saham Pengurus Utama</p>
+              <p className="text-xs text-slate-500">
+                Opsional, isi jika direktur/komisaris memiliki porsi saham.
+              </p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="grid gap-1">
+                  <span className="text-sm font-medium">Porsi Saham Direktur Utama (%)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    className={`rounded-md border px-3 py-2 text-sm${shareErr ? " border-red-400" : ""}`}
+                    value={directorSharePct}
+                    onChange={(e) => {
+                      setDirectorSharePct(e.target.value);
+                      setShareErr("");
+                    }}
+                    placeholder="0 - 100"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-sm font-medium">Porsi Saham Komisaris (%)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    className={`rounded-md border px-3 py-2 text-sm${shareErr ? " border-red-400" : ""}`}
+                    value={commissionerSharePct}
+                    onChange={(e) => {
+                      setCommissionerSharePct(e.target.value);
+                      setShareErr("");
+                    }}
+                    placeholder="0 - 100"
+                  />
+                </label>
+              </div>
+              {shareErr && <p className="text-xs text-red-600">{shareErr}</p>}
+            </div>
+
             <div className="flex justify-between">
               <button
                 type="button"
@@ -1179,12 +1267,12 @@ export default function BusinessWizard() {
               </button>
               <button
                 type="button"
-                onClick={() => setStep(3)}
-                disabled={!canContinue}
+                onClick={saveSharesThenNext}
+                disabled={!canContinue || saving}
                 title={!canContinue ? "Tambahkan minimal 1 Pengurus/BO/PIC" : ""}
                 className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               >
-                Lanjut
+                {saving ? "Menyimpan..." : "Lanjut"}
               </button>
             </div>
           </CardContent>

@@ -7,6 +7,8 @@ import {
   getTransfer,
   getTransferSnapPreview,
   submitTransfer,
+  submitTransferComplianceReview,
+  decideTransferComplianceReview,
   supervisorReviewTransfer,
   financeReviewTransfer,
   decideTransfer,
@@ -14,17 +16,69 @@ import {
   formatTransferAmount,
   transferReference,
   formatDateTime,
+  transferRedFlagLabel,
+  TRANSFER_RED_FLAGS,
   canSubmitTransfer,
+  canSubmitTransferComplianceReview,
+  canDecideTransferComplianceReview,
   canSupervisorReviewTransfer,
   canFinanceReviewTransfer,
   canApproveTransfer,
   canUpdateTransferResult,
   type TransferDetail,
+  type ComplianceReviewAction,
 } from '@/lib/transfers';
 import { evaluateTransfer } from '@/lib/monitoring';
 import { formatCif } from '@/lib/utils';
+import { toast } from '@/lib/toast';
 import { useAuth } from '@/app/providers';
 import { TransferStatusBadge, TransferResultBadge } from '@/components/transfer-badges';
+
+// Compliance review decisions available to ComplianceLead/Admin.
+// `notesRequired` mirrors the backend rule; APPROVE_TO_CONTINUE keeps notes optional.
+const COMPLIANCE_ACTIONS: {
+  action: ComplianceReviewAction;
+  label: string;
+  btnCls: string;
+  notesRequired: boolean;
+  successToast: string;
+}[] = [
+  {
+    action: 'APPROVE_TO_CONTINUE',
+    label: 'Setujui untuk Dilanjutkan',
+    btnCls: 'bg-emerald-600 hover:bg-emerald-700',
+    notesRequired: false,
+    successToast: 'Transaksi disetujui untuk dilanjutkan ke Operation Supervisor.',
+  },
+  {
+    action: 'REJECT',
+    label: 'Tolak Transaksi',
+    btnCls: 'bg-red-600 hover:bg-red-700',
+    notesRequired: true,
+    successToast: 'Transaksi ditolak oleh Compliance.',
+  },
+  {
+    action: 'REQUEST_ADDITIONAL_INFO',
+    label: 'Minta Informasi Tambahan',
+    btnCls: 'bg-amber-600 hover:bg-amber-700',
+    notesRequired: true,
+    successToast: 'Permintaan informasi tambahan telah dikirim.',
+  },
+  {
+    action: 'REQUEST_EDD',
+    label: 'Minta EDD / Pengkinian Data',
+    btnCls: 'bg-amber-600 hover:bg-amber-700',
+    notesRequired: true,
+    successToast: 'Permintaan EDD / pengkinian data telah dikirim.',
+  },
+  {
+    action: 'MARK_LTKM_CANDIDATE',
+    label: 'Tandai Kandidat LTKM Internal',
+    btnCls: 'bg-purple-600 hover:bg-purple-700',
+    notesRequired: true,
+    successToast: 'Transaksi ditandai sebagai kandidat LTKM internal.',
+  },
+];
 
 // ── Small presentational helpers ─────────────────────────────────────────────
 
@@ -97,6 +151,15 @@ export default function TransferDetailPage() {
   const [decisionNotes, setDecisionNotes] = useState('');
   const [rejectReason, setRejectReason] = useState('');
 
+  // compliance review — FrontDesk submit modal
+  const [complianceModalOpen, setComplianceModalOpen] = useState(false);
+  const [redFlags, setRedFlags] = useState<string[]>([]);
+  const [complianceReportNotes, setComplianceReportNotes] = useState('');
+
+  // compliance review — ComplianceLead decision panel
+  const [complianceAction, setComplianceAction] = useState<ComplianceReviewAction | null>(null);
+  const [complianceDecisionNotes, setComplianceDecisionNotes] = useState('');
+
   // result form
   const [resultForm, setResultForm] = useState({
     result: 'SUCCESS' as 'SUCCESS' | 'FAILED',
@@ -156,6 +219,72 @@ export default function TransferDetailPage() {
     try {
       await submitTransfer(id);
       router.push('/transfers');
+    } catch (e) {
+      handleActionError(e);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  function toggleRedFlag(code: string) {
+    setRedFlags((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
+    );
+  }
+
+  function openComplianceModal() {
+    setRedFlags([]);
+    setComplianceReportNotes('');
+    setActionErr('');
+    setComplianceModalOpen(true);
+  }
+
+  async function doSubmitComplianceReview() {
+    if (!id) return;
+    if (redFlags.length === 0) {
+      setActionErr('Pilih minimal satu red flag internal.');
+      return;
+    }
+    if (redFlags.includes('OTHER') && !complianceReportNotes.trim()) {
+      setActionErr('Catatan wajib diisi jika memilih "Lainnya".');
+      return;
+    }
+    setActionLoading(true);
+    setActionErr('');
+    try {
+      await submitTransferComplianceReview(id, {
+        red_flags: redFlags,
+        report_notes: complianceReportNotes.trim() || undefined,
+      });
+      setComplianceModalOpen(false);
+      toast.success('Transaksi diajukan untuk Review Compliance.');
+      await reload();
+    } catch (e) {
+      handleActionError(e);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function doComplianceDecision() {
+    if (!id || !complianceAction) return;
+    const meta = COMPLIANCE_ACTIONS.find((a) => a.action === complianceAction);
+    if (!meta) return;
+    if (meta.notesRequired && !complianceDecisionNotes.trim()) {
+      setActionErr('Catatan keputusan wajib diisi untuk aksi ini.');
+      return;
+    }
+    setActionLoading(true);
+    setActionErr('');
+    try {
+      await decideTransferComplianceReview(id, {
+        action: complianceAction,
+        decision_notes: complianceDecisionNotes.trim() || undefined,
+      });
+      setComplianceAction(null);
+      setComplianceDecisionNotes('');
+      toast.success(meta.successToast);
+      await reload();
     } catch (e) {
       handleActionError(e);
     } finally {
@@ -280,11 +409,19 @@ export default function TransferDetailPage() {
 
   // Role + status conditions for action visibility
   const canSubmit = canSubmitTransfer(role) && row?.status === 'DRAFT';
+  const canSubmitCompliance = canSubmitTransferComplianceReview(role) && row?.status === 'DRAFT';
+  const canReviewCompliance = canDecideTransferComplianceReview(role) && row?.status === 'PENDING_COMPLIANCE_REVIEW';
   const canSupervisorReview = canSupervisorReviewTransfer(role) && row?.status === 'SUBMITTED';
+  // OperationSupervisor sees a blocking note while compliance review is pending.
+  const supervisorBlockedByCompliance =
+    canSupervisorReviewTransfer(role) && row?.status === 'PENDING_COMPLIANCE_REVIEW';
   const canFinanceReview = canFinanceReviewTransfer(role) && row?.status === 'PENDING_FINANCE_STAFF_REVIEW';
   const canDecide = canApproveTransfer(role) && row?.status === 'PENDING_FINANCE_MANAGER_APPROVAL';
   const canSetResult = canUpdateTransferResult(role) && row?.status === 'COMPLETED' && row?.result !== 'SUCCESS';
-  const hasAnyAction = canSubmit || canSupervisorReview || canFinanceReview || canDecide || canSetResult;
+  // canReviewCompliance renders its own panel, so it is excluded here.
+  const hasAnyAction =
+    canSubmit || canSubmitCompliance || canSupervisorReview || canFinanceReview || canDecide || canSetResult;
+  const cr = row?.latest_compliance_review;
   const canEvaluateMonitoring = role === 'ComplianceLead' || role === 'SystemAdmin' || role === 'Director';
 
   async function doEvaluateMonitoring() {
@@ -442,6 +579,99 @@ export default function TransferDetailPage() {
             </div>
           </SectionCard>
 
+          {/* Compliance review context — visible whenever a review snapshot exists */}
+          {cr && (row?.status === 'PENDING_COMPLIANCE_REVIEW' || canReviewCompliance) && (
+            <SectionCard title="Review Compliance">
+              <div className="space-y-3">
+                <div>
+                  <div className="text-xs text-neutral-500">Red flag internal</div>
+                  {cr.red_flags && cr.red_flags.length > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {cr.red_flags.map((f) => (
+                        <span
+                          key={f}
+                          className="inline-flex items-center rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                        >
+                          {transferRedFlagLabel(f)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-neutral-400">-</div>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <Field label="Catatan Pengajuan" value={cr.report_notes} />
+                  <Field label="Diajukan Oleh" value={cr.reported_by} />
+                  <Field label="Diajukan Pada" value={formatDateTime(cr.reported_at)} />
+                  <Field label="Direview Oleh" value={cr.reviewed_by} />
+                  <Field label="Direview Pada" value={formatDateTime(cr.reviewed_at)} />
+                  <Field label="Catatan Keputusan Sebelumnya" value={cr.decision_notes} />
+                </div>
+              </div>
+            </SectionCard>
+          )}
+
+          {/* ComplianceLead decision panel */}
+          {canReviewCompliance && (
+            <SectionCard title="Keputusan Compliance">
+              <div className="flex flex-wrap gap-2">
+                {COMPLIANCE_ACTIONS.map((a) => (
+                  <button
+                    key={a.action}
+                    className={`rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50 ${a.btnCls}`}
+                    disabled={actionLoading}
+                    onClick={() => {
+                      setComplianceAction(complianceAction === a.action ? null : a.action);
+                      setComplianceDecisionNotes('');
+                      setActionErr('');
+                    }}
+                  >
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+
+              {complianceAction && (() => {
+                const meta = COMPLIANCE_ACTIONS.find((a) => a.action === complianceAction)!;
+                return (
+                  <div className="rounded-lg border p-3 space-y-2">
+                    <label className="text-xs text-muted-foreground">
+                      Catatan keputusan
+                      {meta.notesRequired ? <span className="text-red-600"> *</span> : ' (opsional)'}
+                    </label>
+                    <textarea
+                      rows={3}
+                      className={inputCls}
+                      value={complianceDecisionNotes}
+                      onChange={(e) => setComplianceDecisionNotes(e.target.value)}
+                    />
+                    <button
+                      className={`rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50 ${meta.btnCls}`}
+                      disabled={actionLoading}
+                      onClick={doComplianceDecision}
+                    >
+                      {actionLoading ? 'Menyimpan…' : `Konfirmasi: ${meta.label}`}
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {actionErr && (
+                <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+                  {actionErr}
+                </div>
+              )}
+            </SectionCard>
+          )}
+
+          {/* OperationSupervisor blocked while compliance review pending */}
+          {supervisorBlockedByCompliance && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+              Transaksi masih menunggu Review Compliance.
+            </div>
+          )}
+
           {/* Actions */}
           {hasAnyAction && (
             <SectionCard title="Aksi">
@@ -452,7 +682,16 @@ export default function TransferDetailPage() {
                     disabled={actionLoading}
                     onClick={doSubmit}
                   >
-                    Ajukan
+                    Ajukan Transaksi
+                  </button>
+                )}
+                {canSubmitCompliance && (
+                  <button
+                    className="rounded-lg border border-amber-600 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                    disabled={actionLoading}
+                    onClick={openComplianceModal}
+                  >
+                    Submit untuk Review Compliance
                   </button>
                 )}
                 {canSupervisorReview && (
@@ -501,6 +740,63 @@ export default function TransferDetailPage() {
                   </button>
                 )}
               </div>
+
+              {/* Submit compliance review modal */}
+              {canSubmitCompliance && complianceModalOpen && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50/40 p-4 space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-neutral-800">Ajukan Review Compliance</h3>
+                    <p className="text-xs text-neutral-500">
+                      Pilih red flag internal yang relevan sebelum mengajukan transaksi ke Compliance.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-neutral-600">Red flag internal</label>
+                    <div className="mt-1 grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                      {TRANSFER_RED_FLAGS.map(([code, label]) => (
+                        <label key={code} className="flex items-start gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={redFlags.includes(code)}
+                            onChange={() => toggleRedFlag(code)}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-neutral-600">
+                      Catatan review compliance
+                      {redFlags.includes('OTHER') && <span className="text-red-600"> *</span>}
+                    </label>
+                    <textarea
+                      rows={3}
+                      className={inputCls}
+                      value={complianceReportNotes}
+                      onChange={(e) => setComplianceReportNotes(e.target.value)}
+                      placeholder="Catatan internal untuk Compliance…"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      className="rounded-lg bg-amber-600 px-3 py-2 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
+                      disabled={actionLoading}
+                      onClick={doSubmitComplianceReview}
+                    >
+                      {actionLoading ? 'Menyimpan…' : 'Ajukan Review Compliance'}
+                    </button>
+                    <button
+                      className="rounded-lg border px-3 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                      disabled={actionLoading}
+                      onClick={() => { setComplianceModalOpen(false); setActionErr(''); }}
+                    >
+                      Batal
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Approve form */}
               {canDecide && panel === 'approve' && (
@@ -642,7 +938,7 @@ export default function TransferDetailPage() {
             </SectionCard>
           )}
 
-          {!hasAnyAction && (
+          {!hasAnyAction && !canReviewCompliance && !supervisorBlockedByCompliance && (
             <p className="text-xs text-slate-500 italic">
               Tampilan hanya baca — tidak ada aksi yang tersedia untuk peran atau status Anda saat ini.
             </p>

@@ -77,6 +77,7 @@ export default function TransfersPage() {
         >
           <option value="">Semua</option>
           <option value="DRAFT">Draft</option>
+          <option value="PENDING_COMPLIANCE_REVIEW">Menunggu Review Compliance</option>
           <option value="SUBMITTED">Menunggu Review Operation Supervisor</option>
           <option value="PENDING_FINANCE_STAFF_REVIEW">Menunggu Review Finance Staff</option>
           <option value="PENDING_FINANCE_MANAGER_APPROVAL">Menunggu Approval Finance Manager</option>
@@ -133,7 +134,14 @@ export default function TransfersPage() {
                 )}
               </div>
               <div className="col-span-1 font-medium">{formatTransferAmount(r)}</div>
-              <div className="col-span-1"><TransferStatusBadge status={r.status} /></div>
+              <div className="col-span-1">
+                <TransferStatusBadge status={r.status} />
+                {r.status === 'PENDING_COMPLIANCE_REVIEW' && (
+                  <div className="mt-1 inline-flex items-center rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-amber-200">
+                    Compliance Review
+                  </div>
+                )}
+              </div>
               <div className="col-span-1"><TransferResultBadge result={r.result} /></div>
               <div className="col-span-1 text-right">
                 <Link className="text-sm text-kesh-700 hover:underline font-medium" href={`/transfers/${r.id}`}>

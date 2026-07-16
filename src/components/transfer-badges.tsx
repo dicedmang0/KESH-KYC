@@ -4,6 +4,7 @@ import type { TransferResult, TransferStatus } from "@/lib/transfers";
 // Semantic colors per Transfer Recording v2 spec.
 const STATUS_STYLES: Record<TransferStatus, string> = {
   DRAFT: "bg-slate-100 text-slate-700",
+  PENDING_COMPLIANCE_REVIEW: "bg-amber-100 text-amber-800",
   SUBMITTED: "bg-amber-100 text-amber-700",
   PENDING_FINANCE_STAFF_REVIEW: "bg-orange-100 text-orange-700",
   PENDING_FINANCE_MANAGER_APPROVAL: "bg-purple-100 text-purple-700",
@@ -14,6 +15,7 @@ const STATUS_STYLES: Record<TransferStatus, string> = {
 
 const STATUS_LABELS: Record<TransferStatus, string> = {
   DRAFT: "Draft",
+  PENDING_COMPLIANCE_REVIEW: "Menunggu Review Compliance",
   SUBMITTED: "Menunggu Review Operation Supervisor",
   PENDING_FINANCE_STAFF_REVIEW: "Menunggu Review Finance Staff",
   PENDING_FINANCE_MANAGER_APPROVAL: "Menunggu Approval Finance Manager",

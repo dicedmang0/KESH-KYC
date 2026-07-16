@@ -51,10 +51,6 @@ export type EddFormData = {
   alasan_keputusan_kepatuhan: string;
   nama_pejabat_kepatuhan: string;
   tanggal_kepatuhan: string;
-  keputusan_direktur: string;
-  alasan_keputusan_direktur: string;
-  nama_direktur: string;
-  tanggal_direktur: string;
   checklist_kelengkapan: string[];
 };
 
@@ -107,10 +103,6 @@ export const DEFAULT_EDD: EddFormData = {
   alasan_keputusan_kepatuhan: '',
   nama_pejabat_kepatuhan: '',
   tanggal_kepatuhan: '',
-  keputusan_direktur: '',
-  alasan_keputusan_direktur: '',
-  nama_direktur: '',
-  tanggal_direktur: '',
   checklist_kelengkapan: [],
 };
 
@@ -216,31 +208,6 @@ function TextField({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         placeholder={placeholder}
-        className="rounded-md border px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500"
-      />
-    </div>
-  );
-}
-
-function DateField({
-  label,
-  value,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-slate-600">{label}</label>
-      <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
         className="rounded-md border px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500"
       />
     </div>
@@ -430,10 +397,13 @@ export default function EddForm({
         <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{validationError}</div>
       )}
       {role === 'FrontDesk' && (
-        <div className="rounded-md bg-blue-50 p-3 text-xs text-blue-700">Frontline hanya dapat mengisi bagian I sampai III.</div>
+        <div className="rounded-md bg-blue-50 p-3 text-xs text-blue-700">Frontline dapat mengisi bagian I sampai IV.</div>
       )}
       {role === 'ComplianceLead' && (
-        <div className="rounded-md bg-amber-50 p-3 text-xs text-amber-700">Lead Compliance mengisi bagian IV sampai VII. Bagian I sampai III hanya dapat dilihat.</div>
+        <div className="rounded-md bg-amber-50 p-3 text-xs text-amber-700">Lead Compliance mengisi bagian V sampai VII.</div>
+      )}
+      {role === 'Auditor' && (
+        <div className="rounded-md bg-slate-50 p-3 text-xs text-slate-600">Auditor hanya dapat melihat seluruh bagian EDD (baca saja).</div>
       )}
 
       {/* I. Data Dasar Pengguna Jasa */}
@@ -667,7 +637,7 @@ export default function EddForm({
             type="checkbox"
             checked={d.bertindak_untuk_pihak_lain}
             onChange={(e) => set('bertindak_untuk_pihak_lain', e.target.checked)}
-            disabled={complianceDisabled}
+            disabled={frontDisabled}
             className="h-4 w-4 rounded border-slate-300 accent-kesh-700"
           />
           <span className="font-medium text-slate-700">Pengguna jasa bertindak untuk pihak lain (ada Beneficial Owner)</span>
@@ -676,23 +646,23 @@ export default function EddForm({
         {d.bertindak_untuk_pihak_lain && (
           <div className="space-y-4 pl-6 border-l-2 border-slate-200">
             <div className="grid gap-3 sm:grid-cols-2">
-              <TextField label="Nama Beneficial Owner" value={d.nama_bo} onChange={(v) => set('nama_bo', v)} disabled={complianceDisabled} />
-              <TextField label="Hubungan dengan Pengguna Jasa" value={d.hubungan_bo} onChange={(v) => set('hubungan_bo', v)} disabled={complianceDisabled} />
-              <TextField label="Nomor Identitas BO" value={d.nomor_identitas_bo} onChange={(v) => set('nomor_identitas_bo', v)} disabled={complianceDisabled} />
-              <TextField label="Alamat BO" value={d.alamat_bo} onChange={(v) => set('alamat_bo', v)} disabled={complianceDisabled} />
+              <TextField label="Nama Beneficial Owner" value={d.nama_bo} onChange={(v) => set('nama_bo', v)} disabled={frontDisabled} />
+              <TextField label="Hubungan dengan Pengguna Jasa" value={d.hubungan_bo} onChange={(v) => set('hubungan_bo', v)} disabled={frontDisabled} />
+              <TextField label="Nomor Identitas BO" value={d.nomor_identitas_bo} onChange={(v) => set('nomor_identitas_bo', v)} disabled={frontDisabled} />
+              <TextField label="Alamat BO" value={d.alamat_bo} onChange={(v) => set('alamat_bo', v)} disabled={frontDisabled} />
             </div>
             <TextAreaField
               label="Sumber Dana & Kekayaan BO"
               value={d.sumber_dana_kekayaan_bo}
               onChange={(v) => set('sumber_dana_kekayaan_bo', v)}
-              disabled={complianceDisabled}
+              disabled={frontDisabled}
               rows={2}
             />
             <CheckGroup
               label="Dokumen Pendukung BO"
               selected={d.dokumen_bo}
               onChange={(v) => set('dokumen_bo', v)}
-              disabled={complianceDisabled}
+              disabled={frontDisabled}
               options={[
                 { value: 'IDENTITAS_BO', label: 'Dokumen identitas BO' },
                 { value: 'NPWP_BO', label: 'NPWP BO (jika tersedia)' },
@@ -848,34 +818,15 @@ export default function EddForm({
             />
             <div className="grid gap-3 sm:grid-cols-2">
               <TextField label="Nama Pejabat Unit Kepatuhan" value={d.nama_pejabat_kepatuhan} onChange={(v) => set('nama_pejabat_kepatuhan', v)} disabled={complianceDisabled} />
-              <DateField label="Tanggal" value={d.tanggal_kepatuhan} onChange={(v) => set('tanggal_kepatuhan', v)} disabled={complianceDisabled} />
-            </div>
-          </div>
-
-          <div className="space-y-3 border-t pt-4">
-            <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">B. Keputusan Direktur / Final Approval</p>
-            <SelectField
-              label="Keputusan"
-              value={d.keputusan_direktur}
-              onChange={(v) => set('keputusan_direktur', v)}
-              disabled={complianceDisabled}
-              options={[
-                { value: 'DISETUJUI', label: 'Disetujui' },
-                { value: 'DITOLAK', label: 'Ditolak' },
-                { value: 'TINDAKAN_TAMBAHAN', label: 'Perlu tindakan tambahan' },
-                { value: 'LTKM', label: 'Direkomendasikan sebagai LTKM' },
-              ]}
-            />
-            <TextAreaField
-              label="Alasan Keputusan"
-              value={d.alasan_keputusan_direktur}
-              onChange={(v) => set('alasan_keputusan_direktur', v)}
-              disabled={complianceDisabled}
-              rows={2}
-            />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <TextField label="Nama Direktur" value={d.nama_direktur} onChange={(v) => set('nama_direktur', v)} disabled={complianceDisabled} />
-              <DateField label="Tanggal" value={d.tanggal_direktur} onChange={(v) => set('tanggal_direktur', v)} disabled={complianceDisabled} />
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">Tanggal Keputusan</label>
+                {d.tanggal_kepatuhan ? (
+                  <p className="rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-700">{d.tanggal_kepatuhan}</p>
+                ) : (
+                  <p className="rounded-md border border-dashed bg-slate-50 px-3 py-2 text-sm text-slate-400">Belum ada — dibuat otomatis saat disimpan.</p>
+                )}
+                <p className="text-xs text-slate-400">Tanggal keputusan dibuat otomatis saat disimpan/diselesaikan.</p>
+              </div>
             </div>
           </div>
         </div>

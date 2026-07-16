@@ -20,6 +20,16 @@ export function canSupervisorReviewTransfer(role: string | null | undefined): bo
   return role === 'OperationSupervisor' || role === 'SystemAdmin' || role === 'Director';
 }
 
+/** FrontDesk/Admin who may escalate a DRAFT transfer into compliance review. */
+export function canSubmitTransferComplianceReview(role: string | null | undefined): boolean {
+  return role === 'FrontDesk' || role === 'SystemAdmin' || role === 'Director';
+}
+
+/** ComplianceLead/Admin who may decide a PENDING_COMPLIANCE_REVIEW transfer. */
+export function canDecideTransferComplianceReview(role: string | null | undefined): boolean {
+  return role === 'ComplianceLead' || role === 'SystemAdmin' || role === 'Director';
+}
+
 export function canFinanceReviewTransfer(role: string | null | undefined): boolean {
   return role === 'FinanceStaff' || role === 'SystemAdmin' || role === 'Director';
 }
@@ -34,6 +44,7 @@ export function canUpdateTransferResult(role: string | null | undefined): boolea
 
 export type TransferStatus =
   | "DRAFT"
+  | "PENDING_COMPLIANCE_REVIEW"
   | "SUBMITTED"
   | "PENDING_FINANCE_STAFF_REVIEW"
   | "PENDING_FINANCE_MANAGER_APPROVAL"
@@ -42,6 +53,50 @@ export type TransferStatus =
   | "COMPLETED";
 
 export type TransferResult = "SUCCESS" | "FAILED" | null;
+
+// ── Compliance Review (migration 0050) ───────────────────────────────────────
+
+/** Internal red-flag checklist shown when escalating to compliance review. */
+export const TRANSFER_RED_FLAGS = [
+  ["AMOUNT_NOT_MATCH_PROFILE", "Nominal tidak sesuai profil"],
+  ["PURPOSE_NOT_MATCH_PROFILE", "Tujuan transaksi tidak sesuai profil"],
+  ["UNUSUAL_FREQUENCY", "Frekuensi transaksi tidak wajar"],
+  ["UNUSUAL_VOLUME", "Volume transaksi tidak wajar"],
+  ["NEW_BENEFICIARY_HIGH_AMOUNT", "Beneficiary baru dengan nominal besar"],
+  ["STRUCTURING_PATTERN", "Pola transaksi terindikasi pecah nominal"],
+  ["RBA_HIGH", "Profil risiko tinggi"],
+  ["RBA_INCOMPLETE", "RBA belum lengkap"],
+  ["WATCHLIST_NEAR_MATCH", "Watchlist near match"],
+  ["DOCUMENT_OR_INFORMATION_UNUSUAL", "Dokumen/informasi tidak wajar"],
+  ["OTHER", "Lainnya"],
+] as const;
+
+export type TransferRedFlag = (typeof TRANSFER_RED_FLAGS)[number][0];
+
+/** Readable label for a red-flag code (falls back to the raw code). */
+export function transferRedFlagLabel(code: string): string {
+  return TRANSFER_RED_FLAGS.find(([c]) => c === code)?.[1] ?? code;
+}
+
+export type ComplianceReviewAction =
+  | "APPROVE_TO_CONTINUE"
+  | "REJECT"
+  | "REQUEST_ADDITIONAL_INFO"
+  | "REQUEST_EDD"
+  | "MARK_LTKM_CANDIDATE";
+
+/** Snapshot of the latest compliance review returned in transfer detail/list. */
+export type ComplianceReview = {
+  id?: number | string | null;
+  status?: string | null;
+  red_flags?: string[] | null;
+  report_notes?: string | null;
+  reported_by?: number | string | null;
+  reported_at?: string | null;
+  reviewed_by?: number | string | null;
+  reviewed_at?: string | null;
+  decision_notes?: string | null;
+};
 
 /**
  * Curated row returned by the list endpoint (GET /transfers).
@@ -67,6 +122,8 @@ export type TransferListRow = {
   beneficiary_bank_name: string;
   status: TransferStatus;
   result: TransferResult;
+  compliance_review_status?: string | null;
+  latest_compliance_review?: ComplianceReview | null;
   created_at: string;
   submitted_at: string | null;
   approved_at: string | null;
@@ -181,6 +238,16 @@ export type TransferReviewBody = {
 
 export type DecideTransferBody = TransferReviewBody;
 
+export type SubmitComplianceReviewBody = {
+  red_flags: string[];
+  report_notes?: string;
+};
+
+export type DecideComplianceReviewBody = {
+  action: ComplianceReviewAction;
+  decision_notes?: string;
+};
+
 export type SetTransferResultBody = {
   result: "SUCCESS" | "FAILED";
   result_notes?: string;
@@ -283,6 +350,28 @@ export function createTransfer(body: CreateTransferBody) {
 
 export function submitTransfer(id: number | string) {
   return apiFetch<TransferDetail>(`/transfers/${id}/submit`, { method: "POST" });
+}
+
+/** POST /transfers/:id/submit-compliance-review — escalate a DRAFT into compliance review. */
+export function submitTransferComplianceReview(
+  id: number | string,
+  body: SubmitComplianceReviewBody,
+) {
+  return apiFetch<TransferDetail>(`/transfers/${id}/submit-compliance-review`, {
+    method: "POST",
+    body,
+  });
+}
+
+/** POST /transfers/:id/compliance-review — ComplianceLead decision on a review. */
+export function decideTransferComplianceReview(
+  id: number | string,
+  body: DecideComplianceReviewBody,
+) {
+  return apiFetch<TransferDetail>(`/transfers/${id}/compliance-review`, {
+    method: "POST",
+    body,
+  });
 }
 
 function toActionPayload(body: TransferReviewBody = { action: "APPROVE" }) {
