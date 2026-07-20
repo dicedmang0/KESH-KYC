@@ -60,8 +60,8 @@ export default function Sidebar() {
     ComplianceLead:      ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring', '/reports'],
     OperationSupervisor: ['/dashboard', '/kyc', '/transfers'],
     FrontDesk:           ['/dashboard', '/users', '/kyc', '/transfers', '/complaints'],
-    FinanceStaff:        ['/dashboard', '/transfers', '/reports'],
-    FinanceManager:      ['/dashboard', '/transfers', '/reports'],
+    FinanceStaff:        ['/dashboard', '/transfers'],
+    FinanceManager:      ['/dashboard', '/transfers'],
     Auditor:             ['/dashboard', '/kyc', '/complaints', '/monitoring', '/reports'],
     ComplianceStaff:     ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring'],
   };
