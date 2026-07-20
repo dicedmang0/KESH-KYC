@@ -34,6 +34,8 @@ type Item = {
   cif_no?: string | null;
   display_name: string | null;
   display_type?: string | null;
+  rba_score_v01?: number | null;
+  risk_level?: string | null;
 };
 
 type ApiRes = {
@@ -89,6 +91,27 @@ function StatusBadge({ s }: { s: Status }) {
       {STATUS_DISPLAY[s]}
     </Badge>
   );
+}
+
+function fmtRbaScore(v?: number | null): string {
+  return v == null ? "—" : `${Number(v.toFixed(2))}`;
+}
+
+function riskScoreClass(riskLevel?: string | null): string {
+  switch ((riskLevel ?? "").toUpperCase()) {
+    case "LOW":
+    case "RENDAH":
+      return "bg-emerald-100 text-emerald-700";
+    case "MEDIUM":
+    case "MENENGAH":
+      return "bg-amber-100 text-amber-700";
+    case "HIGH":
+    case "TINGGI":
+    case "PROHIBITED":
+      return "bg-red-100 text-red-700";
+    default:
+      return "bg-slate-100 text-slate-600";
+  }
 }
 
 const EMPTY_API: ApiRes = { data: [], total: 0, page: 1, limit: 20 };
@@ -279,6 +302,7 @@ function KycPageInner() {
                     <TableHead>Nama Pengguna Jasa</TableHead>
                     <TableHead>Jenis Pengguna</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Risk Score</TableHead>
                     <TableHead>Tanggal Dibuat</TableHead>
                     <TableHead>Detail</TableHead>
                   </TableRow>
@@ -299,6 +323,11 @@ function KycPageInner() {
                       </TableCell>
                       <TableCell>
                         <StatusBadge s={row.status} />
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={`border-0 text-xs font-medium ${riskScoreClass(row.risk_level)}`}>
+                          {fmtRbaScore(row.rba_score_v01)}
+                        </Badge>
                       </TableCell>
                       <TableCell>{fmtDate(row.created_at)}</TableCell>
                       <TableCell>
