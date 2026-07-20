@@ -1113,7 +1113,7 @@ export default function UserDetailPage() {
     try {
       await apiFetch(`/applications/${id}/decision`, {
         method: 'PATCH',
-        body: { action: 'APPROVED' },
+        body: { decision: 'APPROVED' },
       });
       toast.success('Aplikasi berhasil disetujui.');
       await load();
@@ -1134,7 +1134,7 @@ export default function UserDetailPage() {
     try {
       await apiFetch(`/applications/${id}/decision`, {
         method: 'PATCH',
-        body: { action: 'REJECTED', revision_reason: rejectReason.trim() },
+        body: { decision: 'RETURN_FOR_REVISION', reason: rejectReason.trim() },
       });
       toast.success('Aplikasi dikembalikan untuk perbaikan.');
       setShowRejectInput(false);
