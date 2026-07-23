@@ -48,7 +48,7 @@ function PriorityBadge({ priority }: { priority?: string | null }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const ALLOWED_ROLES = new Set(['SystemAdmin', 'ComplianceLead', 'FrontDesk', 'Auditor', 'FinanceManager']);
+const ALLOWED_ROLES = new Set(['SystemAdmin', 'Director', 'FrontDesk', 'OperationSupervisor', 'Auditor', 'FinanceManager']);
 
 export default function ComplaintsPage() {
   const { token } = useAuth();

@@ -1445,8 +1445,13 @@ export default function UserDetailPage() {
   if (err) return <p className="p-6 text-sm text-red-600">{err}</p>;
   if (!app) return <p className="p-6 text-sm text-slate-500">Data tidak ditemukan.</p>;
 
-  const canSubmit = app.status === 'DRAFT' || app.status === 'REVISION_REQUIRED';
+  // Read-only roles (FinanceStaff/FinanceManager can view Manajemen Pengguna Jasa;
+  // Auditor is read-only) never see edit/upload/submit/party affordances.
+  const canWrite = !['FinanceStaff', 'FinanceManager', 'Auditor'].includes(userRole ?? '');
+  const canSubmit = canWrite && (app.status === 'DRAFT' || app.status === 'REVISION_REQUIRED');
   const canDecide = app.status === 'SUBMITTED' || app.status === 'IN_REVIEW';
+  // OperationSupervisor may view parties but cannot add/delete them.
+  const canManageParties = canSubmit && userRole !== 'OperationSupervisor';
 
   const displayName = app.type === 'INDIVIDUAL' ? person?.full_name : business?.legal_name;
 
@@ -1557,13 +1562,15 @@ export default function UserDetailPage() {
 
         {/* Button group — all actions in one unified row */}
         <div className="flex flex-wrap gap-3">
-          <button
-            onClick={runPrecheck}
-            disabled={actionLoading}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-          >
-            Pra-Pemeriksaan
-          </button>
+          {canWrite && (
+            <button
+              onClick={runPrecheck}
+              disabled={actionLoading}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            >
+              Pra-Pemeriksaan
+            </button>
+          )}
 
           {canSubmit && (
             <button
@@ -2700,7 +2707,7 @@ export default function UserDetailPage() {
         <div className="rounded-xl border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Pihak Terkait</p>
-            {canSubmit && (
+            {canManageParties && (
               <button
                 type="button"
                 onClick={() => setPartyOpen((v) => !v)}
@@ -2712,7 +2719,7 @@ export default function UserDetailPage() {
           </div>
 
           {/* Add party form — DRAFT only */}
-          {canSubmit && partyOpen && (
+          {canManageParties && partyOpen && (
             <form onSubmit={addParty} className="rounded-lg border bg-slate-50 p-3 space-y-3">
               <p className="text-xs font-semibold text-slate-700">Tambah Pihak Terkait</p>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -2826,7 +2833,7 @@ export default function UserDetailPage() {
                     <th className="py-1 pr-4">Kepemilikan</th>
                     <th className="py-1 pr-4">CIF</th>
                     <th className="py-1">Parameter CIF</th>
-                    {canSubmit && <th className="py-1" />}
+                    {canManageParties && <th className="py-1" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -2857,7 +2864,7 @@ export default function UserDetailPage() {
                       </td>
                       <td className="py-1.5 pr-4 text-slate-600">{formatCif(p.cif_no)}</td>
                       <td className="py-1.5">{getCifRelationshipLabel(p.cif_relationship_type)}</td>
-                      {canSubmit && (
+                      {canManageParties && (
                         <td className="py-1.5 text-right">
                           <button
                             onClick={() => deleteParty(p.id)}

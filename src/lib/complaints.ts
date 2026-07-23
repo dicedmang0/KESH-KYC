@@ -192,11 +192,11 @@ export function canCreateComplaint(role?: string | null): boolean {
 }
 
 export function canResolveComplaint(role?: string | null): boolean {
-  return role === 'ComplianceLead' || role === 'FinanceManager' || role === 'SystemAdmin';
+  return role === 'OperationSupervisor' || role === 'FinanceManager' || role === 'SystemAdmin' || role === 'Director';
 }
 
 export function canUpdateComplaint(role?: string | null, complaint?: Complaint | null): boolean {
-  if (role === 'ComplianceLead' || role === 'FinanceManager' || role === 'SystemAdmin') return true;
+  if (role === 'OperationSupervisor' || role === 'FinanceManager' || role === 'SystemAdmin' || role === 'Director') return true;
   if (role === 'FrontDesk') return complaint?.status === 'OPEN';
   return false;
 }

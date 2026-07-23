@@ -57,11 +57,11 @@ export default function Sidebar() {
   const ROLE_MENU: Record<string, string[]> = {
     SystemAdmin:         ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist', '/monitoring', '/reports', '/settings'],
     Director:            ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist', '/monitoring', '/reports', '/settings'],
-    ComplianceLead:      ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring', '/reports'],
-    OperationSupervisor: ['/dashboard', '/kyc', '/transfers'],
-    FrontDesk:           ['/dashboard', '/users', '/kyc', '/transfers', '/complaints'],
-    FinanceStaff:        ['/dashboard', '/transfers'],
-    FinanceManager:      ['/dashboard', '/transfers'],
+    ComplianceLead:      ['/dashboard', '/kyc', '/watchlist', '/monitoring', '/reports'],
+    OperationSupervisor: ['/dashboard', '/kyc', '/transfers', '/complaints'],
+    FrontDesk:           ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist'],
+    FinanceStaff:        ['/dashboard', '/users', '/transfers'],
+    FinanceManager:      ['/dashboard', '/users', '/transfers', '/complaints'],
     Auditor:             ['/dashboard', '/kyc', '/complaints', '/monitoring', '/reports'],
     ComplianceStaff:     ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring'],
   };
