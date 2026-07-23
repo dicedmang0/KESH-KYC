@@ -46,7 +46,7 @@ function CaseTypeBadge({ type }: { type?: string | null }) {
   );
 }
 
-function StatusBadge({ status }: { status?: string | null }) {
+function StatusBadge({ status, label }: { status?: string | null; label?: string | null }) {
   const cls =
     status === 'DETECTED'                         ? 'bg-orange-100 text-orange-700' :
     status === 'UNDER_COMPLIANCE_REVIEW'          ? 'bg-blue-100 text-blue-700' :
@@ -68,7 +68,7 @@ function StatusBadge({ status }: { status?: string | null }) {
                                                     'bg-slate-100 text-slate-500';
   return (
     <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>
-      {formatCaseStatus(status)}
+      {label || formatCaseStatus(status)}
     </span>
   );
 }
@@ -199,7 +199,7 @@ export default function MonitoringPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <SummaryCard label="Total Case" value={summary.total} loading={summaryLoading} />
-        <SummaryCard label="Menunggu Review Operation Supervisor" value={summary.staffPending} loading={summaryLoading} />
+        <SummaryCard label="Menunggu Review Compliance" value={summary.staffPending} loading={summaryLoading} />
         <SummaryCard label="Menunggu Approval Lead Compliance" value={summary.managerPending} loading={summaryLoading} />
         <SummaryCard label="Siap Lapor" value={summary.ready} loading={summaryLoading} />
         <SummaryCard label="Terlapor" value={summary.reported} loading={summaryLoading} />
@@ -280,19 +280,19 @@ export default function MonitoringPage() {
 
       {/* Table */}
       <div className="rounded-2xl border overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm min-w-[1100px]">
           <thead>
             <tr className="border-b bg-slate-50 text-left text-xs text-slate-500">
-              <th className="px-4 py-3 font-medium">No. Case</th>
-              <th className="px-3 py-3 font-medium">Tipe</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">No. Case</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">Tipe</th>
               <th className="px-3 py-3 font-medium">Nama Customer</th>
-              <th className="px-3 py-3 font-medium">CIF</th>
-              <th className="px-3 py-3 font-medium">Severity</th>
-              <th className="px-3 py-3 font-medium">Status</th>
-              <th className="px-3 py-3 font-medium">Jatuh Tempo</th>
-              <th className="px-3 py-3 font-medium">Terdeteksi</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">CIF</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">Severity</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">Status</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">Jatuh Tempo</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">Terdeteksi</th>
               <th className="px-3 py-3 font-medium">Ringkasan Trigger</th>
-              <th className="px-3 py-3 font-medium text-right">Aksi</th>
+              <th className="px-3 py-3 font-medium text-right whitespace-nowrap">Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -307,18 +307,18 @@ export default function MonitoringPage() {
             ) : (
               rows.map((c) => (
                 <tr key={c.id} className="border-t hover:bg-slate-50 transition-colors align-top">
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="font-mono text-xs font-medium text-slate-800">{c.case_no ?? `#${c.id}`}</div>
                   </td>
-                  <td className="px-3 py-3"><CaseTypeBadge type={c.case_type} /></td>
-                  <td className="px-3 py-3">
-                    <div className="font-medium text-slate-800">{c.customer_name ?? '—'}</div>
+                  <td className="px-3 py-3 whitespace-nowrap"><CaseTypeBadge type={c.case_type} /></td>
+                  <td className="px-3 py-3 min-w-[160px]">
+                    <div className="font-medium text-slate-800 break-words">{c.customer_name ?? '—'}</div>
                   </td>
-                  <td className="px-3 py-3 font-mono text-xs text-slate-600">{formatCif(c.cif_no)}</td>
-                  <td className="px-3 py-3"><SeverityBadge severity={c.severity} /></td>
-                  <td className="px-3 py-3"><StatusBadge status={c.status} /></td>
-                  <td className="px-3 py-3 text-xs text-slate-600">{formatDate(c.due_date)}</td>
-                  <td className="px-3 py-3 text-xs text-slate-600">{formatDateTime(c.detected_at)}</td>
+                  <td className="px-3 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">{formatCif(c.cif_no)}</td>
+                  <td className="px-3 py-3 whitespace-nowrap"><SeverityBadge severity={c.severity} /></td>
+                  <td className="px-3 py-3 whitespace-nowrap"><StatusBadge status={c.status} label={c.status_label} /></td>
+                  <td className="px-3 py-3 text-xs text-slate-600 whitespace-nowrap">{formatDate(c.due_date)}</td>
+                  <td className="px-3 py-3 text-xs text-slate-600 whitespace-nowrap">{formatDateTime(c.detected_at)}</td>
                   <td className="px-3 py-3 text-xs text-slate-600 max-w-xs">
                     {c.alert_names && c.alert_names.length > 0 ? (
                       <div>
@@ -331,7 +331,7 @@ export default function MonitoringPage() {
                       c.trigger_summary ?? '—'
                     )}
                   </td>
-                  <td className="px-3 py-3 text-right">
+                  <td className="px-3 py-3 text-right whitespace-nowrap">
                     <Link
                       href={`/monitoring/${c.id}`}
                       className="text-xs font-medium text-kesh-700 hover:underline whitespace-nowrap"

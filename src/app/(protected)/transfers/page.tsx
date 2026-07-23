@@ -88,13 +88,13 @@ export default function TransfersPage() {
 
       {err && <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">{err}</div>}
 
-      <div className="rounded-2xl border overflow-hidden">
-        <div className="grid grid-cols-12 gap-2 bg-muted/40 px-4 py-3 text-xs font-medium">
+      <div className="rounded-2xl border overflow-x-auto">
+        <div className="grid grid-cols-12 gap-2 bg-muted/40 px-4 py-3 text-xs font-medium min-w-[1100px]">
           <div className="col-span-2">Referensi</div>
           <div className="col-span-2">Pengirim</div>
           <div className="col-span-2">Penerima</div>
           <div className="col-span-2">Bank</div>
-          <div className="col-span-1">Nominal</div>
+          <div className="col-span-1 text-right">Nominal</div>
           <div className="col-span-1">Status</div>
           <div className="col-span-1">Hasil</div>
           <div className="col-span-1 text-right">Aksi</div>
@@ -106,12 +106,12 @@ export default function TransfersPage() {
           <div className="p-4 text-sm text-muted-foreground">Belum ada data.</div>
         ) : (
           pagedRows.map((r) => (
-            <div key={r.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm border-t items-center">
-              <div className="col-span-2">
+            <div key={r.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm border-t items-center min-w-[1100px]">
+              <div className="col-span-2 max-w-[180px]">
                 <div className="font-medium font-mono text-xs break-all">{transferReference(r)}</div>
                 <div className="text-xs text-muted-foreground">#{r.id}</div>
               </div>
-              <div className="col-span-2">
+              <div className="col-span-2 max-w-[220px] break-words">
                 <div className="font-medium">{r.sender_name ?? '—'}</div>
                 {r.sender_cif_no && (
                   <div className="text-xs text-muted-foreground font-mono">{formatCif(r.sender_cif_no)}</div>
@@ -123,18 +123,18 @@ export default function TransfersPage() {
                   <div className="text-xs text-muted-foreground">App #{r.sender_application_id}</div>
                 )}
               </div>
-              <div className="col-span-2">
+              <div className="col-span-2 max-w-[220px] break-words">
                 <div className="font-medium">{r.beneficiary_account_name}</div>
-                <div className="text-xs text-muted-foreground">{r.beneficiary_account_number}</div>
+                <div className="text-xs text-muted-foreground break-all">{r.beneficiary_account_number}</div>
               </div>
-              <div className="col-span-2">
+              <div className="col-span-2 break-words">
                 <div className="font-medium">{r.beneficiary_bank_name}</div>
                 {r.beneficiary_bank_code && (
                   <div className="text-xs text-muted-foreground">{r.beneficiary_bank_code}</div>
                 )}
               </div>
-              <div className="col-span-1 font-medium">{formatTransferAmount(r)}</div>
-              <div className="col-span-1">
+              <div className="col-span-1 font-medium whitespace-nowrap text-right">{formatTransferAmount(r)}</div>
+              <div className="col-span-1 whitespace-nowrap">
                 <TransferStatusBadge status={r.status} />
                 {r.status === 'PENDING_COMPLIANCE_REVIEW' && (
                   <div className="mt-1 inline-flex items-center rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-amber-200">
@@ -142,8 +142,8 @@ export default function TransfersPage() {
                   </div>
                 )}
               </div>
-              <div className="col-span-1"><TransferResultBadge result={r.result} /></div>
-              <div className="col-span-1 text-right">
+              <div className="col-span-1 whitespace-nowrap"><TransferResultBadge result={r.result} /></div>
+              <div className="col-span-1 text-right whitespace-nowrap">
                 <Link className="text-sm text-kesh-700 hover:underline font-medium" href={`/transfers/${r.id}`}>
                   Buka
                 </Link>

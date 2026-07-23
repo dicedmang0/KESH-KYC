@@ -69,6 +69,7 @@ export type MonitoringCase = {
   case_no?: string | null;
   case_type?: MonitoringCaseType | null;
   status?: MonitoringCaseStatus | null;
+  status_label?: string | null;
   severity?: string | null;
   customer_name?: string | null;
   cif_no?: string | null;
@@ -279,19 +280,20 @@ export function updateMonitoringReport(id: number | string, body: ReportUpdateBo
 
 // ── Display labels ────────────────────────────────────────────────────────────
 
+// Local fallback only — backend now sends `status_label`, use that first.
 export const CASE_STATUS_LABELS: Record<string, string> = {
-  DETECTED: 'Menunggu Review Operation Supervisor',
+  DETECTED: 'Menunggu Review Compliance',
   UNDER_COMPLIANCE_REVIEW: 'Review Compliance',
-  NEED_CLARIFICATION: 'Butuh Klarifikasi',
-  CLOSED_FALSE_POSITIVE: 'Ditutup / False Positive',
+  NEED_CLARIFICATION: 'Menunggu Klarifikasi Compliance',
+  CLOSED_FALSE_POSITIVE: 'Ditutup (False Positive)',
   COMPLIANCE_APPROVED: 'Disetujui Lead Compliance',
   COMPLIANCE_REJECTED: 'Ditolak Lead Compliance',
-  PENDING_COMPLIANCE_STAFF_REVIEW: 'Menunggu Review Operation Supervisor',
+  PENDING_COMPLIANCE_STAFF_REVIEW: 'Menunggu Review Compliance',
   PENDING_COMPLIANCE_MANAGER_REVIEW: 'Menunggu Approval Lead Compliance',
-  STAFF_REVIEWED: 'Sudah Review Operation Supervisor',
+  STAFF_REVIEWED: 'Sudah Direview Compliance',
   MANAGER_APPROVED: 'Disetujui Lead Compliance',
   MANAGER_REJECTED: 'Ditolak Lead Compliance',
-  READY_TO_REPORT: 'Disetujui Lead Compliance',
+  READY_TO_REPORT: 'Siap Dilaporkan',
   REPORTED: 'Sudah Dilaporkan',
   ARCHIVED: 'Diarsipkan',
   // Legacy Director statuses — mapped to Lead Compliance wording for historical data.

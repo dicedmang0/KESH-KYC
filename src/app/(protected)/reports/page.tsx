@@ -360,20 +360,20 @@ export default function ReportCenterPage() {
             <p className="py-8 text-center text-sm text-slate-500">Belum ada report.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[1100px]">
                 <thead>
                   <tr className="border-b text-left text-xs text-slate-500">
-                    <th className="px-2 py-2 font-medium">Report No</th>
-                    <th className="px-2 py-2 font-medium">Jenis Report</th>
-                    <th className="px-2 py-2 font-medium">Mode</th>
-                    <th className="px-2 py-2 font-medium">Format</th>
-                    <th className="px-2 py-2 font-medium">Status</th>
-                    <th className="px-2 py-2 font-medium">Periode</th>
-                    <th className="px-2 py-2 font-medium">Row Count</th>
-                    <th className="px-2 py-2 font-medium">File Size</th>
-                    <th className="px-2 py-2 font-medium">Generated At</th>
-                    <th className="px-2 py-2 font-medium">Completed At</th>
-                    <th className="px-2 py-2 font-medium">Aksi</th>
+                    <th className="px-2 py-2 font-medium whitespace-nowrap">Report No</th>
+                    <th className="px-2 py-2 font-medium whitespace-nowrap">Jenis Report</th>
+                    <th className="px-2 py-2 font-medium whitespace-nowrap">Mode</th>
+                    <th className="px-2 py-2 font-medium whitespace-nowrap">Format</th>
+                    <th className="px-2 py-2 font-medium whitespace-nowrap">Status</th>
+                    <th className="px-2 py-2 font-medium whitespace-nowrap">Periode</th>
+                    <th className="px-2 py-2 font-medium whitespace-nowrap">Row Count</th>
+                    <th className="px-2 py-2 font-medium whitespace-nowrap">File Size</th>
+                    <th className="px-2 py-2 font-medium whitespace-nowrap">Generated At</th>
+                    <th className="px-2 py-2 font-medium whitespace-nowrap">Completed At</th>
+                    <th className="px-2 py-2 font-medium whitespace-nowrap">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -381,19 +381,19 @@ export default function ReportCenterPage() {
                     const rows = totalRowCount(r.row_counts);
                     return (
                       <tr key={String(r.id)} className="border-b last:border-0 align-top">
-                        <td className="px-2 py-2 font-mono text-xs text-slate-600">{r.report_no ?? '—'}</td>
-                        <td className="px-2 py-2">{formatReportType(r.report_type)}</td>
-                        <td className="px-2 py-2 text-slate-600">{formatGenerationMode(r.generation_mode)}</td>
-                        <td className="px-2 py-2 text-slate-600">{r.format ?? '—'}</td>
-                        <td className="px-2 py-2"><StatusBadge s={r.status} /></td>
-                        <td className="px-2 py-2 text-xs text-slate-600">
+                        <td className="px-2 py-2 font-mono text-xs text-slate-600 whitespace-nowrap">{r.report_no ?? '—'}</td>
+                        <td className="px-2 py-2 whitespace-nowrap">{formatReportType(r.report_type)}</td>
+                        <td className="px-2 py-2 text-slate-600 whitespace-nowrap">{formatGenerationMode(r.generation_mode)}</td>
+                        <td className="px-2 py-2 text-slate-600 whitespace-nowrap">{r.format ?? '—'}</td>
+                        <td className="px-2 py-2 whitespace-nowrap"><StatusBadge s={r.status} /></td>
+                        <td className="px-2 py-2 text-xs text-slate-600 whitespace-nowrap">
                           {fmtDate(r.period_start)} – {fmtDate(r.period_end)}
                         </td>
-                        <td className="px-2 py-2 text-slate-600">{rows ?? '—'}</td>
-                        <td className="px-2 py-2 text-slate-600">{formatFileSize(r.file_size)}</td>
-                        <td className="px-2 py-2 text-xs text-slate-600">{fmtDateTime(r.generated_at)}</td>
-                        <td className="px-2 py-2 text-xs text-slate-600">{fmtDateTime(r.completed_at)}</td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-2 text-slate-600 text-right whitespace-nowrap">{rows ?? '—'}</td>
+                        <td className="px-2 py-2 text-slate-600 whitespace-nowrap">{formatFileSize(r.file_size)}</td>
+                        <td className="px-2 py-2 text-xs text-slate-600 whitespace-nowrap">{fmtDateTime(r.generated_at)}</td>
+                        <td className="px-2 py-2 text-xs text-slate-600 whitespace-nowrap">{fmtDateTime(r.completed_at)}</td>
+                        <td className="px-2 py-2 max-w-[220px]">
                           {r.status === 'COMPLETED' ? (
                             <button
                               onClick={() => onDownload(r.id)}

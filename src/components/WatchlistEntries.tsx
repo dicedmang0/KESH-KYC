@@ -211,7 +211,7 @@ export default function WatchlistEntries({ refreshKey = 0 }: { refreshKey?: numb
 
       {/* Table */}
       <div className="overflow-x-auto text-xs">
-        <table className="w-full border border-neutral-200 rounded-md">
+        <table className="w-full min-w-[1100px] border border-neutral-200 rounded-md">
           <thead className="bg-neutral-50">
             <tr>
               <th className="border px-2 py-1 text-left">Unique ID</th>

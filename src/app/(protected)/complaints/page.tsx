@@ -158,18 +158,18 @@ export default function ComplaintsPage() {
 
       {/* Table */}
       <div className="rounded-2xl border overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm min-w-[900px]">
           <thead>
             <tr className="border-b bg-slate-50 text-left text-xs text-slate-500">
-              <th className="px-4 py-3 font-medium">No. Pengaduan</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">No. Pengaduan</th>
               <th className="px-3 py-3 font-medium">Customer</th>
-              <th className="px-3 py-3 font-medium">CIF</th>
-              <th className="px-3 py-3 font-medium">No. Transaksi</th>
-              <th className="px-3 py-3 font-medium">Kategori</th>
-              <th className="px-3 py-3 font-medium">Prioritas</th>
-              <th className="px-3 py-3 font-medium">Status</th>
-              <th className="px-3 py-3 font-medium">Tanggal</th>
-              <th className="px-3 py-3 font-medium text-right">Detail</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">CIF</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">No. Transaksi</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">Kategori</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">Prioritas</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">Status</th>
+              <th className="px-3 py-3 font-medium whitespace-nowrap">Tanggal</th>
+              <th className="px-3 py-3 font-medium text-right whitespace-nowrap">Detail</th>
             </tr>
           </thead>
           <tbody>
@@ -188,33 +188,33 @@ export default function ComplaintsPage() {
             ) : (
               rows.map((c) => (
                 <tr key={c.id} className="border-t hover:bg-slate-50 transition-colors align-top">
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="font-mono text-xs font-medium text-slate-800">
                       {c.complaint_no ?? `#${c.id}`}
                     </div>
                   </td>
-                  <td className="px-3 py-3">
-                    <div className="font-medium text-slate-800">{c.customer_name ?? '—'}</div>
+                  <td className="px-3 py-3 min-w-[160px]">
+                    <div className="font-medium text-slate-800 break-words">{c.customer_name ?? '—'}</div>
                   </td>
-                  <td className="px-3 py-3 font-mono text-xs text-slate-600">
+                  <td className="px-3 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">
                     {formatCif(c.cif_no)}
                   </td>
-                  <td className="px-3 py-3 font-mono text-xs text-slate-600">
+                  <td className="px-3 py-3 font-mono text-xs text-slate-600 break-all max-w-[160px]">
                     {c.transaction_reference ?? '—'}
                   </td>
                   <td className="px-3 py-3 text-xs text-slate-600">
                     {formatComplaintCategory(c.category)}
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <PriorityBadge priority={c.priority} />
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <StatusBadge status={c.status} />
                   </td>
-                  <td className="px-3 py-3 text-xs text-slate-600">
+                  <td className="px-3 py-3 text-xs text-slate-600 whitespace-nowrap">
                     {formatDateTime(c.created_at)}
                   </td>
-                  <td className="px-3 py-3 text-right">
+                  <td className="px-3 py-3 text-right whitespace-nowrap">
                     <Link
                       href={`/complaints/${c.id}`}
                       className="text-sm font-medium text-kesh-700 hover:underline"

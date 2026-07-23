@@ -76,7 +76,7 @@ function CaseTypeBadge({ type }: { type?: string | null }) {
   return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>{formatCaseType(type)}</span>;
 }
 
-function StatusBadge({ status }: { status?: string | null }) {
+function StatusBadge({ status, label }: { status?: string | null; label?: string | null }) {
   const cls =
     status === 'DETECTED'                         ? 'bg-orange-100 text-orange-700' :
     status === 'UNDER_COMPLIANCE_REVIEW'          ? 'bg-blue-100 text-blue-700' :
@@ -96,7 +96,7 @@ function StatusBadge({ status }: { status?: string | null }) {
     status === 'REPORTED'                         ? 'bg-green-100 text-green-700' :
     status === 'ARCHIVED'                         ? 'bg-slate-100 text-slate-400' :
                                                     'bg-slate-100 text-slate-500';
-  return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>{formatCaseStatus(status)}</span>;
+  return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>{label || formatCaseStatus(status)}</span>;
 }
 
 function SystemSupportBadge({ supported }: { supported?: boolean | null }) {
@@ -389,7 +389,7 @@ export default function MonitoringDetailPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <Field label="No. Case" value={<span className="font-mono">{detail.case_no ?? `#${detail.id}`}</span>} />
           <Field label="Tipe Case" value={<CaseTypeBadge type={detail.case_type} />} />
-          <Field label="Status" value={<StatusBadge status={detail.status} />} />
+          <Field label="Status" value={<StatusBadge status={detail.status} label={detail.status_label} />} />
           <Field label="Severity" value={<SeverityBadge severity={detail.severity} />} />
           <Field label="Nama Customer" value={detail.customer_name} />
           <Field label="CIF" value={<span className="font-mono">{formatCif(detail.cif_no)}</span>} />
