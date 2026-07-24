@@ -57,7 +57,7 @@ export default function Sidebar() {
   const ROLE_MENU: Record<string, string[]> = {
     SystemAdmin:         ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist', '/monitoring', '/reports', '/settings'],
     Director:            ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist', '/monitoring', '/reports', '/settings'],
-    ComplianceLead:      ['/dashboard', '/kyc', '/watchlist', '/monitoring', '/reports'],
+    ComplianceLead:      ['/dashboard', '/kyc', '/transfers', '/watchlist', '/monitoring', '/reports'],
     OperationSupervisor: ['/dashboard', '/kyc', '/transfers', '/complaints'],
     FrontDesk:           ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist'],
     FinanceStaff:        ['/dashboard', '/users', '/transfers'],

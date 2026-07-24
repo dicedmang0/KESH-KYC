@@ -7,6 +7,7 @@ import {
   searchSenders,
   getTransferBanks,
   canCreateTransfer,
+  BENEFICIARY_RELATIONSHIP_OPTIONS,
   FALLBACK_BANKS,
   TRANSFER_MIN_AMOUNT,
   TRANSFER_MAX_AMOUNT,
@@ -53,6 +54,7 @@ export default function NewTransferPage() {
     beneficiaryBankCode: '',
     beneficiaryAccountNumber: '',
     beneficiaryAccountName: '',
+    beneficiary_relationship_to_sender: '',
     source_of_funds: '',
     transaction_purpose: '',
     description: '',
@@ -160,7 +162,8 @@ export default function NewTransferPage() {
     !acctError &&
     accountDigitsOnly &&
     !!clean(form.beneficiaryBankName) &&
-    !!clean(form.beneficiaryAccountName);
+    !!clean(form.beneficiaryAccountName) &&
+    !!clean(form.beneficiary_relationship_to_sender);
 
   async function submit() {
     if (!selectedSender) {
@@ -186,6 +189,10 @@ export default function NewTransferPage() {
     }
     if (!clean(form.beneficiaryAccountName)) {
       setErr('Nama rekening penerima wajib diisi.');
+      return;
+    }
+    if (!clean(form.beneficiary_relationship_to_sender)) {
+      setErr('Hubungan dengan Pengirim wajib dipilih.');
       return;
     }
 
@@ -215,6 +222,7 @@ export default function NewTransferPage() {
         beneficiaryBankCode: clean(form.beneficiaryBankCode),
         beneficiaryAccountNumber: form.beneficiaryAccountNumber.trim(),
         beneficiaryAccountName: form.beneficiaryAccountName.trim(),
+        beneficiary_relationship_to_sender: form.beneficiary_relationship_to_sender.trim(),
         source_of_funds: clean(form.source_of_funds),
         transaction_purpose: clean(form.transaction_purpose),
         description: clean(form.description),
@@ -270,7 +278,7 @@ export default function NewTransferPage() {
   }
 
   return (
-    <div className="p-6 max-w-2xl space-y-4">
+    <div className="max-w-2xl space-y-4">
       <div>
         <h1 className="text-xl font-semibold">Transfer Baru</h1>
         <p className="text-sm text-muted-foreground">Buat draft transfer</p>
@@ -447,6 +455,20 @@ export default function NewTransferPage() {
               onChange={(e) => setForm((s) => ({ ...s, beneficiaryAccountName: e.target.value }))}
             />
           </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-muted-foreground">Hubungan dengan Pengirim *</label>
+          <select
+            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"
+            value={form.beneficiary_relationship_to_sender}
+            onChange={(e) => setForm((s) => ({ ...s, beneficiary_relationship_to_sender: e.target.value }))}
+          >
+            <option value="">Pilih hubungan…</option>
+            {BENEFICIARY_RELATIONSHIP_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

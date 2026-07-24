@@ -457,7 +457,7 @@ export default function TransferDetailPage() {
   const inputCls = 'mt-1 w-full border rounded-lg px-3 py-2 text-sm';
 
   return (
-    <div className="p-6 max-w-4xl space-y-4">
+    <div className="max-w-4xl space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">Transfer #{row?.id ?? id}</h1>
@@ -521,6 +521,7 @@ export default function TransferDetailPage() {
               <Field label="Nomor Rekening" value={row.beneficiary_account_number} />
               <Field label="Kode Bank" value={row.beneficiary_bank_code} />
               <Field label="Nama Bank" value={row.beneficiary_bank_name} />
+              <Field label="Hubungan dengan Pengirim" value={row.beneficiary_relationship_to_sender} />
               <Field label="Alamat" value={row.beneficiary_address} />
               <Field label="Email" value={row.beneficiary_email} />
               <Field label="Domisili" value={row.beneficiary_customer_residence} />

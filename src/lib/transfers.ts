@@ -120,6 +120,7 @@ export type TransferListRow = {
   beneficiary_account_number: string;
   beneficiary_bank_code: string | null;
   beneficiary_bank_name: string;
+  beneficiary_relationship_to_sender?: string | null;
   status: TransferStatus;
   result: TransferResult;
   compliance_review_status?: string | null;
@@ -194,9 +195,22 @@ export type TransferDetail = TransferListRow & {
 
 // ── Request payloads ─────────────────────────────────────────────────────────
 
+/** "Hubungan dengan Pengirim" — dropdown options (free text also accepted by backend). */
+export const BENEFICIARY_RELATIONSHIP_OPTIONS = [
+  'Keluarga',
+  'Teman',
+  'Rekan Kerja',
+  'Karyawan',
+  'Vendor',
+  'Customer',
+  'Pemilik Usaha',
+  'Lainnya',
+] as const;
+
 export type CreateTransferBody = {
   amount: number;
   currency?: string;
+  beneficiary_relationship_to_sender: string;
   beneficiaryBankName: string;
   beneficiaryBankCode?: string;
   beneficiaryAccountNumber: string;
@@ -346,6 +360,41 @@ export function getTransferSnapPreview(id: number | string) {
 
 export function createTransfer(body: CreateTransferBody) {
   return apiFetch<TransferDetail>(`/transfers`, { method: "POST", body });
+}
+
+// ── Bulk transfer (POST /transfers/bulk) ─────────────────────────────────────
+// One item = one normal DRAFT transfer; sender is set once at batch level.
+
+export type BulkTransferItem = {
+  amount: number;
+  beneficiary_relationship_to_sender: string;
+  beneficiaryBankName: string;
+  beneficiaryBankCode?: string;
+  beneficiaryAccountNumber: string;
+  beneficiaryAccountName: string;
+  currency?: string;
+  transaction_purpose?: string;
+  source_of_funds?: string;
+  description?: string;
+};
+
+export type CreateBulkTransferBody = {
+  sender_application_id: number;
+  items: BulkTransferItem[];
+};
+
+export type BulkTransferResult = {
+  batch_id: number | string;
+  batch_no: string;
+  total_count: number;
+  total_amount: number;
+  transfers: TransferDetail[];
+};
+
+export const BULK_TRANSFER_MAX_ROWS = 20;
+
+export function createBulkTransfers(body: CreateBulkTransferBody) {
+  return apiFetch<BulkTransferResult>(`/transfers/bulk`, { method: "POST", body });
 }
 
 export function submitTransfer(id: number | string) {

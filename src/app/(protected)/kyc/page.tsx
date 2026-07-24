@@ -93,8 +93,16 @@ function StatusBadge({ s }: { s: Status }) {
   );
 }
 
-function fmtRbaScore(v?: number | null): string {
-  return v == null ? "—" : `${Number(v.toFixed(2))}`;
+// Risk Score column shows the risk LEVEL text only (LOW/MEDIUM/HIGH),
+// normalizing any localized value; numeric rba_score is not displayed.
+const RISK_LEVEL_TEXT: Record<string, string> = {
+  LOW: "LOW", RENDAH: "LOW",
+  MEDIUM: "MEDIUM", MENENGAH: "MEDIUM",
+  HIGH: "HIGH", TINGGI: "HIGH", PROHIBITED: "HIGH",
+};
+
+function riskLevelText(v?: string | null): string {
+  return RISK_LEVEL_TEXT[(v ?? "").toUpperCase()] ?? "—";
 }
 
 function riskScoreClass(riskLevel?: string | null): string {
@@ -313,7 +321,7 @@ function KycPageInner() {
                       <TableCell className="font-mono text-xs">
                         {formatCif(row.cif_no)}
                       </TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium whitespace-normal break-words min-w-[160px]">
                         {row.display_name || "—"}
                       </TableCell>
                       <TableCell className="text-slate-600">
@@ -326,7 +334,7 @@ function KycPageInner() {
                       </TableCell>
                       <TableCell>
                         <Badge className={`border-0 text-xs font-medium ${riskScoreClass(row.risk_level)}`}>
-                          {fmtRbaScore(row.rba_score_v01)}
+                          {riskLevelText(row.risk_level)}
                         </Badge>
                       </TableCell>
                       <TableCell>{fmtDate(row.created_at)}</TableCell>

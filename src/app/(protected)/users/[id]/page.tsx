@@ -8,6 +8,7 @@ import { formatCif, isLainnya } from '@/lib/utils';
 import LainnyaField from '@/components/lainnya-field';
 import EddForm, { DEFAULT_EDD, type EddFormData } from '@/components/EddForm';
 import WebcamCapture from '@/components/WebcamCapture';
+import DataReviewCard from '@/components/DataReviewCard';
 
 type Status = 'DRAFT' | 'SUBMITTED' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'REVISION_REQUIRED';
 
@@ -1501,7 +1502,7 @@ export default function UserDetailPage() {
   const showEddSection = canViewEdd && (eddRequired || Object.keys(eddData).length > 0);
 
   return (
-    <div className="space-y-5 p-6 max-w-3xl">
+    <div className="space-y-5 max-w-3xl">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -1682,6 +1683,9 @@ export default function UserDetailPage() {
       </div>
 
       {canViewRisk && <RiskScoreCard risk={risk} />}
+
+      {/* Pengkinian Data — periodic customer data review (separate from KYC/KYB approval). */}
+      <DataReviewCard appId={String(id)} role={userRole} />
 
       {/* Detail info */}
       {app.type === 'INDIVIDUAL' ? (

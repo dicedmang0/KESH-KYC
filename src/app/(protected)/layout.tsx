@@ -9,7 +9,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
       <div className="lg:pl-64">
         {/* Top bar */}
         <header className="sticky top-0 z-20 bg-white border-b border-slate-200/80 shadow-sm">
-          <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
             <div className="hidden lg:block">
               <p className="text-sm font-semibold text-slate-800 leading-tight">KESH KYC Admin</p>
               <p className="text-xs text-slate-400 leading-tight">Portal Kepatuhan Internal</p>
@@ -23,7 +23,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
         </header>
 
         <main>
-          <div className="max-w-6xl mx-auto px-4 py-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
             {children}
           </div>
         </main>

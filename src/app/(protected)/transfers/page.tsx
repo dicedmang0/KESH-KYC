@@ -51,7 +51,7 @@ export default function TransfersPage() {
   );
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">Pencatatan Transfer</h1>
@@ -59,12 +59,20 @@ export default function TransfersPage() {
         </div>
 
         {canCreateTransfer(role) && (
-          <Link
-            href="/transfers/new"
-            className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 transition-colors"
-          >
-            + Transfer Baru
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/transfers/new"
+              className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 transition-colors whitespace-nowrap"
+            >
+              + Transfer Tunggal
+            </Link>
+            <Link
+              href="/transfers/bulk"
+              className="rounded-lg border border-kesh-700 text-kesh-700 px-4 py-2 text-sm hover:bg-kesh-50 transition-colors whitespace-nowrap"
+            >
+              + Transfer Bulk
+            </Link>
+          </div>
         )}
       </div>
 
