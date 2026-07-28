@@ -28,6 +28,24 @@ export type Complaint = {
   created_at?: string | null;
   resolved_at?: string | null;
   updated_at?: string | null;
+  /**
+   * Refund statement yang tertaut — read-only. Adanya refund TIDAK mengubah
+   * status pengaduan; penutupan tetap manual.
+   */
+  statement_refunds?: ComplaintLinkedRefund[] | null;
+};
+
+export type ComplaintLinkedRefund = {
+  id: number | string;
+  refund_no: string;
+  amount?: string | number | null;
+  currency?: string | null;
+  status?: string | null;
+  statement_date?: string | null;
+  received_at?: string | null;
+  original_transfer_id?: number | string | null;
+  approved_at?: string | null;
+  credited_at?: string | null;
 };
 
 export type ComplaintCustomerSearchItem = {

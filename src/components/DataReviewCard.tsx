@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
 import {
@@ -89,7 +90,7 @@ export default function DataReviewCard({ appId, role }: { appId: string; role: s
       toast.error('Alasan wajib diisi untuk aksi ini.');
       return;
     }
-    run(() => decideDataReview(appId, decision, reason.trim() || undefined),
+    run(() => decideDataReview(appId, { decision, reason: reason.trim() || undefined }),
       decision === 'APPROVED' ? 'Pengkinian data disetujui.'
         : decision === 'REJECTED' ? 'Pengkinian data ditolak.'
         : 'Pengkinian data dikembalikan untuk perbaikan.');
@@ -99,11 +100,16 @@ export default function DataReviewCard({ appId, role }: { appId: string; role: s
     <div className="rounded-xl border p-4 space-y-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Pengkinian Data</p>
-        {data && (
-          <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-            {dataReviewStatusLabel(data.status)}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {data && (
+            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+              {dataReviewStatusLabel(data.status)}
+            </span>
+          )}
+          <Link href="/data-reviews" className="text-xs font-medium text-kesh-700 hover:underline whitespace-nowrap">
+            Buka Menu Pengkinian Data →
+          </Link>
+        </div>
       </div>
 
       {loading ? (
@@ -156,20 +162,20 @@ export default function DataReviewCard({ appId, role }: { appId: string; role: s
               <div className="flex flex-wrap gap-2">
                 {showInitiate && (
                   <button
-                    onClick={() => run(() => initiateDataReview(appId), 'Pengkinian data dimulai.')}
+                    onClick={() => run(() => initiateDataReview(appId), 'Permintaan pengkinian data dikirim ke Frontline.')}
                     disabled={busy}
                     className="rounded-lg bg-kesh-700 px-4 py-2 text-sm font-medium text-white hover:bg-kesh-600 disabled:opacity-60 transition-colors"
                   >
-                    Mulai Pengkinian Data
+                    Minta Pengkinian Data
                   </button>
                 )}
                 {showSubmit && (
                   <button
-                    onClick={() => run(() => submitDataReview(appId), 'Pengkinian data diajukan untuk review Compliance.')}
+                    onClick={() => run(() => submitDataReview(appId), 'Hasil pengkinian data diajukan untuk review Compliance.')}
                     disabled={busy}
                     className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60 transition-colors"
                   >
-                    {activeStatus === 'RETURNED_FOR_REVISION' ? 'Ajukan Ulang' : 'Ajukan untuk Review Compliance'}
+                    {activeStatus === 'RETURNED_FOR_REVISION' ? 'Ajukan Ulang Hasil Pengkinian' : 'Ajukan Hasil Pengkinian'}
                   </button>
                 )}
                 {showDecide && (

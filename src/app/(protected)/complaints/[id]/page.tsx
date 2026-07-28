@@ -7,7 +7,8 @@ import { useAuth } from '@/app/providers';
 import { getRoleFromToken } from '@/lib/api';
 import { formatCif } from '@/lib/utils';
 import { toast } from '@/lib/toast';
-import { formatDateTime } from '@/lib/monitoring';
+import { formatDateTime, formatMonitoringAmount } from '@/lib/monitoring';
+import { refundStatusLabel, refundStatusBadgeClass } from '@/lib/statement-refunds';
 import {
   getComplaint,
   updateComplaint,
@@ -263,6 +264,49 @@ export default function ComplaintDetailPage() {
             : undefined
         } />
       </Section>
+
+      {/* Refund terkait — read-only. Refund tidak menutup pengaduan. */}
+      {(complaint.statement_refunds?.length ?? 0) > 0 && (
+        <Section title="Refund Terkait">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead>
+                <tr className="border-b bg-slate-50 text-left text-xs text-slate-500">
+                  <th className="px-3 py-2 font-medium whitespace-nowrap">Refund No</th>
+                  <th className="px-3 py-2 font-medium whitespace-nowrap text-right">Nominal</th>
+                  <th className="px-3 py-2 font-medium whitespace-nowrap">Tanggal Dana Masuk</th>
+                  <th className="px-3 py-2 font-medium whitespace-nowrap">Status</th>
+                  <th className="px-3 py-2 font-medium text-right whitespace-nowrap">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {complaint.statement_refunds?.map((r) => (
+                  <tr key={String(r.id)} className="border-t">
+                    <td className="px-3 py-2 font-mono text-xs text-slate-600 whitespace-nowrap">{r.refund_no}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-slate-800">
+                      {formatMonitoringAmount(r.amount, r.currency ?? 'IDR')}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-slate-600">{formatDateTime(r.received_at)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${refundStatusBadgeClass(r.status)}`}>
+                        {refundStatusLabel(r.status)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <Link href={`/statement-refunds/${r.id}`} className="text-xs font-medium text-kesh-700 hover:underline">
+                        Detail
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-slate-400">
+            Refund yang ditemukan tidak menutup pengaduan secara otomatis — penyelesaian pengaduan tetap dilakukan manual.
+          </p>
+        </Section>
+      )}
 
       <Section title="Riwayat">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

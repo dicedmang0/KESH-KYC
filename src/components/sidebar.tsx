@@ -13,8 +13,10 @@ import {
   LogOut,
   ArrowLeftRight,
   ClipboardList,
+  CalendarClock,
   AlertTriangle,
   MessageSquare,
+  Undo2,
   X,
 } from 'lucide-react';
 import { useAuth } from '@/app/providers';
@@ -34,8 +36,10 @@ const allItems: Item[] = [
   { href: '/dashboard',  label: 'Dashboard',               icon: BarChart3      },
   { href: '/users',      label: 'Manajemen Pengguna Jasa', icon: Users          },
   { href: '/kyc',        label: 'Verifikasi KYC/KYB',      icon: ShieldCheck    },
+  { href: '/data-reviews', label: 'Pengkinian Data',        icon: CalendarClock  },
   { href: '/transfers',  label: 'Pencatatan Transfer',      icon: ArrowLeftRight },
   { href: '/complaints', label: 'Pencatatan Pengaduan',     icon: MessageSquare  },
+  { href: '/statement-refunds', label: 'Pencatatan Refund',  icon: Undo2          },
   { href: '/watchlist',  label: 'Daftar Pengawasan',        icon: ClipboardList  },
   { href: '/monitoring', label: 'Monitoring',               icon: AlertTriangle  },
   { href: '/reports',    label: 'Laporan',                  icon: FileBarChart   },
@@ -55,14 +59,14 @@ export default function Sidebar() {
   useEffect(() => { setMounted(true); }, []);
 
   const ROLE_MENU: Record<string, string[]> = {
-    SystemAdmin:         ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist', '/monitoring', '/reports', '/settings'],
-    Director:            ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist', '/monitoring', '/reports', '/settings'],
-    ComplianceLead:      ['/dashboard', '/kyc', '/transfers', '/watchlist', '/monitoring', '/reports'],
+    SystemAdmin:         ['/dashboard', '/users', '/kyc', '/data-reviews', '/transfers', '/complaints', '/statement-refunds', '/watchlist', '/monitoring', '/reports', '/settings'],
+    Director:            ['/dashboard', '/users', '/kyc', '/data-reviews', '/transfers', '/complaints', '/statement-refunds', '/watchlist', '/monitoring', '/reports', '/settings'],
+    ComplianceLead:      ['/dashboard', '/kyc', '/data-reviews', '/transfers', '/statement-refunds', '/watchlist', '/monitoring', '/reports'],
     OperationSupervisor: ['/dashboard', '/kyc', '/transfers', '/complaints'],
-    FrontDesk:           ['/dashboard', '/users', '/kyc', '/transfers', '/complaints', '/watchlist'],
-    FinanceStaff:        ['/dashboard', '/users', '/transfers'],
-    FinanceManager:      ['/dashboard', '/users', '/transfers', '/complaints'],
-    Auditor:             ['/dashboard', '/kyc', '/complaints', '/monitoring', '/reports'],
+    FrontDesk:           ['/dashboard', '/users', '/kyc', '/data-reviews', '/transfers', '/complaints', '/watchlist'],
+    FinanceStaff:        ['/dashboard', '/users', '/transfers', '/statement-refunds'],
+    FinanceManager:      ['/dashboard', '/users', '/transfers', '/complaints', '/statement-refunds'],
+    Auditor:             ['/dashboard', '/kyc', '/data-reviews', '/complaints', '/statement-refunds', '/monitoring', '/reports'],
     ComplianceStaff:     ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring'],
   };
 
