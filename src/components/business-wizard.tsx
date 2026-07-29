@@ -261,7 +261,20 @@ export default function BusinessWizard() {
         ok = false;
       }
     }
+    // Porsi saham pengurus utama (opsional 0–100) — bagian dari profil badan usaha.
+    if (!validateShares()) ok = false;
     return ok;
+  }
+
+  // Pesan ramah untuk kasus salah panggil endpoint CDD Individual (bug historis
+  // saveSharesThenNext yang memanggil PATCH /applications/:id). Endpoint itu sudah
+  // tidak dipanggil dari form ini, tapi terjemahan pesan dipertahankan sebagai jaring pengaman.
+  function friendlyBusinessError(e: unknown, fallback: string): string {
+    const msg = e instanceof Error ? e.message : fallback;
+    if (msg.includes("Update CDD hanya berlaku untuk aplikasi Individual")) {
+      return "Form KYB tidak boleh menggunakan endpoint CDD Individual. Silakan coba lagi setelah perbaikan.";
+    }
+    return msg;
   }
 
   async function saveCompany() {
@@ -304,6 +317,10 @@ export default function BusinessWizard() {
         business_relationship_purpose: cdd_brp || null,
         business_relationship_purpose_other: isLainnya(cdd_brp) ? cdd_brp_other || null : null,
         distribution_channel: cdd_dist || null,
+        // Porsi saham — hanya disetel di sini; tidak ada endpoint PATCH bisnis
+        // untuk mengubahnya setelah aplikasi dibuat.
+        director_share_percentage: directorSharePct.trim() === "" ? null : Number(directorSharePct),
+        commissioner_share_percentage: commissionerSharePct.trim() === "" ? null : Number(commissionerSharePct),
       };
       const res = await apiFetch<{ id: number; status: AppStatus }>(
         "/applications/business",
@@ -314,7 +331,7 @@ export default function BusinessWizard() {
       setAppId(id);
       setStep(2);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Gagal menyimpan informasi badan usaha";
+      const msg = friendlyBusinessError(e, "Gagal menyimpan informasi badan usaha");
       setErrCompany(msg);
       toast.error(msg);
     } finally {
@@ -440,31 +457,6 @@ export default function BusinessWizard() {
     }
     setShareErr("");
     return true;
-  }
-
-  // Persist the entity-level share portions, then advance to Step 3.
-  async function saveSharesThenNext() {
-    if (!validateShares()) return;
-    if (appId) {
-      setSaving(true);
-      try {
-        await apiFetch(`/applications/${appId}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            director_share_percentage: directorSharePct.trim() === "" ? null : Number(directorSharePct),
-            commissioner_share_percentage: commissionerSharePct.trim() === "" ? null : Number(commissionerSharePct),
-          }),
-        });
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Gagal menyimpan porsi saham";
-        setErrParties(msg);
-        toast.error(msg);
-        setSaving(false);
-        return;
-      }
-      setSaving(false);
-    }
-    setStep(3);
   }
 
   useEffect(() => {
@@ -964,6 +956,50 @@ export default function BusinessWizard() {
               </div>
             </div>
 
+            {/* Porsi saham pengurus utama (opsional) — kolom di tabel business,
+                hanya bisa disetel saat aplikasi dibuat (tidak ada endpoint PATCH bisnis). */}
+            <div className="rounded-xl border p-4 space-y-3">
+              <p className="text-sm font-semibold text-slate-700">Porsi Saham Pengurus Utama</p>
+              <p className="text-xs text-slate-500">
+                Opsional, isi jika direktur/komisaris memiliki porsi saham.
+              </p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="grid gap-1">
+                  <span className="text-sm font-medium">Porsi Saham Direktur Utama (%)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    className={`rounded-md border px-3 py-2 text-sm${shareErr ? " border-red-400" : ""}`}
+                    value={directorSharePct}
+                    onChange={(e) => {
+                      setDirectorSharePct(e.target.value);
+                      setShareErr("");
+                    }}
+                    placeholder="0 - 100"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-sm font-medium">Porsi Saham Komisaris (%)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    className={`rounded-md border px-3 py-2 text-sm${shareErr ? " border-red-400" : ""}`}
+                    value={commissionerSharePct}
+                    onChange={(e) => {
+                      setCommissionerSharePct(e.target.value);
+                      setShareErr("");
+                    }}
+                    placeholder="0 - 100"
+                  />
+                </label>
+              </div>
+              {shareErr && <p className="text-xs text-red-600">{shareErr}</p>}
+            </div>
+
             <div className="flex justify-end">
               <button
                 type="button"
@@ -1214,49 +1250,6 @@ export default function BusinessWizard() {
               </Table>
             </div>
 
-            {/* Porsi saham pengurus utama (opsional) */}
-            <div className="rounded-xl border p-4 space-y-3">
-              <p className="text-sm font-semibold text-slate-700">Porsi Saham Pengurus Utama</p>
-              <p className="text-xs text-slate-500">
-                Opsional, isi jika direktur/komisaris memiliki porsi saham.
-              </p>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="grid gap-1">
-                  <span className="text-sm font-medium">Porsi Saham Direktur Utama (%)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.01"
-                    className={`rounded-md border px-3 py-2 text-sm${shareErr ? " border-red-400" : ""}`}
-                    value={directorSharePct}
-                    onChange={(e) => {
-                      setDirectorSharePct(e.target.value);
-                      setShareErr("");
-                    }}
-                    placeholder="0 - 100"
-                  />
-                </label>
-                <label className="grid gap-1">
-                  <span className="text-sm font-medium">Porsi Saham Komisaris (%)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.01"
-                    className={`rounded-md border px-3 py-2 text-sm${shareErr ? " border-red-400" : ""}`}
-                    value={commissionerSharePct}
-                    onChange={(e) => {
-                      setCommissionerSharePct(e.target.value);
-                      setShareErr("");
-                    }}
-                    placeholder="0 - 100"
-                  />
-                </label>
-              </div>
-              {shareErr && <p className="text-xs text-red-600">{shareErr}</p>}
-            </div>
-
             <div className="flex justify-between">
               <button
                 type="button"
@@ -1267,12 +1260,12 @@ export default function BusinessWizard() {
               </button>
               <button
                 type="button"
-                onClick={saveSharesThenNext}
-                disabled={!canContinue || saving}
+                onClick={() => setStep(3)}
+                disabled={!canContinue}
                 title={!canContinue ? "Tambahkan minimal 1 Pengurus/BO/PIC" : ""}
                 className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               >
-                {saving ? "Menyimpan..." : "Lanjut"}
+                Lanjut
               </button>
             </div>
           </CardContent>

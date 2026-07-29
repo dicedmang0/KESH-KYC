@@ -8,26 +8,49 @@ import { getRoleFromToken } from '@/lib/api';
 import { formatCif } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { formatDateTime, formatMonitoringAmount } from '@/lib/monitoring';
-import { refundStatusLabel, refundStatusBadgeClass } from '@/lib/statement-refunds';
+import {
+  refundStatusLabel,
+  refundStatusBadgeClass,
+  balanceCreditStatusLabel,
+} from '@/lib/statement-refunds';
 import {
   getComplaint,
-  updateComplaint,
+  verifyComplaintData,
+  operationInvestigation,
+  amlReviewComplaint,
+  financeReviewComplaint,
+  resolveComplaint,
+  closeComplaint,
   formatComplaintStatus,
   formatComplaintCategory,
   formatComplaintChannel,
   formatComplaintPriority,
-  canUpdateComplaint,
+  formatComplaintLevel,
+  formatLevel3Risk,
+  formatComplaintStage,
+  formatDataVerification,
+  formatOperationResult,
+  formatAmlDecision,
+  formatFinanceDecision,
+  complaintStatusBadgeClass,
+  complaintLevelBadgeClass,
+  canViewComplaints,
+  canVerifyComplaintData,
+  canOperationInvestigate,
+  canAmlReview,
+  canFinanceReview,
   canResolveComplaint,
+  canCloseComplaint,
   isComplaintReadOnly,
-  COMPLAINT_CATEGORY_LABELS,
-  COMPLAINT_CHANNEL_LABELS,
-  COMPLAINT_PRIORITY_LABELS,
-  COMPLAINT_STATUS_LABELS,
+  DATA_VERIFICATION_LABELS,
+  OPERATION_RESULT_LABELS,
+  AML_DECISION_LABELS,
+  FINANCE_DECISION_LABELS,
   type Complaint,
-  type ComplaintCategory,
-  type ComplaintChannel,
-  type ComplaintPriority,
-  type ComplaintStatus,
+  type DataVerificationStatus,
+  type OperationInvestigationResult,
+  type AmlDecision,
+  type FinanceDecision,
 } from '@/lib/complaints';
 
 // ── Small UI helpers ──────────────────────────────────────────────────────────
@@ -52,36 +75,86 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function StatusBadge({ status }: { status?: string | null }) {
-  const cls =
-    status === 'OPEN'        ? 'bg-blue-100 text-blue-700' :
-    status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' :
-    status === 'RESOLVED'    ? 'bg-emerald-100 text-emerald-700' :
-    status === 'CLOSED'      ? 'bg-slate-100 text-slate-500' :
-                               'bg-slate-100 text-slate-500';
+function Notes({ label, value }: { label: string; value?: string | null }) {
   return (
-    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>
-      {formatComplaintStatus(status)}
-    </span>
+    <Field
+      label={label}
+      value={value ? <span className="whitespace-pre-wrap text-slate-700">{value}</span> : undefined}
+    />
   );
 }
 
-function PriorityBadge({ priority }: { priority?: string | null }) {
-  const cls =
-    priority === 'HIGH'   ? 'bg-red-100 text-red-700' :
-    priority === 'MEDIUM' ? 'bg-amber-100 text-amber-700' :
-    priority === 'LOW'    ? 'bg-emerald-100 text-emerald-700' :
-                            'bg-slate-100 text-slate-500';
+/**
+ * Form aksi workflow: satu pilihan + catatan. Dipakai oleh verify-data,
+ * operation investigation, AML review, dan finance review.
+ */
+function WorkflowForm({
+  options,
+  requiresNotes,
+  submitLabel,
+  onSubmit,
+}: {
+  options: Record<string, string>;
+  requiresNotes: (choice: string) => boolean;
+  submitLabel: string;
+  onSubmit: (choice: string, notes: string) => Promise<void>;
+}) {
+  const keys = Object.keys(options);
+  const [choice, setChoice] = useState(keys[0]);
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const notesNeeded = requiresNotes(choice);
+  const valid = !notesNeeded || notes.trim().length > 0;
+
   return (
-    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>
-      {formatComplaintPriority(priority)}
-    </span>
+    <div className="space-y-3 border-t pt-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="text-xs text-slate-500">Keputusan / Hasil</label>
+          <select
+            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
+            value={choice}
+            onChange={(e) => setChoice(e.target.value)}
+          >
+            {keys.map((k) => (
+              <option key={k} value={k}>{options[k]}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className="text-xs text-slate-500">
+          Catatan {notesNeeded && <span className="text-red-500">*</span>}
+        </label>
+        <textarea
+          rows={3}
+          className="mt-1 w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-kesh-700 resize-y"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Tuliskan catatan hasil pemeriksaan…"
+        />
+      </div>
+      <button
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await onSubmit(choice, notes.trim());
+            setNotes('');
+          } finally {
+            setBusy(false);
+          }
+        }}
+        disabled={busy || !valid}
+        className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-60 transition-colors"
+      >
+        {busy ? 'Menyimpan…' : submitLabel}
+      </button>
+    </div>
   );
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-
-const ALLOWED_ROLES = new Set(['SystemAdmin', 'Director', 'FrontDesk', 'OperationSupervisor', 'Auditor', 'FinanceManager']);
 
 export default function ComplaintDetailPage() {
   const params = useParams();
@@ -93,16 +166,11 @@ export default function ComplaintDetailPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
-  // edit form state
-  const [editCategory, setEditCategory]           = useState<ComplaintCategory>('TRANSFER');
-  const [editChannel, setEditChannel]             = useState<ComplaintChannel>('WALK_IN');
-  const [editPriority, setEditPriority]           = useState<ComplaintPriority>('MEDIUM');
-  const [editStatus, setEditStatus]               = useState<ComplaintStatus>('OPEN');
-  const [editNotes, setEditNotes]                 = useState('');
-  const [editResolutionNotes, setEditResolutionNotes] = useState('');
-
-  const [saving, setSaving] = useState(false);
-  const [saveErr, setSaveErr] = useState('');
+  // resolve / close forms
+  const [resolutionNotes, setResolutionNotes] = useState('');
+  const [communicationNotes, setCommunicationNotes] = useState('');
+  const [closingNotes, setClosingNotes] = useState('');
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -114,12 +182,6 @@ export default function ComplaintDetailPage() {
         const data = await getComplaint(id);
         if (!alive) return;
         setComplaint(data);
-        setEditCategory((data.category as ComplaintCategory) ?? 'TRANSFER');
-        setEditChannel((data.channel as ComplaintChannel) ?? 'WALK_IN');
-        setEditPriority((data.priority as ComplaintPriority) ?? 'MEDIUM');
-        setEditStatus((data.status as ComplaintStatus) ?? 'OPEN');
-        setEditNotes(data.complaint_notes ?? '');
-        setEditResolutionNotes(data.resolution_notes ?? '');
       } catch (e: unknown) {
         if (!alive) return;
         setErr(e instanceof Error ? e.message : 'Gagal memuat data pengaduan');
@@ -130,43 +192,18 @@ export default function ComplaintDetailPage() {
     return () => { alive = false; };
   }, [id]);
 
-  async function save() {
-    if (!complaint) return;
-    setSaving(true);
-    setSaveErr('');
+  /** Semua aksi workflow memakai jalur yang sama: kirim, pasang hasil, beri tahu. */
+  async function run(fn: () => Promise<Complaint>, successMsg: string) {
     try {
-      const payload: Parameters<typeof updateComplaint>[1] = {};
-
-      // FrontDesk can only update notes on their own OPEN complaint
-      if (role === 'FrontDesk') {
-        payload.complaint_notes = editNotes;
-      } else {
-        payload.category         = editCategory;
-        payload.channel          = editChannel;
-        payload.priority         = editPriority;
-        payload.status           = editStatus;
-        payload.complaint_notes  = editNotes;
-        payload.resolution_notes = editResolutionNotes || undefined;
-      }
-
-      const updated = await updateComplaint(id, payload);
+      const updated = await fn();
       setComplaint(updated);
-      setEditCategory((updated.category as ComplaintCategory) ?? 'TRANSFER');
-      setEditChannel((updated.channel as ComplaintChannel) ?? 'WALK_IN');
-      setEditPriority((updated.priority as ComplaintPriority) ?? 'MEDIUM');
-      setEditStatus((updated.status as ComplaintStatus) ?? 'OPEN');
-      setEditNotes(updated.complaint_notes ?? '');
-      setEditResolutionNotes(updated.resolution_notes ?? '');
-      toast.success('Pengaduan berhasil diperbarui.');
+      toast.success(successMsg);
     } catch (e: unknown) {
-      toast.error('Gagal memperbarui pengaduan. Silakan coba lagi.');
-      setSaveErr(e instanceof Error ? e.message : 'Gagal memperbarui pengaduan. Silakan coba lagi.');
-    } finally {
-      setSaving(false);
+      toast.error(e instanceof Error ? e.message : 'Aksi gagal. Silakan coba lagi.');
     }
   }
 
-  if (!ALLOWED_ROLES.has(role ?? '')) {
+  if (!canViewComplaints(role)) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
         Anda tidak memiliki akses ke halaman ini.
@@ -197,92 +234,182 @@ export default function ComplaintDetailPage() {
 
   if (!complaint) return null;
 
-  const readOnly = isComplaintReadOnly(role, complaint);
-  const canEdit  = canUpdateComplaint(role, complaint);
-  const canResolve = canResolveComplaint(role);
-
-  // Status options available per role
-  const statusOptions = Object.entries(COMPLAINT_STATUS_LABELS).filter(([k]) => {
-    if (role === 'FrontDesk') return k !== 'RESOLVED' && k !== 'CLOSED';
-    return true;
-  });
+  const c = complaint;
+  const readOnly = isComplaintReadOnly(role, c);
 
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">
-            <Link href="/complaints" className="text-sm text-kesh-700 hover:underline">
-              ← Pengaduan
-            </Link>
-          </div>
-          <h1 className="mt-1 text-xl font-semibold">
-            {complaint.complaint_no ?? `Pengaduan #${complaint.id}`}
+          <Link href="/complaints" className="text-sm text-kesh-700 hover:underline">
+            ← Pengaduan
+          </Link>
+          <h1 className="mt-1 text-xl font-semibold break-all">
+            {c.complaint_no ?? `Pengaduan #${c.id}`}
           </h1>
         </div>
-        <StatusBadge status={complaint.status} />
+        <div className="flex items-center gap-2">
+          <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${complaintLevelBadgeClass(c.complaint_level)}`}>
+            {formatComplaintLevel(c.complaint_level)}
+          </span>
+          <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${complaintStatusBadgeClass(c.status)}`}>
+            {formatComplaintStatus(c.status)}
+          </span>
+        </div>
       </div>
 
-      {/* Detail sections */}
-      <Section title="Informasi Customer">
+      {/* 1. Ringkasan */}
+      <Section title="Ringkasan Pengaduan">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="Nama Customer" value={complaint.customer_name} />
-          <Field label="CIF" value={
-            <span className="font-mono">{formatCif(complaint.cif_no)}</span>
-          } />
-          <Field label="Tipe Customer" value={complaint.customer_type} />
+          <Field label="No. Pengaduan" value={<span className="font-mono break-all">{c.complaint_no ?? `#${c.id}`}</span>} />
+          <Field label="Status" value={formatComplaintStatus(c.status)} />
+          <Field label="Tahap Berjalan" value={formatComplaintStage(c.status)} />
+          <Field label="Complaint Level" value={formatComplaintLevel(c.complaint_level)} />
+          <Field label="Kategori Risiko Level 3" value={c.level_3_risk_category ? formatLevel3Risk(c.level_3_risk_category) : undefined} />
+          <Field label="Jenis Pengaduan" value={formatComplaintCategory(c.category)} />
+          <Field label="Nama Pengguna / Merchant" value={c.customer_name} />
+          <Field label="CIF" value={<span className="font-mono">{formatCif(c.customer_cif_no)}</span>} />
+          <Field label="Tipe Customer" value={c.customer_type} />
+          <Field
+            label="Transaksi / Transfer"
+            value={
+              c.transfer_id ? (
+                <Link href={`/transfers/${c.transfer_id}`} className="font-mono text-kesh-700 hover:underline break-all">
+                  {c.transaction_reference ?? `#${c.transfer_id}`}
+                </Link>
+              ) : c.transaction_reference ? (
+                <span className="font-mono break-all">{c.transaction_reference}</span>
+              ) : undefined
+            }
+          />
+          <Field label="Kanal" value={formatComplaintChannel(c.channel)} />
+          <Field label="Prioritas" value={formatComplaintPriority(c.priority)} />
+          <Field label="Dibuat Oleh" value={c.created_by} />
+          <Field label="Tanggal Dibuat" value={formatDateTime(c.created_at)} />
+          {c.resolved_at && <Field label="Tanggal Selesai" value={formatDateTime(c.resolved_at)} />}
+          {c.closed_at && <Field label="Tanggal Ditutup" value={formatDateTime(c.closed_at)} />}
         </div>
+        <Notes label="Penjelasan Pengaduan" value={c.complaint_notes} />
       </Section>
 
-      <Section title="Detail Pengaduan">
+      {/* 2. Verifikasi data */}
+      <Section title="Verifikasi Data Nasabah">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="No. Pengaduan" value={
-            <span className="font-mono">{complaint.complaint_no ?? `#${complaint.id}`}</span>
-          } />
-          <Field label="No. Transaksi" value={
-            complaint.transaction_reference
-              ? <span className="font-mono">{complaint.transaction_reference}</span>
-              : undefined
-          } />
-          <Field label="Kategori" value={formatComplaintCategory(complaint.category)} />
-          <Field label="Kanal" value={formatComplaintChannel(complaint.channel)} />
-          <Field label="Prioritas" value={<PriorityBadge priority={complaint.priority} />} />
-          <Field label="Status" value={<StatusBadge status={complaint.status} />} />
+          <Field label="Hasil Verifikasi" value={c.data_verification_status ? formatDataVerification(c.data_verification_status) : undefined} />
+          <Field label="Tanggal Verifikasi" value={c.data_verified_at ? formatDateTime(c.data_verified_at) : undefined} />
         </div>
+        <Notes label="Catatan Verifikasi" value={c.data_verification_notes} />
+        {canVerifyComplaintData(role, c) && (
+          <WorkflowForm
+            options={DATA_VERIFICATION_LABELS}
+            // Backend mewajibkan catatan hanya saat data tidak lengkap.
+            requiresNotes={(v) => v === 'INCOMPLETE'}
+            submitLabel="Simpan Verifikasi Data"
+            onSubmit={(choice, notes) =>
+              run(
+                () => verifyComplaintData(id, {
+                  data_verification_status: choice as DataVerificationStatus,
+                  notes: notes || undefined,
+                }),
+                'Verifikasi data tersimpan.'
+              )
+            }
+          />
+        )}
       </Section>
 
-      <Section title="Catatan">
-        <Field label="Catatan Keluhan" value={
-          complaint.complaint_notes
-            ? <span className="whitespace-pre-wrap text-slate-700">{complaint.complaint_notes}</span>
-            : undefined
-        } />
-        <Field label="Catatan Penyelesaian" value={
-          complaint.resolution_notes
-            ? <span className="whitespace-pre-wrap text-slate-700">{complaint.resolution_notes}</span>
-            : undefined
-        } />
+      {/* 3. Investigasi transaksi */}
+      <Section title="Investigasi Transaksi">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Field label="Hasil Investigasi" value={c.operation_investigation_result ? formatOperationResult(c.operation_investigation_result) : undefined} />
+          <Field label="Tanggal Investigasi" value={c.operation_investigated_at ? formatDateTime(c.operation_investigated_at) : undefined} />
+        </div>
+        <Notes label="Catatan Investigasi" value={c.operation_investigation_notes} />
+        {canOperationInvestigate(role, c) && (
+          <WorkflowForm
+            options={OPERATION_RESULT_LABELS}
+            requiresNotes={() => true}
+            submitLabel="Simpan Hasil Investigasi"
+            onSubmit={(choice, notes) =>
+              run(
+                () => operationInvestigation(id, {
+                  result: choice as OperationInvestigationResult,
+                  notes,
+                }),
+                'Hasil investigasi tersimpan.'
+              )
+            }
+          />
+        )}
       </Section>
 
-      {/* Refund terkait — read-only. Refund tidak menutup pengaduan. */}
-      {(complaint.statement_refunds?.length ?? 0) > 0 && (
+      {/* 4. AML / Compliance */}
+      <Section title="AML / Compliance Review">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Field label="Keputusan" value={c.aml_decision ? formatAmlDecision(c.aml_decision) : undefined} />
+          <Field label="Tanggal Review" value={c.aml_reviewed_at ? formatDateTime(c.aml_reviewed_at) : undefined} />
+        </div>
+        <Notes label="Catatan AML" value={c.aml_notes} />
+        {canAmlReview(role, c) && (
+          <WorkflowForm
+            options={AML_DECISION_LABELS}
+            requiresNotes={() => true}
+            submitLabel="Simpan Keputusan AML"
+            onSubmit={(choice, notes) =>
+              run(
+                () => amlReviewComplaint(id, { decision: choice as AmlDecision, notes }),
+                'Keputusan AML tersimpan.'
+              )
+            }
+          />
+        )}
+      </Section>
+
+      {/* 5. Finance review */}
+      <Section title="Finance Review">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Field label="Keputusan" value={c.finance_decision ? formatFinanceDecision(c.finance_decision) : undefined} />
+          <Field label="Tanggal Review" value={c.finance_reviewed_at ? formatDateTime(c.finance_reviewed_at) : undefined} />
+        </div>
+        <Notes label="Catatan Finance" value={c.finance_review_notes} />
+        {canFinanceReview(role, c) && (
+          <WorkflowForm
+            options={FINANCE_DECISION_LABELS}
+            requiresNotes={() => true}
+            submitLabel="Simpan Keputusan Finance"
+            onSubmit={(choice, notes) =>
+              run(
+                () => financeReviewComplaint(id, { decision: choice as FinanceDecision, notes }),
+                'Keputusan finance tersimpan.'
+              )
+            }
+          />
+        )}
+        <p className="text-xs text-slate-400">
+          Persetujuan refund dilakukan oleh Finance Manager melalui menu Pencatatan Refund.
+        </p>
+      </Section>
+
+      {/* 6. Refund terkait — read-only. Refund tidak menutup pengaduan. */}
+      {(c.statement_refunds?.length ?? 0) > 0 && (
         <Section title="Refund Terkait">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm min-w-[760px]">
               <thead>
                 <tr className="border-b bg-slate-50 text-left text-xs text-slate-500">
                   <th className="px-3 py-2 font-medium whitespace-nowrap">Refund No</th>
                   <th className="px-3 py-2 font-medium whitespace-nowrap text-right">Nominal</th>
                   <th className="px-3 py-2 font-medium whitespace-nowrap">Tanggal Dana Masuk</th>
                   <th className="px-3 py-2 font-medium whitespace-nowrap">Status</th>
+                  <th className="px-3 py-2 font-medium whitespace-nowrap">Posting Saldo</th>
                   <th className="px-3 py-2 font-medium text-right whitespace-nowrap">Aksi</th>
                 </tr>
               </thead>
               <tbody>
-                {complaint.statement_refunds?.map((r) => (
-                  <tr key={String(r.id)} className="border-t">
-                    <td className="px-3 py-2 font-mono text-xs text-slate-600 whitespace-nowrap">{r.refund_no}</td>
+                {c.statement_refunds?.map((r) => (
+                  <tr key={String(r.id)} className="border-t align-top">
+                    <td className="px-3 py-2 font-mono text-xs text-slate-600 break-all">{r.refund_no}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-slate-800">
                       {formatMonitoringAmount(r.amount, r.currency ?? 'IDR')}
                     </td>
@@ -291,6 +418,13 @@ export default function ComplaintDetailPage() {
                       <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${refundStatusBadgeClass(r.status)}`}>
                         {refundStatusLabel(r.status)}
                       </span>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-slate-600">
+                      {r.credited_at
+                        ? balanceCreditStatusLabel('CREDITED')
+                        : r.approved_at
+                          ? balanceCreditStatusLabel('PENDING_EXTERNAL_POSTING')
+                          : '—'}
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       <Link href={`/statement-refunds/${r.id}`} className="text-xs font-medium text-kesh-700 hover:underline">
@@ -303,127 +437,104 @@ export default function ComplaintDetailPage() {
             </table>
           </div>
           <p className="text-xs text-slate-400">
-            Refund yang ditemukan tidak menutup pengaduan secara otomatis — penyelesaian pengaduan tetap dilakukan manual.
+            Refund tidak menutup pengaduan secara otomatis — penyelesaian pengaduan tetap dilakukan manual.
           </p>
         </Section>
       )}
 
-      <Section title="Riwayat">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="Dibuat Oleh" value={complaint.created_by} />
-          <Field label="Tanggal Dibuat" value={formatDateTime(complaint.created_at)} />
-          {complaint.resolved_at && (
-            <Field label="Tanggal Selesai" value={formatDateTime(complaint.resolved_at)} />
-          )}
+      {c.status === 'REFUND_PROCESS' && (
+        <div className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">
+          Proses refund dilakukan melalui menu Pencatatan Refund.
         </div>
-      </Section>
-
-      {/* Edit / Update form — hidden for Auditor and non-editable states */}
-      {!readOnly && canEdit && (
-        <Section title="Perbarui Pengaduan">
-          {saveErr && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-              {saveErr}
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {/* Full editors for roles with resolve permission */}
-            {role !== 'FrontDesk' && (
-              <>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <div>
-                    <label className="text-xs text-slate-500">Kategori</label>
-                    <select
-                      className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
-                      value={editCategory}
-                      onChange={(e) => setEditCategory(e.target.value as ComplaintCategory)}
-                    >
-                      {Object.entries(COMPLAINT_CATEGORY_LABELS).map(([k, v]) => (
-                        <option key={k} value={k}>{v}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-500">Kanal</label>
-                    <select
-                      className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
-                      value={editChannel}
-                      onChange={(e) => setEditChannel(e.target.value as ComplaintChannel)}
-                    >
-                      {Object.entries(COMPLAINT_CHANNEL_LABELS).map(([k, v]) => (
-                        <option key={k} value={k}>{v}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-500">Prioritas</label>
-                    <select
-                      className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
-                      value={editPriority}
-                      onChange={(e) => setEditPriority(e.target.value as ComplaintPriority)}
-                    >
-                      {Object.entries(COMPLAINT_PRIORITY_LABELS).map(([k, v]) => (
-                        <option key={k} value={k}>{v}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-slate-500">Status</label>
-                  <select
-                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value as ComplaintStatus)}
-                    disabled={!canResolve && (editStatus === 'RESOLVED' || editStatus === 'CLOSED')}
-                  >
-                    {statusOptions.map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
-                  </select>
-                </div>
-              </>
-            )}
-
-            <div>
-              <label className="text-xs text-slate-500">Catatan Keluhan</label>
-              <textarea
-                rows={4}
-                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-kesh-700 resize-y"
-                value={editNotes}
-                onChange={(e) => setEditNotes(e.target.value)}
-                placeholder="Catatan keluhan…"
-              />
-            </div>
-
-            {role !== 'FrontDesk' && (
-              <div>
-                <label className="text-xs text-slate-500">Catatan Penyelesaian</label>
-                <textarea
-                  rows={3}
-                  className="mt-1 w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-kesh-700 resize-y"
-                  value={editResolutionNotes}
-                  onChange={(e) => setEditResolutionNotes(e.target.value)}
-                  placeholder="Isi catatan penyelesaian jika pengaduan telah ditangani…"
-                />
-              </div>
-            )}
-
-            <button
-              onClick={save}
-              disabled={saving}
-              className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-60 transition-colors"
-            >
-              {saving ? 'Menyimpan…' : 'Simpan Perubahan'}
-            </button>
-          </div>
-        </Section>
       )}
 
-      {readOnly && role === 'Auditor' && (
+      {/* 7. Penyelesaian & penutupan */}
+      <Section title="Penyelesaian & Penutupan">
+        <Notes label="Catatan Penyelesaian" value={c.resolution_notes} />
+        <Notes label="Catatan Komunikasi Nasabah" value={c.customer_communication_notes} />
+        <Notes label="Catatan Penutupan" value={c.closing_notes} />
+
+        {canResolveComplaint(role, c) && (
+          <div className="space-y-3 border-t pt-3">
+            <div>
+              <label className="text-xs text-slate-500">
+                Catatan Penyelesaian <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-kesh-700 resize-y"
+                value={resolutionNotes}
+                onChange={(e) => setResolutionNotes(e.target.value)}
+                placeholder="Ringkasan penyelesaian pengaduan…"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">Catatan Komunikasi ke Nasabah</label>
+              <textarea
+                rows={3}
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-kesh-700 resize-y"
+                value={communicationNotes}
+                onChange={(e) => setCommunicationNotes(e.target.value)}
+                placeholder="Isi komunikasi yang sudah disampaikan ke nasabah / merchant…"
+              />
+            </div>
+            <button
+              onClick={async () => {
+                setBusy(true);
+                await run(
+                  () => resolveComplaint(id, {
+                    resolution_notes: resolutionNotes.trim(),
+                    customer_communication_notes: communicationNotes.trim() || undefined,
+                  }),
+                  'Pengaduan diselesaikan.'
+                );
+                setBusy(false);
+              }}
+              disabled={busy || resolutionNotes.trim().length === 0}
+              className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-60 transition-colors"
+            >
+              {busy ? 'Menyimpan…' : 'Selesaikan Pengaduan'}
+            </button>
+          </div>
+        )}
+
+        {canCloseComplaint(role, c) && (
+          <div className="space-y-3 border-t pt-3">
+            <div>
+              <label className="text-xs text-slate-500">
+                Catatan Penutupan <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                className="mt-1 w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-kesh-700 resize-y"
+                value={closingNotes}
+                onChange={(e) => setClosingNotes(e.target.value)}
+                placeholder="Alasan / ringkasan penutupan tiket…"
+              />
+            </div>
+            <button
+              onClick={async () => {
+                setBusy(true);
+                await run(
+                  () => closeComplaint(id, { closing_notes: closingNotes.trim() }),
+                  'Pengaduan ditutup.'
+                );
+                setBusy(false);
+              }}
+              disabled={busy || closingNotes.trim().length === 0}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60 transition-colors"
+            >
+              {busy ? 'Menyimpan…' : 'Tutup Pengaduan'}
+            </button>
+          </div>
+        )}
+      </Section>
+
+      {readOnly && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
-          Anda memiliki akses baca saja pada halaman ini.
+          {c.status === 'CLOSED'
+            ? 'Pengaduan sudah ditutup — halaman ini hanya dapat dibaca.'
+            : 'Anda memiliki akses baca saja pada pengaduan ini.'}
         </div>
       )}
     </div>

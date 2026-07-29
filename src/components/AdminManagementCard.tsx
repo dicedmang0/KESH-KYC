@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { Pagination } from '@/components/pagination';
+import { ROLE_LABELS } from '@/lib/roles';
 
 type AdminUser = {
   id: number;
@@ -19,23 +20,12 @@ const INTERNAL_ROLES = [
   'Director',
   'ComplianceLead',
   'OperationSupervisor',
+  'ComplaintHandling',
   'FrontDesk',
   'FinanceStaff',
   'FinanceManager',
   'Auditor',
 ];
-
-const ROLE_LABELS: Record<string, string> = {
-  SystemAdmin:         'Admin Sistem',
-  Director:            'Direktur',
-  ComplianceLead:      'Lead Compliance',
-  OperationSupervisor: 'Operation Supervisor',
-  FrontDesk:           'Frontline',
-  FinanceStaff:        'Finance Staff',
-  FinanceManager:      'Finance Manager',
-  Auditor:             'Auditor',
-  ComplianceStaff:     'Deprecated - Compliance Staff',
-};
 
 export default function AdminManagementCard() {
   const [admins, setAdmins] = useState<AdminUser[]>([]);

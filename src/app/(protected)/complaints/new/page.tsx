@@ -17,9 +17,13 @@ import {
   COMPLAINT_CATEGORY_LABELS,
   COMPLAINT_CHANNEL_LABELS,
   COMPLAINT_PRIORITY_LABELS,
+  COMPLAINT_LEVEL_LABELS,
+  LEVEL_3_RISK_CATEGORY_LABELS,
   type ComplaintCategory,
   type ComplaintChannel,
   type ComplaintPriority,
+  type ComplaintLevel,
+  type Level3RiskCategory,
   type ComplaintCustomerSearchItem,
   type ComplaintTransactionSearchItem,
 } from '@/lib/complaints';
@@ -58,6 +62,8 @@ export default function NewComplaintPage() {
   const [category, setCategory] = useState<ComplaintCategory>('TRANSFER');
   const [channel, setChannel]   = useState<ComplaintChannel>('WALK_IN');
   const [priority, setPriority] = useState<ComplaintPriority>('MEDIUM');
+  const [level, setLevel]       = useState<ComplaintLevel | ''>('');
+  const [riskCategory, setRiskCategory] = useState<Level3RiskCategory | ''>('');
   const [complaintNotes, setComplaintNotes] = useState('');
 
   // ── Customer search ───────────────────────────────────────────────────────
@@ -167,12 +173,30 @@ export default function NewComplaintPage() {
       ? 'Catatan keluhan minimal 10 karakter.'
       : '';
 
-  const formValid = !!selectedCustomer && complaintNotes.trim().length >= 10;
+  // Backend mewajibkan transaction_reference; kategori risiko hanya untuk LEVEL_3.
+  const formValid =
+    !!selectedCustomer &&
+    !!clean(transactionRef) &&
+    !!level &&
+    (level !== 'LEVEL_3' || !!riskCategory) &&
+    complaintNotes.trim().length >= 10;
 
   // ── Submit ────────────────────────────────────────────────────────────────
   async function submit() {
     if (!selectedCustomer) {
       setErr('Silakan pilih customer dari hasil pencarian.');
+      return;
+    }
+    if (!clean(transactionRef)) {
+      setErr('Nomor transaksi / transfer wajib diisi.');
+      return;
+    }
+    if (!level) {
+      setErr('Complaint level wajib dipilih.');
+      return;
+    }
+    if (level === 'LEVEL_3' && !riskCategory) {
+      setErr('Kategori risiko wajib dipilih untuk Level 3.');
       return;
     }
     if (complaintNotes.trim().length < 10) {
@@ -185,13 +209,20 @@ export default function NewComplaintPage() {
       const created = await createComplaint({
         customer_application_id: selectedCustomer.application_id,
         transfer_id: selectedTx ? Number(selectedTx.transfer_id) : undefined,
-        transaction_reference: clean(transactionRef),
+        transaction_reference: clean(transactionRef)!,
         category,
         channel,
         priority,
+        complaint_level: level,
+        // LEVEL_1 / LEVEL_2 → field tidak dikirim sama sekali.
+        level_3_risk_category: level === 'LEVEL_3' ? (riskCategory as Level3RiskCategory) : undefined,
         complaint_notes: complaintNotes.trim(),
       });
-      toast.success('Pengaduan berhasil dicatat.');
+      toast.success(
+        created.complaint_no
+          ? `Pengaduan ${created.complaint_no} berhasil dicatat.`
+          : 'Pengaduan berhasil dicatat.'
+      );
       router.push(created.id ? `/complaints/${created.id}` : '/complaints');
     } catch (e: unknown) {
       toast.error('Gagal mencatat pengaduan. Silakan coba lagi.');
@@ -312,7 +343,9 @@ export default function NewComplaintPage() {
 
         {/* B. Nomor Transaksi yang Diadukan */}
         <div>
-          <label className="text-xs text-slate-500">Nomor Transaksi yang Diadukan</label>
+          <label className="text-xs text-slate-500">
+            Nomor Transaksi / Transfer yang Diadukan <span className="text-red-500">*</span>
+          </label>
 
           {/* No customer yet */}
           {!selectedCustomer && (
@@ -399,9 +432,49 @@ export default function NewComplaintPage() {
           )}
         </div>
 
-        {/* C. Kategori */}
+        {/* C. Complaint Level */}
         <div>
-          <label className="text-xs text-slate-500">Kategori Pengaduan</label>
+          <label className="text-xs text-slate-500">
+            Complaint Level <span className="text-red-500">*</span>
+          </label>
+          <select
+            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
+            value={level}
+            onChange={(e) => {
+              const next = e.target.value as ComplaintLevel | '';
+              setLevel(next);
+              if (next !== 'LEVEL_3') setRiskCategory('');
+            }}
+          >
+            <option value="">Pilih level…</option>
+            {Object.entries(COMPLAINT_LEVEL_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* C2. Kategori risiko — hanya Level 3 */}
+        {level === 'LEVEL_3' && (
+          <div>
+            <label className="text-xs text-slate-500">
+              Kategori Risiko Level 3 <span className="text-red-500">*</span>
+            </label>
+            <select
+              className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
+              value={riskCategory}
+              onChange={(e) => setRiskCategory(e.target.value as Level3RiskCategory | '')}
+            >
+              <option value="">Pilih kategori risiko…</option>
+              {Object.entries(LEVEL_3_RISK_CATEGORY_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* D. Jenis / Kategori */}
+        <div>
+          <label className="text-xs text-slate-500">Jenis Pengaduan</label>
           <select
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
             value={category}
