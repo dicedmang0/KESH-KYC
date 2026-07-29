@@ -724,24 +724,26 @@ export default function BusinessWizard() {
                 />
               </label>
               <div className="grid gap-1 md:col-span-2">
-                <span className="text-sm font-medium">Bidang Usaha *</span>
-                <select
-                  className="rounded-md border px-3 py-2 text-sm"
-                  value={business_activity}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setBizAct(v);
-                    if (!isLainnya(v)) setBizActOther("");
-                  }}
-                >
-                  <option value="">— Pilih bidang usaha —</option>
-                  {industryCategories.map((i) => (
-                    <option key={i.code} value={i.name}>{i.name}</option>
-                  ))}
-                  {business_activity && !industryCategories.find((i) => i.name === business_activity) && (
-                    <option value={business_activity}>{business_activity}</option>
-                  )}
-                </select>
+                <label className="grid gap-1">
+                  <span className="text-sm font-medium">Bidang Usaha *</span>
+                  <select
+                    className="rounded-md border px-3 py-2 text-sm"
+                    value={business_activity}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setBizAct(v);
+                      if (!isLainnya(v)) setBizActOther("");
+                    }}
+                  >
+                    <option value="">— Pilih bidang usaha —</option>
+                    {industryCategories.map((i) => (
+                      <option key={i.code} value={i.name}>{i.name}</option>
+                    ))}
+                    {business_activity && !industryCategories.find((i) => i.name === business_activity) && (
+                      <option value={business_activity}>{business_activity}</option>
+                    )}
+                  </select>
+                </label>
                 <LainnyaField
                   when={business_activity}
                   value={business_activity_other}
