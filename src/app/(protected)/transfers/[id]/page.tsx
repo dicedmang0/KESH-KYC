@@ -493,6 +493,8 @@ export default function TransferDetailPage() {
               <Field label="Metode Transfer" value={row.transfer_method} />
               <Field label="Kanal Transfer" value={row.transfer_channel} />
               <Field label="Dibuat Pada" value={formatDateTime(row.created_at)} />
+              {row.batch_no && <Field label="Batch No" value={row.batch_no} />}
+              {row.bulk_reference_no && <Field label="No. Referensi Bulk" value={row.bulk_reference_no} />}
             </div>
           </SectionCard>
 

@@ -125,6 +125,10 @@ export type TransferListRow = {
   result: TransferResult;
   compliance_review_status?: string | null;
   latest_compliance_review?: ComplianceReview | null;
+  // Bulk transfer batch info (migration 0057), present when created via /transfers/bulk.
+  batch_id?: number | string | null;
+  batch_no?: string | null;
+  bulk_reference_no?: string | null;
   created_at: string;
   submitted_at: string | null;
   approved_at: string | null;
@@ -345,8 +349,14 @@ function buildTransferQuery(params: Record<string, string | number | undefined |
 
 // ── API functions ────────────────────────────────────────────────────────────
 
-export function getTransfers(status?: string) {
-  const q = status ? `?status=${encodeURIComponent(status)}` : "";
+/** `single` = normal transfers (batch_id IS NULL); `bulk_item` = bulk child transfers; `all` = unfiltered (backward compatible). */
+export type TransferMode = "single" | "bulk_item" | "all";
+
+export function getTransfers(params?: { status?: string; transfer_mode?: TransferMode }) {
+  const q = buildTransferQuery({
+    status: params?.status,
+    transfer_mode: params?.transfer_mode && params.transfer_mode !== "all" ? params.transfer_mode : undefined,
+  });
   return apiFetch<TransferListRow[]>(`/transfers${q}`);
 }
 
@@ -380,21 +390,79 @@ export type BulkTransferItem = {
 
 export type CreateBulkTransferBody = {
   sender_application_id: number;
+  bulk_reference_no: string;
   items: BulkTransferItem[];
 };
 
 export type BulkTransferResult = {
   batch_id: number | string;
   batch_no: string;
+  bulk_reference_no: string;
   total_count: number;
   total_amount: number;
   transfers: TransferDetail[];
 };
 
+export const BULK_REFERENCE_NO_MAX_LENGTH = 150;
+
 export const BULK_TRANSFER_MAX_ROWS = 20;
 
 export function createBulkTransfers(body: CreateBulkTransferBody) {
   return apiFetch<BulkTransferResult>(`/transfers/bulk`, { method: "POST", body });
+}
+
+// ── Bulk batches (GET /transfers/bulk-batches) ────────────────────────────────
+// One row per batch — for the Bulk Transfer list tab, as opposed to
+// GET /transfers?transfer_mode=bulk_item which returns one row per child transfer.
+
+/** Per-status transfer counts within a batch, e.g. `{ DRAFT: 5, SUBMITTED: 3 }`. */
+export type BulkBatchStatusSummary = Record<string, number>;
+
+export type BulkBatchListRow = {
+  id: number | string;
+  batch_no: string;
+  bulk_reference_no: string;
+  sender_application_id: number | string | null;
+  sender_display_name?: string | null;
+  total_count: number;
+  total_amount: number | string;
+  created_by?: number | string | null;
+  created_at: string;
+  updated_at?: string | null;
+  status_summary?: BulkBatchStatusSummary | string | null;
+};
+
+export type BulkBatchListResponse = {
+  data: BulkBatchListRow[];
+  page: number;
+  limit: number;
+  total: number;
+};
+
+export type BulkBatchDetail = {
+  batch: BulkBatchListRow;
+  transfers: TransferListRow[];
+};
+
+export function getBulkTransferBatches(params?: {
+  q?: string;
+  date_from?: string;
+  date_to?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const q = buildTransferQuery({
+    q: params?.q,
+    date_from: params?.date_from,
+    date_to: params?.date_to,
+    page: params?.page,
+    limit: params?.limit,
+  });
+  return apiFetch<BulkBatchListResponse>(`/transfers/bulk-batches${q}`);
+}
+
+export function getBulkTransferBatchById(id: number | string) {
+  return apiFetch<BulkBatchDetail>(`/transfers/bulk-batches/${id}`);
 }
 
 export function submitTransfer(id: number | string) {

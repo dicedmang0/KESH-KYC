@@ -434,10 +434,11 @@ export default function NewComplaintPage() {
 
         {/* C. Complaint Level */}
         <div>
-          <label className="text-xs text-slate-500">
+          <label htmlFor="complaint-level" className="text-xs text-slate-500">
             Complaint Level <span className="text-red-500">*</span>
           </label>
           <select
+            id="complaint-level"
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
             value={level}
             onChange={(e) => {
@@ -474,8 +475,9 @@ export default function NewComplaintPage() {
 
         {/* D. Jenis / Kategori */}
         <div>
-          <label className="text-xs text-slate-500">Jenis Pengaduan</label>
+          <label htmlFor="complaint-category" className="text-xs text-slate-500">Jenis Pengaduan</label>
           <select
+            id="complaint-category"
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
             value={category}
             onChange={(e) => setCategory(e.target.value as ComplaintCategory)}

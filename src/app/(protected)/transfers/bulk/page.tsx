@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import * as XLSX from 'xlsx';
 import { getRoleFromToken } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import { toast } from '@/lib/toast';
@@ -14,6 +15,7 @@ import {
   canCreateTransfer,
   BENEFICIARY_RELATIONSHIP_OPTIONS,
   BULK_TRANSFER_MAX_ROWS,
+  BULK_REFERENCE_NO_MAX_LENGTH,
   FALLBACK_BANKS,
   TRANSFER_MIN_AMOUNT,
   TRANSFER_MAX_AMOUNT,
@@ -45,6 +47,126 @@ function emptyRow(): Row {
   };
 }
 
+// ── Excel template / import ──────────────────────────────────────────────────
+// Sheet "Bulk Transfer": No. Referensi Bulk in B4 (optional), header row 8,
+// data starts row 9 (both 1-indexed, matching what a user sees in Excel).
+
+const TEMPLATE_SHEET_NAME = 'Bulk Transfer';
+const TEMPLATE_HEADERS = [
+  'No',
+  'beneficiaryAccountName',
+  'beneficiaryBank',
+  'beneficiaryAccount',
+  'amount',
+  'transaction_purpose',
+  'beneficiary_relationship_to_sender',
+  'notes',
+] as const;
+const TEMPLATE_REF_ROW_INDEX = 3; // row 4 (0-indexed)
+const TEMPLATE_REF_COL_INDEX = 1; // column B (0-indexed)
+const TEMPLATE_HEADER_ROW_INDEX = 7; // row 8 (0-indexed)
+const TEMPLATE_DATA_START_INDEX = 8; // row 9 (0-indexed)
+
+function buildTemplateWorkbook(): XLSX.WorkBook {
+  const aoa: (string | number)[][] = [];
+  aoa[0] = ['KESH - Template Bulk Transfer'];
+  aoa[2] = [`Isi "No. Referensi Bulk" (opsional) di sel B4. Data dimulai baris 9, maksimal ${BULK_TRANSFER_MAX_ROWS} baris.`];
+  aoa[TEMPLATE_REF_ROW_INDEX] = ['No. Referensi Bulk', ''];
+  aoa[TEMPLATE_HEADER_ROW_INDEX] = [...TEMPLATE_HEADERS];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, TEMPLATE_SHEET_NAME);
+  return wb;
+}
+
+function downloadBulkTransferTemplate() {
+  XLSX.writeFile(buildTemplateWorkbook(), 'kesh-bulk-transfer-template.xlsx');
+}
+
+/** Best-effort match of an imported bank name/code against the known bank list. */
+function resolveImportedBank(raw: string, banks: TransferBank[]): { code: string; name: string } {
+  const v = raw.trim();
+  const byCode = banks.find((b) => (b.code ?? '').toLowerCase() === v.toLowerCase());
+  if (byCode) return { code: byCode.code ?? '', name: byCode.name ?? v };
+  const byName = banks.find((b) => (b.name ?? '').toLowerCase() === v.toLowerCase());
+  if (byName) return { code: byName.code ?? '', name: byName.name ?? v };
+  return { code: '', name: v };
+}
+
+type ImportResult = { rows: Row[]; refFromTemplate: string } | { errors: string[] };
+
+/** Parses+validates a Bulk Transfer template workbook. Pure function — no state, easy to reason about/test. */
+function parseBulkTransferWorkbook(wb: XLSX.WorkBook, banks: TransferBank[]): ImportResult {
+  const sheet = wb.Sheets[TEMPLATE_SHEET_NAME];
+  if (!sheet) {
+    return { errors: ['Template tidak sesuai. Gunakan template resmi KESH.'] };
+  }
+
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
+
+  const headerRow = aoa[TEMPLATE_HEADER_ROW_INDEX] ?? [];
+  const headerOk = TEMPLATE_HEADERS.every((h, i) => String(headerRow[i] ?? '').trim() === h);
+  if (!headerOk) {
+    return { errors: ['Template tidak sesuai. Gunakan template resmi KESH.'] };
+  }
+
+  const refCell = aoa[TEMPLATE_REF_ROW_INDEX]?.[TEMPLATE_REF_COL_INDEX];
+  const refFromTemplate = String(refCell ?? '').trim();
+
+  const dataRows = aoa
+    .slice(TEMPLATE_DATA_START_INDEX)
+    .filter((r) => Array.isArray(r) && r.some((c) => String(c ?? '').trim() !== ''));
+
+  if (dataRows.length === 0) {
+    return { errors: ['Tidak ada data untuk diimpor.'] };
+  }
+  if (dataRows.length > BULK_TRANSFER_MAX_ROWS) {
+    return { errors: [`Import ditolak. Maksimal ${BULK_TRANSFER_MAX_ROWS} transaksi per bulk transfer.`] };
+  }
+
+  const errors: string[] = [];
+  const rows: Row[] = [];
+
+  dataRows.forEach((r, idx) => {
+    const excelRowNo = TEMPLATE_DATA_START_INDEX + 1 + idx; // 1-indexed row number, for error messages
+    const [, name, bank, account, amountRaw, purpose, relationship] = r as unknown[];
+
+    const nameStr = String(name ?? '').trim();
+    const bankStr = String(bank ?? '').trim();
+    const accountStr = String(account ?? '').trim();
+    const purposeStr = String(purpose ?? '').trim();
+    const relationshipStr = String(relationship ?? '').trim();
+    const amountNum = Number(amountRaw);
+
+    if (!nameStr) errors.push(`Baris ${excelRowNo}: beneficiaryAccountName wajib diisi.`);
+    if (!bankStr) errors.push(`Baris ${excelRowNo}: beneficiaryBank wajib diisi.`);
+    if (!accountStr) errors.push(`Baris ${excelRowNo}: beneficiaryAccount wajib diisi.`);
+    if (amountRaw === '' || !Number.isFinite(amountNum) || amountNum <= 0) {
+      errors.push(`Baris ${excelRowNo}: amount wajib angka lebih dari 0.`);
+    }
+    if (!purposeStr) errors.push(`Baris ${excelRowNo}: transaction_purpose wajib diisi.`);
+    if (!relationshipStr) errors.push(`Baris ${excelRowNo}: beneficiary_relationship_to_sender wajib diisi.`);
+
+    if (!nameStr || !bankStr || !accountStr || !purposeStr || !relationshipStr || amountRaw === '' || !Number.isFinite(amountNum) || amountNum <= 0) {
+      return;
+    }
+
+    const resolvedBank = resolveImportedBank(bankStr, banks);
+    rows.push({
+      beneficiaryAccountName: nameStr,
+      beneficiaryBankCode: resolvedBank.code,
+      beneficiaryBankName: resolvedBank.name,
+      beneficiaryAccountNumber: accountStr.replace(/\D/g, ''),
+      amount: amountNum,
+      transaction_purpose: purposeStr,
+      beneficiary_relationship_to_sender: relationshipStr,
+    });
+  });
+
+  if (errors.length > 0) return { errors };
+  return { rows, refFromTemplate };
+}
+
 export default function BulkTransferPage() {
   const router = useRouter();
   const { token } = useAuth();
@@ -52,7 +174,8 @@ export default function BulkTransferPage() {
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
-  const [result, setResult] = useState<{ batch_no: string; total_count: number } | null>(null);
+  const [result, setResult] = useState<{ batch_no: string; bulk_reference_no: string; total_count: number } | null>(null);
+  const [bulkReferenceNo, setBulkReferenceNo] = useState('');
 
   // Sender picker (mirrors single transfer form)
   const [senderQuery, setSenderQuery] = useState('');
@@ -65,6 +188,10 @@ export default function BulkTransferPage() {
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
   // Track which rows the user has attempted to submit, to show row errors.
   const [showErrors, setShowErrors] = useState(false);
+
+  // Excel import
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [importSuccessInfo, setImportSuccessInfo] = useState('');
 
   const selectedSenderIsWic = selectedSender?.cif_relationship_type === 'WIC';
   const effectiveMaxAmount = selectedSenderIsWic ? WIC_TRANSFER_MAX_AMOUNT : TRANSFER_MAX_AMOUNT;
@@ -111,6 +238,37 @@ export default function BulkTransferPage() {
     setRows((rs) => (rs.length <= 1 ? rs : rs.filter((_, idx) => idx !== i)));
   }
 
+  async function onImportFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+
+    setImportSuccessInfo('');
+    setImportErrors([]);
+
+    let wb: XLSX.WorkBook;
+    try {
+      const buf = await file.arrayBuffer();
+      wb = XLSX.read(buf, { type: 'array' });
+    } catch {
+      setImportErrors(['Template tidak sesuai. Gunakan template resmi KESH.']);
+      return;
+    }
+
+    const result = parseBulkTransferWorkbook(wb, banks);
+    if ('errors' in result) {
+      setImportErrors(result.errors);
+      return;
+    }
+
+    if (result.refFromTemplate && !bulkReferenceNo.trim()) {
+      setBulkReferenceNo(result.refFromTemplate);
+    }
+    setRows(result.rows);
+    setShowErrors(false);
+    setImportSuccessInfo(`${result.rows.length} baris berhasil diimpor. Periksa/edit baris di bawah sebelum submit.`);
+  }
+
   // Returns an error message for a row, or '' if valid.
   function rowError(r: Row): string {
     if (!r.beneficiaryAccountName.trim()) return 'Nama rekening penerima wajib diisi.';
@@ -131,10 +289,21 @@ export default function BulkTransferPage() {
   const rowErrors = rows.map(rowError);
   const allRowsValid = rowErrors.every((e) => e === '');
 
+  // Returns an error message for the bulk reference no, or '' if valid.
+  function bulkReferenceNoError(): string {
+    const v = bulkReferenceNo.trim();
+    if (!v) return 'No. Referensi Bulk wajib diisi.';
+    if (v.length > BULK_REFERENCE_NO_MAX_LENGTH) return `No. Referensi Bulk maksimal ${BULK_REFERENCE_NO_MAX_LENGTH} karakter.`;
+    return '';
+  }
+
+  const bulkReferenceNoErr = bulkReferenceNoError();
+
   async function submit() {
     setErr('');
     setShowErrors(true);
     if (!selectedSender) { setErr('Silakan pilih pengirim dari hasil pencarian.'); return; }
+    if (bulkReferenceNoErr) { setErr(bulkReferenceNoErr); return; }
     if (!allRowsValid) { setErr('Perbaiki baris yang belum valid sebelum menyimpan.'); return; }
 
     const items: BulkTransferItem[] = rows.map((r) => ({
@@ -151,14 +320,19 @@ export default function BulkTransferPage() {
     try {
       const res = await createBulkTransfers({
         sender_application_id: Number(selectedSender.application_id),
+        bulk_reference_no: bulkReferenceNo.trim(),
         items,
       });
-      setResult({ batch_no: res.batch_no, total_count: res.total_count });
-      toast.success(`Bulk transfer berhasil. ${res.total_count} transfer dibuat.`);
+      setResult({ batch_no: res.batch_no, bulk_reference_no: res.bulk_reference_no, total_count: res.total_count });
+      toast.success(`Bulk transfer berhasil dibuat. ${res.total_count} transaksi dibuat.`);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Gagal membuat bulk transfer';
+      const rawMsg = e instanceof Error ? e.message : 'Gagal membuat bulk transfer';
+      const msg = rawMsg.toLowerCase().includes('bulk_reference_no')
+        ? 'No. Referensi Bulk sudah pernah digunakan untuk pengguna jasa ini.'
+        : rawMsg;
       setErr(msg);
       toast.error(msg);
+      console.error('Bulk transfer gagal:', rawMsg);
     } finally {
       setLoading(false);
     }
@@ -184,8 +358,10 @@ export default function BulkTransferPage() {
       <div className="max-w-2xl space-y-4">
         <h1 className="text-xl font-semibold">Bulk Transfer Berhasil</h1>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 space-y-1">
-          <p><span className="font-medium">Nomor Batch:</span> <span className="font-mono">{result.batch_no}</span></p>
-          <p><span className="font-medium">Total transfer dibuat:</span> {result.total_count}</p>
+          <p>Bulk transfer berhasil dibuat.</p>
+          <p><span className="font-medium">Batch No:</span> <span className="font-mono">{result.batch_no}</span></p>
+          <p><span className="font-medium">No. Referensi Bulk:</span> <span className="font-mono">{result.bulk_reference_no}</span></p>
+          <p><span className="font-medium">Total transaksi:</span> {result.total_count}</p>
           <p className="text-xs text-emerald-700">Transfer dibuat sebagai DRAFT dan tampil di daftar transfer normal.</p>
         </div>
         <div className="flex gap-2">
@@ -193,7 +369,7 @@ export default function BulkTransferPage() {
             Ke Daftar Transfer
           </button>
           <button
-            onClick={() => { setResult(null); setRows([emptyRow()]); setSelectedSender(null); setShowErrors(false); }}
+            onClick={() => { setResult(null); setRows([emptyRow()]); setSelectedSender(null); setShowErrors(false); setBulkReferenceNo(''); setImportErrors([]); setImportSuccessInfo(''); }}
             className="rounded-lg border px-4 py-2 text-sm hover:bg-slate-50"
           >
             Buat Bulk Lagi
@@ -276,6 +452,66 @@ export default function BulkTransferPage() {
         )}
       </div>
 
+      {/* Bulk reference no */}
+      <div className="rounded-2xl border p-4 space-y-2">
+        <label htmlFor="bulk-reference-no" className="text-xs text-muted-foreground">
+          No. Referensi Bulk <span className="text-red-600">*</span>
+        </label>
+        <input
+          id="bulk-reference-no"
+          className="w-full border rounded-lg px-3 py-2 text-sm"
+          value={bulkReferenceNo}
+          onChange={(e) => setBulkReferenceNo(e.target.value)}
+          maxLength={BULK_REFERENCE_NO_MAX_LENGTH}
+          placeholder="mis: BULK-REF-20260730-001"
+        />
+        {showErrors && bulkReferenceNoErr && (
+          <p className="text-xs text-red-600">{bulkReferenceNoErr}</p>
+        )}
+      </div>
+
+      {/* Excel import */}
+      <div className="rounded-2xl border p-4 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-700">Import dari Excel (opsional)</h2>
+            <p className="text-xs text-muted-foreground">
+              Unduh template, isi data, lalu import untuk mengisi baris penerima secara otomatis.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={downloadBulkTransferTemplate}
+              className="rounded-lg border px-3 py-2 text-xs hover:bg-slate-50 whitespace-nowrap"
+            >
+              Download Template
+            </button>
+            <label
+              htmlFor="bulk-import-file"
+              className="rounded-lg border px-3 py-2 text-xs hover:bg-slate-50 whitespace-nowrap cursor-pointer"
+            >
+              Import Excel
+            </label>
+            <input
+              id="bulk-import-file"
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={onImportFileChange}
+            />
+          </div>
+        </div>
+        {importErrors.length > 0 && (
+          <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-xs text-red-700 space-y-1">
+            {importErrors.map((e, i) => <p key={i}>{e}</p>)}
+          </div>
+        )}
+        {importSuccessInfo && importErrors.length === 0 && (
+          <p className="text-xs text-emerald-700">{importSuccessInfo}</p>
+        )}
+      </div>
+
       {/* Beneficiary rows */}
       <div className="space-y-3">
         {rows.map((r, i) => {
@@ -296,16 +532,18 @@ export default function BulkTransferPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-muted-foreground">Nama Rekening</label>
+                  <label htmlFor={`row-account-name-${i}`} className="text-xs text-muted-foreground">Nama Rekening</label>
                   <input
+                    id={`row-account-name-${i}`}
                     className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                     value={r.beneficiaryAccountName}
                     onChange={(e) => updateRow(i, { beneficiaryAccountName: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Bank Penerima</label>
+                  <label htmlFor={`row-bank-code-${i}`} className="text-xs text-muted-foreground">Bank Penerima</label>
                   <select
+                    id={`row-bank-code-${i}`}
                     className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"
                     value={r.beneficiaryBankCode}
                     onChange={(e) => onRowBankChange(i, e.target.value)}
@@ -319,8 +557,9 @@ export default function BulkTransferPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Nomor Rekening</label>
+                  <label htmlFor={`row-account-number-${i}`} className="text-xs text-muted-foreground">Nomor Rekening</label>
                   <input
+                    id={`row-account-number-${i}`}
                     inputMode="numeric"
                     className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                     value={r.beneficiaryAccountNumber}
@@ -328,8 +567,9 @@ export default function BulkTransferPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Nominal</label>
+                  <label htmlFor={`row-amount-${i}`} className="text-xs text-muted-foreground">Nominal</label>
                   <input
+                    id={`row-amount-${i}`}
                     type="number"
                     min={TRANSFER_MIN_AMOUNT}
                     max={effectiveMaxAmount}
@@ -339,8 +579,9 @@ export default function BulkTransferPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Tujuan Transaksi</label>
+                  <label htmlFor={`row-purpose-${i}`} className="text-xs text-muted-foreground">Tujuan Transaksi</label>
                   <input
+                    id={`row-purpose-${i}`}
                     className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                     value={r.transaction_purpose}
                     onChange={(e) => updateRow(i, { transaction_purpose: e.target.value })}
@@ -348,8 +589,9 @@ export default function BulkTransferPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Hubungan dengan Pengirim</label>
+                  <label htmlFor={`row-relationship-${i}`} className="text-xs text-muted-foreground">Hubungan dengan Pengirim</label>
                   <select
+                    id={`row-relationship-${i}`}
                     className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"
                     value={r.beneficiary_relationship_to_sender}
                     onChange={(e) => updateRow(i, { beneficiary_relationship_to_sender: e.target.value })}
@@ -382,7 +624,7 @@ export default function BulkTransferPage() {
 
       <button
         onClick={submit}
-        disabled={loading || !selectedSender}
+        disabled={loading || !selectedSender || !!bulkReferenceNoErr}
         className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-60 transition-colors"
       >
         {loading ? 'Menyimpan…' : `Buat ${rows.length} Transfer`}

@@ -39,6 +39,11 @@ export default function ComplaintsPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    // Role isn't known until the auth token hydrates (starts null on first
+    // render) — skip entirely once we know it's unauthorized, and re-check
+    // once a real role arrives, instead of firing the fetch unconditionally.
+    if (!canViewComplaints(role)) return;
+
     let alive = true;
     setLoading(true);
     setError('');
@@ -62,7 +67,7 @@ export default function ComplaintsPage() {
       }
     })();
     return () => { alive = false; };
-  }, [page, limit, q, status, level]);
+  }, [role, page, limit, q, status, level]);
 
   const resetPage = () => setPage(1);
 

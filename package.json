@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:complaint-refund": "playwright test e2e/complaint-refund-flow.spec.ts",
+    "test:e2e:bulk-transfer": "playwright test e2e/bulk-transfer-reference.spec.ts",
+    "test:e2e:bulk-transfer-list-import": "playwright test e2e/bulk-transfer-list-import.spec.ts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",
@@ -17,7 +20,8 @@
     "next": "^16.2.7",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0",

@@ -63,7 +63,7 @@ function Modal({
   confirmClass?: string;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl bg-white p-5 space-y-3">
         <p className="text-sm font-semibold text-slate-800">{title}</p>
         {children}
@@ -502,10 +502,11 @@ export default function StatementRefundDetailPage() {
         >
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-slate-500">
+              <label htmlFor="match-transfer-id" className="text-xs text-slate-500">
                 ID Transaksi Asal <span className="text-red-600">*</span>
               </label>
               <input
+                id="match-transfer-id"
                 type="number"
                 min={1}
                 value={matchTransferId}
@@ -514,8 +515,9 @@ export default function StatementRefundDetailPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-slate-500">ID Pengaduan (opsional)</label>
+              <label htmlFor="match-complaint-id" className="text-xs text-slate-500">ID Pengaduan (opsional)</label>
               <input
+                id="match-complaint-id"
                 type="number"
                 min={1}
                 value={matchComplaintId}
@@ -524,8 +526,9 @@ export default function StatementRefundDetailPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-slate-500">Catatan Investigasi</label>
+              <label htmlFor="match-notes" className="text-xs text-slate-500">Catatan Investigasi</label>
               <textarea
+                id="match-notes"
                 rows={3}
                 value={matchNotes}
                 onChange={(e) => setMatchNotes(e.target.value)}
@@ -571,8 +574,9 @@ export default function StatementRefundDetailPage() {
               Approval refund belum otomatis melakukan posting saldo partner sampai integrasi balance tersedia.
             </p>
             <div>
-              <label className="text-xs text-slate-500">Catatan Finance (opsional)</label>
+              <label htmlFor="approve-finance-notes" className="text-xs text-slate-500">Catatan Finance (opsional)</label>
               <textarea
+                id="approve-finance-notes"
                 rows={3}
                 value={financeNotes}
                 onChange={(e) => setFinanceNotes(e.target.value)}
@@ -602,8 +606,9 @@ export default function StatementRefundDetailPage() {
           }}
         >
           <div>
-            <label className="text-xs text-slate-500">Alasan <span className="text-red-600">*</span></label>
+            <label htmlFor="reject-reason" className="text-xs text-slate-500">Alasan <span className="text-red-600">*</span></label>
             <textarea
+              id="reject-reason"
               rows={3}
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}

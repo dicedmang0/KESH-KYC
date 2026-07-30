@@ -126,8 +126,9 @@ export default function AdminManagementCard() {
         <form onSubmit={handleCreate} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-neutral-500">Email</label>
+              <label htmlFor="admin-email" className="text-xs text-neutral-500">Email</label>
               <input
+                id="admin-email"
                 className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                 value={form.email}
                 onChange={(e) =>
@@ -137,8 +138,9 @@ export default function AdminManagementCard() {
               />
             </div>
             <div>
-              <label className="text-xs text-neutral-500">Nama</label>
+              <label htmlFor="admin-fullname" className="text-xs text-neutral-500">Nama</label>
               <input
+                id="admin-fullname"
                 className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                 value={form.fullName}
                 onChange={(e) =>
@@ -151,8 +153,9 @@ export default function AdminManagementCard() {
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-neutral-500">Role</label>
+              <label htmlFor="admin-role" className="text-xs text-neutral-500">Role</label>
               <select
+                id="admin-role"
                 className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"
                 value={form.role}
                 onChange={(e) =>
@@ -167,8 +170,9 @@ export default function AdminManagementCard() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-neutral-500">Branch ID</label>
+              <label htmlFor="admin-branch-id" className="text-xs text-neutral-500">Branch ID</label>
               <input
+                id="admin-branch-id"
                 className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                 value={form.branchId}
                 onChange={(e) =>
@@ -178,8 +182,9 @@ export default function AdminManagementCard() {
               />
             </div>
             <div>
-              <label className="text-xs text-neutral-500">Password awal</label>
+              <label htmlFor="admin-password" className="text-xs text-neutral-500">Password awal</label>
               <input
+                id="admin-password"
                 className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
                 type="password"
                 value={form.password}
