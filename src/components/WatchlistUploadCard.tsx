@@ -15,6 +15,20 @@ type OverwriteStrategy = 'merge' | 'replace';
 
 type RowError = { row: number | string; message: string };
 
+/**
+ * A row that was inserted but looks like an existing entry (same list type,
+ * normalised name, DOB and nationality under a different Unique ID). Warning
+ * only — the row is stored and the upload can still be SUCCESS.
+ */
+type DuplicateWarning = {
+  row?: number | string;
+  name?: string;
+  list_type?: string;
+  unique_id?: string | null;
+  existing_unique_ids?: (string | null)[];
+  message?: string;
+};
+
 type UploadResponse = {
   status?: UploadStatus;
   ok?: boolean;
@@ -24,6 +38,11 @@ type UploadResponse = {
   errors?: string;
   row_errors?: RowError[];
   count?: number; // legacy field
+  inserted_count?: number;
+  updated_count?: number;
+  skipped_count?: number;
+  warning_count?: number;
+  duplicate_warnings?: DuplicateWarning[];
 };
 
 type UploadResult = {
@@ -31,6 +50,15 @@ type UploadResult = {
   message: string;
   rowErrors: RowError[];
   errorsText: string | null;
+  counts: {
+    total: number;
+    success: number;
+    inserted: number;
+    updated: number;
+    skipped: number;
+    warnings: number;
+  };
+  duplicateWarnings: DuplicateWarning[];
 };
 
 function formatJumlah(h: WatchlistHistoryItem): string {
@@ -99,6 +127,17 @@ export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () =>
     const rowErrors = Array.isArray(res.row_errors) ? res.row_errors : [];
     const errorsText =
       typeof res.errors === 'string' && res.errors.trim() ? res.errors.trim() : null;
+    const duplicateWarnings = Array.isArray(res.duplicate_warnings) ? res.duplicate_warnings : [];
+
+    // Duplicate warnings never affect the status — they are advisory only.
+    const counts = {
+      total,
+      success,
+      inserted: Number(res.inserted_count ?? 0),
+      updated: Number(res.updated_count ?? 0),
+      skipped: Number(res.skipped_count ?? errorCount),
+      warnings: Number(res.warning_count ?? duplicateWarnings.length),
+    };
 
     const isFailed =
       res.status === 'FAILED' || res.ok === false || success === 0;
@@ -109,6 +148,8 @@ export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () =>
         message: 'Upload gagal. Tidak ada baris yang berhasil diproses.',
         rowErrors,
         errorsText,
+        counts,
+        duplicateWarnings,
       };
     }
 
@@ -118,6 +159,8 @@ export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () =>
         message: `Upload selesai sebagian. ${success} dari ${total} baris berhasil diproses, ${errorCount} baris gagal.`,
         rowErrors,
         errorsText,
+        counts,
+        duplicateWarnings,
       };
     }
 
@@ -126,6 +169,8 @@ export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () =>
       message: `Upload ${listType} (${listSource}) berhasil. ${success} dari ${total} baris berhasil diproses.`,
       rowErrors,
       errorsText,
+      counts,
+      duplicateWarnings,
     };
   }
 
@@ -172,8 +217,9 @@ export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () =>
       <form onSubmit={handleUpload} className="space-y-3 text-xs">
         {/* --- Upload Form --- */}
         <div className="flex flex-col gap-1">
-          <label className="font-medium">Jenis list</label>
+          <label className="font-medium" htmlFor="watchlist-list-type">Jenis list</label>
           <select
+            id="watchlist-list-type"
             className="w-full rounded-md border border-neutral-300 px-2 py-1 bg-white"
             value={listType}
             onChange={(e) => setListType(e.target.value as ListType)}
@@ -185,8 +231,9 @@ export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () =>
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="font-medium">Sumber list</label>
+          <label className="font-medium" htmlFor="watchlist-list-source">Sumber list</label>
           <input
+            id="watchlist-list-source"
             className="w-full rounded-md border border-neutral-300 px-2 py-1"
             value={listSource}
             onChange={(e) => setListSource(e.target.value)}
@@ -207,8 +254,9 @@ export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () =>
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="font-medium">File Excel/CSV</label>
+          <label className="font-medium" htmlFor="watchlist-file">File Excel/CSV</label>
           <input
+            id="watchlist-file"
             type="file"
             accept=".xlsx,.xls,.csv"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -233,6 +281,22 @@ export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () =>
           >
             <p>{result.message}</p>
 
+            <dl className="grid grid-cols-3 gap-x-3 gap-y-1 pt-1 sm:grid-cols-6">
+              {([
+                ['Total baris', result.counts.total],
+                ['Berhasil', result.counts.success],
+                ['Data baru', result.counts.inserted],
+                ['Diperbarui', result.counts.updated],
+                ['Gagal/dilewati', result.counts.skipped],
+                ['Peringatan', result.counts.warnings],
+              ] as const).map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-[11px] opacity-70">{label}</dt>
+                  <dd className="text-sm font-semibold">{value}</dd>
+                </div>
+              ))}
+            </dl>
+
             {result.rowErrors.length > 0 ? (
               <ul className="list-disc pl-4 space-y-0.5">
                 {result.rowErrors.slice(0, 5).map((re, i) => (
@@ -247,6 +311,46 @@ export default function WatchlistUploadCard({ onUploaded }: { onUploaded?: () =>
             ) : (
               result.errorsText && <p>{result.errorsText}</p>
             )}
+          </div>
+        )}
+
+        {result && result.duplicateWarnings.length > 0 && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 space-y-2">
+            <p className="font-semibold">
+              Peringatan Kemungkinan Duplikat ({result.duplicateWarnings.length})
+            </p>
+            <p className="text-[11px]">
+              Baris tetap tersimpan. Nama berikut mirip dengan entri yang sudah ada namun
+              memakai Unique ID berbeda.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] border border-amber-200 bg-white text-[11px]">
+                <thead className="bg-amber-100/60">
+                  <tr>
+                    <th className="border border-amber-200 px-2 py-1 text-left">Baris</th>
+                    <th className="border border-amber-200 px-2 py-1 text-left">Nama</th>
+                    <th className="border border-amber-200 px-2 py-1 text-left">Jenis List</th>
+                    <th className="border border-amber-200 px-2 py-1 text-left">Unique ID</th>
+                    <th className="border border-amber-200 px-2 py-1 text-left">Unique ID Terdaftar</th>
+                    <th className="border border-amber-200 px-2 py-1 text-left">Pesan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.duplicateWarnings.map((w, i) => (
+                    <tr key={`${w.unique_id ?? 'dup'}-${w.row ?? i}`}>
+                      <td className="border border-amber-200 px-2 py-1">{w.row ?? '-'}</td>
+                      <td className="border border-amber-200 px-2 py-1 font-medium">{w.name || '-'}</td>
+                      <td className="border border-amber-200 px-2 py-1">{w.list_type || '-'}</td>
+                      <td className="border border-amber-200 px-2 py-1 font-mono">{w.unique_id || '-'}</td>
+                      <td className="border border-amber-200 px-2 py-1 font-mono break-all">
+                        {(w.existing_unique_ids ?? []).filter(Boolean).join(', ') || '-'}
+                      </td>
+                      <td className="border border-amber-200 px-2 py-1">{w.message || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

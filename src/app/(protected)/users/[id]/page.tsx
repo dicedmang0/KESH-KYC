@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { apiFetch, apiUpload, getRoleFromToken } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { formatCif, isLainnya } from '@/lib/utils';
+// Watchlist display helpers are shared with the transfer screening UI.
+import { formatDateTime, formatMatchScore, isBlockingListType, matchedFieldLabel } from '@/lib/transfers';
 import LainnyaField from '@/components/lainnya-field';
 import EddForm, { DEFAULT_EDD, type EddFormData } from '@/components/EddForm';
 import WebcamCapture from '@/components/WebcamCapture';
@@ -190,6 +192,8 @@ type DetailResponse = {
   parties: Party[];
   risk?: RiskRecord | null;
   edd?: EddRecord | null;
+  screening?: ScreeningHit[] | null;
+  watchlist_summary?: WatchlistSummary | null;
 };
 
 type Party = {
@@ -210,11 +214,31 @@ type Party = {
   source_of_wealth?: string | null;
 };
 
-type ScreeningResult = {
-  status?: string;
-  checked_at?: string | null;
-  matches?: { name: string; list_type: string; match_score?: number }[];
-  [key: string]: unknown;
+/** One watchlist match recorded for this application (detail API `screening[]`). */
+type ScreeningHit = {
+  id?: number | string;
+  list_type?: string | null;
+  input_name?: string | null;
+  matched_name?: string | null;
+  matched_field?: string | null;
+  match_score?: number | string | null;
+  unique_id?: string | null;
+  subject_type?: string | null;
+  subject_ref?: number | string | null;
+  watchlist_id?: number | string | null;
+  matched_dob?: string | null;
+  matched_nationality?: string | null;
+  review_status?: string | null;
+  /** Backend classification: MATCH / NEAR_MATCH / CLEAR. */
+  status?: string | null;
+  created_at?: string | null;
+};
+
+type WatchlistSummary = {
+  has_hit?: boolean | null;
+  status?: WatchlistStatus | null;
+  list_types?: string[] | null;
+  compliance_blocking?: boolean | null;
 };
 
 type PrecheckResult = {
@@ -771,7 +795,9 @@ export default function UserDetailPage() {
   const [docs, setDocs] = useState<Document[]>([]);
   const [parties, setParties] = useState<Party[]>([]);
   const [risk, setRisk] = useState<RiskRecord | null>(null);
-  const [screening, setScreening] = useState<ScreeningResult | null>(null);
+  const [screening, setScreening] = useState<ScreeningHit[]>([]);
+  const [watchlistSummary, setWatchlistSummary] = useState<WatchlistSummary | null>(null);
+  const [rescreening, setRescreening] = useState(false);
   const [precheck, setPrecheck] = useState<PrecheckResult | null>(null);
   const [eddData, setEddData] = useState<Partial<EddFormData>>({});
   const [eddSaving, setEddSaving] = useState(false);
@@ -947,11 +973,9 @@ export default function UserDetailPage() {
         if (eddFromEndpoint) setEddData(eddFromEndpoint);
       }
 
-      // Only fetch screening after submission — DRAFT hasn't run screening yet
-      if (appData.status !== 'DRAFT') {
-        const screeningData = await apiFetch<ScreeningResult>(`/applications/${id}/screening`).catch(() => null);
-        setScreening(screeningData);
-      }
+      // Watchlist hits come with the detail response — no extra GET /screening.
+      setScreening(Array.isArray(resp.screening) ? resp.screening : []);
+      setWatchlistSummary(resp.watchlist_summary ?? null);
     } catch (e: unknown) {
       setErr(getErrMsg(e, 'Gagal memuat data aplikasi'));
     } finally {
@@ -1442,6 +1466,25 @@ export default function UserDetailPage() {
     }
   }
 
+  // Manual re-screen — needed when watchlist data was uploaded after submit.
+  async function rescreenWatchlist() {
+    setRescreening(true);
+    try {
+      const res = await apiFetch<{ hit_count?: number; status?: string; risk_level?: string }>(
+        `/applications/${id}/rescreen-watchlist`,
+        { method: 'POST' },
+      );
+      toast.success(
+        `Re-screen selesai — ${res?.hit_count ?? 0} hit (${res?.status ?? '-'}), risk ${res?.risk_level ?? '-'}`,
+      );
+      await load();
+    } catch (e: unknown) {
+      toast.error(getErrMsg(e, 'Gagal menjalankan re-screen watchlist'));
+    } finally {
+      setRescreening(false);
+    }
+  }
+
   if (loading) return <p className="p-6 text-sm text-slate-500">Memuat…</p>;
   if (err) return <p className="p-6 text-sm text-red-600">{err}</p>;
   if (!app) return <p className="p-6 text-sm text-slate-500">Data tidak ditemukan.</p>;
@@ -1496,6 +1539,16 @@ export default function UserDetailPage() {
     || (userRole === 'OperationSupervisor' && isLowOrMediumRisk)
     || (userRole === 'ComplianceLead' && isHighRisk);
 
+  // Watchlist screening — the backend decides blocking; FE only mirrors it so the
+  // Screening section and the RBA card can never contradict each other.
+  const complianceBlocking =
+    watchlistSummary?.compliance_blocking === true ||
+    screening.some((h) => h.status === 'MATCH' && isBlockingListType(h.list_type));
+  const pepOnlyHit =
+    !complianceBlocking &&
+    screening.some((h) => h.status !== 'CLEAR' && String(h.list_type ?? '').toUpperCase() === 'PEP');
+  const canRescreen = ['ComplianceLead', 'SystemAdmin', 'Director'].includes(userRole ?? '');
+
   const canViewRisk = ['SystemAdmin', 'Director', 'ComplianceLead', 'OperationSupervisor', 'FrontDesk', 'Auditor'].includes(userRole ?? '');
   const canEditEdd = ['SystemAdmin', 'Director', 'FrontDesk', 'ComplianceLead'].includes(userRole ?? '');
   const canViewEdd = ['SystemAdmin', 'Director', 'FrontDesk', 'ComplianceLead', 'Auditor'].includes(userRole ?? '');
@@ -1542,6 +1595,19 @@ export default function UserDetailPage() {
               Tanggal: {new Date(app.revision_requested_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}
             </p>
           )}
+        </div>
+      )}
+
+      {/* Watchlist sanction banner */}
+      {complianceBlocking && (
+        <div role="alert" className="rounded-md border border-red-300 bg-red-50 p-4 text-sm font-semibold text-red-800">
+          Customer terindikasi masuk daftar DTTOT/PPPSPM. Aplikasi memerlukan review Compliance.
+        </div>
+      )}
+      {pepOnlyHit && (
+        <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <span className="font-semibold">Customer terindikasi masuk daftar PEP.</span>{' '}
+          Enhanced Due Diligence (EDD) diperlukan sebelum aplikasi disetujui.
         </div>
       )}
 
@@ -2934,38 +3000,100 @@ export default function UserDetailPage() {
             Screening belum dijalankan. Submit aplikasi terlebih dahulu.
           </p>
         </div>
-      ) : screening ? (
-        <div className="rounded-xl border p-4 space-y-2">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Screening</p>
-          {screening.status && (
-            <p className="text-sm">
-              <span className="font-medium">Status:</span> {{ DRAFT: 'Draft', SUBMITTED: 'Diajukan', IN_REVIEW: 'Dalam Review', APPROVED: 'Disetujui', REJECTED: 'Ditolak', CLEAN: 'Bersih', HIT: 'Terdeteksi' }[screening.status ?? ''] ?? screening.status}
-            </p>
-          )}
-          {screening.checked_at && (
-            <p className="text-xs text-slate-500">
-              Diperiksa: {new Date(screening.checked_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}
-            </p>
-          )}
-          {Array.isArray(screening.matches) && screening.matches.length > 0 ? (
-            <div className="mt-2">
-              <p className="text-sm font-medium text-red-700 mb-1">
-                Match ditemukan ({screening.matches.length}):
-              </p>
-              <ul className="space-y-1">
-                {screening.matches.map((m, i) => (
-                  <li key={i} className="text-sm text-red-600">
-                    {m.name} — {m.list_type}
-                    {m.match_score != null ? ` (score: ${m.match_score})` : ''}
-                  </li>
+      ) : (
+        <div className="rounded-xl border p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Screening</p>
+              <div className="mt-1 flex items-center gap-2">
+                <WatchlistBadge status={watchlistSummary?.status ?? 'CLEAR'} />
+                {(watchlistSummary?.list_types ?? []).map((t) => (
+                  <span
+                    key={t}
+                    className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                      isBlockingListType(t) ? 'bg-red-600 text-white' : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {t}
+                  </span>
                 ))}
-              </ul>
+              </div>
             </div>
+            {canRescreen && (
+              <button
+                type="button"
+                onClick={rescreenWatchlist}
+                disabled={rescreening}
+                className="shrink-0 rounded-md border border-kesh-600 px-3 py-1.5 text-xs font-medium text-kesh-700 hover:bg-kesh-50 disabled:opacity-50"
+              >
+                {rescreening ? 'Memproses…' : 'Re-screen Watchlist'}
+              </button>
+            )}
+          </div>
+
+          {screening.length > 0 ? (
+            <>
+              <p className="text-xs text-slate-500">
+                {screening.length} entri watchlist cocok dengan data customer.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] text-xs">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="border px-2 py-1 text-left">Jenis List</th>
+                      <th className="border px-2 py-1 text-left">Input Name</th>
+                      <th className="border px-2 py-1 text-left">Matched Name</th>
+                      <th className="border px-2 py-1 text-left">Matched Field</th>
+                      <th className="border px-2 py-1 text-left">Match Score</th>
+                      <th className="border px-2 py-1 text-left">Unique ID</th>
+                      <th className="border px-2 py-1 text-left">Subject Type</th>
+                      <th className="border px-2 py-1 text-left">Subject Ref</th>
+                      <th className="border px-2 py-1 text-left">DOB</th>
+                      <th className="border px-2 py-1 text-left">Nationality</th>
+                      <th className="border px-2 py-1 text-left">Review Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {screening.map((h, i) => (
+                      <tr key={h.id ?? `${h.unique_id ?? 'hit'}-${i}`}>
+                        <td className="border px-2 py-1">
+                          <span
+                            className={`inline-block rounded px-1.5 py-0.5 font-medium ${
+                              isBlockingListType(h.list_type)
+                                ? 'bg-red-600 text-white'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {h.list_type ?? '-'}
+                          </span>
+                        </td>
+                        <td className="border px-2 py-1">{h.input_name ?? '-'}</td>
+                        <td className="border px-2 py-1 font-medium">{h.matched_name ?? '-'}</td>
+                        <td className="border px-2 py-1">{matchedFieldLabel(h.matched_field)}</td>
+                        <td className="border px-2 py-1">{formatMatchScore(h.match_score)}</td>
+                        <td className="border px-2 py-1 font-mono">{h.unique_id ?? '-'}</td>
+                        <td className="border px-2 py-1">{h.subject_type ?? '-'}</td>
+                        <td className="border px-2 py-1">{h.subject_ref ?? '-'}</td>
+                        <td className="border px-2 py-1">{h.matched_dob ? String(h.matched_dob).slice(0, 10) : '-'}</td>
+                        <td className="border px-2 py-1">{h.matched_nationality ?? '-'}</td>
+                        <td className="border px-2 py-1">
+                          {h.review_status ?? '-'}
+                          {h.status && h.status !== h.review_status ? ` (${h.status})` : ''}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-slate-400">
+                Terakhir dicek: {formatDateTime(screening[0]?.created_at)}
+              </p>
+            </>
           ) : (
             <p className="text-sm text-emerald-700">Tidak ada match pada watchlist.</p>
           )}
         </div>
-      ) : null}
+      )}
 
       {/* Shared hidden file input — used by every "Upload File" action. */}
       <input

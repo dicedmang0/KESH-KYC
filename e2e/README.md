@@ -23,6 +23,31 @@ for the workflow under test. Specs:
   Transfer Excel template download, and importing a generated `.xlsx` fixture
   to fill and submit bulk rows (including the B4 "No. Referensi Bulk"
   prefill), plus duplicate `bulk_reference_no` rejection in that same flow.
+- `dttot-watchlist-transfer-hit.spec.ts` — DTTOT watchlist upload through
+  Daftar Pengawasan (ComplianceLead), then a FrontDesk transfer whose
+  beneficiary name is one of the uploaded DTTOT names. Converts the PPATK
+  DTTOT export at `e2e/fixtures/watchlist/20260617043405.xlsx` into the KESH
+  watchlist template at run time (see "DTTOT fixture" below). The second test
+  then submits that transfer through the UI and asserts the screening result:
+  status `PENDING_COMPLIANCE_REVIEW`, the "Hasil Screening Watchlist" section
+  with the DTTOT hit rows and warning, the "Watchlist Hit"/`DTTOT` badges on
+  the transfer list, and a sanction-related monitoring case. Screening runs on
+  **submit**, not create — the draft is still clean immediately after "Buat
+  Draft". A third test uploads a one-row file carrying the same name/DOB/
+  nationality under a *different* `Unique_ID` and asserts the upload stays
+  `SUCCESS` while the "Peringatan Kemungkinan Duplikat" panel lists the row.
+  That row is deliberately inserted with a run-unique `E2E-DUP-<ts>` id (a
+  reused id would dedupe and produce no warning) and removed again in
+  `afterAll` — see "Duplicate-fixture cleanup" below.
+
+- `kyc-watchlist-screening.spec.ts` — application detail (`/users/:id`)
+  watchlist screening: the Screening section renders every stored hit from the
+  detail response (`screening[]` + `watchlist_summary`, no separate
+  `GET /applications/:id/screening`), the DTTOT/PPPSPM compliance-blocking
+  banner is shown, ComplianceLead can run "Re-screen Watchlist" and the risk
+  level refreshes to HIGH, and FrontDesk sees the section but not the button.
+  Targets application `13686` (Mira Ariani) by default — override with
+  `E2E_WATCHLIST_APP_ID`.
 
 Default FE base URL for this suite is `http://localhost:3100` (not `:3000`) —
 see "Why :3100" below.
@@ -89,6 +114,23 @@ Local/dev database only. Do not point this at production or a devtunnel.
      since the bulk transfer sender picker only returns approved applications.
      If none exists, the spec fails in `beforeAll` with a message telling you
      to seed one.
+   - `dttot-watchlist-transfer-hit.spec.ts` needs the seeded **ComplianceLead**
+     (`admin@example.com` / `Admin123!`, override via `E2E_COMPLIANCE_EMAIL` /
+     `E2E_COMPLIANCE_PASSWORD`) — the backend restricts
+     `POST /watchlist/upload` to that role. It creates its own FrontDesk
+     account and reuses an existing `APPROVED` application, same as the bulk
+     specs. Uploads are idempotent: `Unique_ID` is derived from the DTTOT
+     "Kode Densus", so re-runs upsert the same 5 rows.
+   - `kyc-watchlist-screening.spec.ts` needs the seeded **ComplianceLead** (it
+     drives the page and the re-screen action) and the **SystemAdmin** (to
+     create the FrontDesk account used for the negative check), plus a local
+     application whose customer name already matches an uploaded watchlist
+     entry. `13686` (Mira Ariani) is the default; run
+     `dttot-watchlist-transfer-hit.spec.ts` first if the DTTOT data is not
+     loaded yet, or set `E2E_WATCHLIST_APP_ID`. Note the backend appends a new
+     `screening_results` row per re-screen, so the hit count grows between runs
+     — the spec reads the expected count from the API each run instead of
+     hardcoding it.
    - `bulk-transfer-list-import.spec.ts` has the same requirements as
      `bulk-transfer-reference.spec.ts` above (own FrontDesk account, reuses an
      existing `APPROVED` application, never touches KYC/KYB itself). It builds
@@ -110,6 +152,8 @@ npm run test:e2e:bulk-transfer-list-import        # list split + Excel import sp
 npx playwright test e2e/complaint-refund-flow.spec.ts
 npx playwright test e2e/bulk-transfer-reference.spec.ts
 npx playwright test e2e/bulk-transfer-list-import.spec.ts
+npx playwright test e2e/dttot-watchlist-transfer-hit.spec.ts
+npx playwright test e2e/kyc-watchlist-screening.spec.ts
 
 # headed / debugging:
 npx playwright test --headed
@@ -137,3 +181,62 @@ Pengirim), and the transfer list's "Filter status" select. The Bulk
 Transfer form's hidden `<input type="file">` (styled as an "Import Excel"
 button) is likewise given a proper `htmlFor`/`id` pair so tests can target it
 with `getByLabel('Import Excel').setInputFiles(...)`.
+
+Same fix for `dttot-watchlist-transfer-hit.spec.ts`: the Watchlist upload
+card's "Jenis list", "Sumber list" and "File Excel/CSV" fields, and the single
+Transfer form's Nominal, Bank Penerima, Nomor Rekening, Nama Rekening,
+Hubungan dengan Pengirim and Tujuan Transaksi fields.
+
+## DTTOT fixture
+
+`e2e/fixtures/watchlist/20260617043405.xlsx` is the raw PPATK DTTOT export
+(531 rows, sheet "Export", Indonesian headers: `Nama`, `Deskripsi`, `Terduga`,
+`Kode Densus`, `Tempat Lahir`, `Tanggal Lahir`, `WN/Asal Negara`, `Alamat`).
+The KESH ingester does not accept it as-is — `Nama` has no recognised alias,
+so every row would fail with "Baris tanpa Full_Name/Entity_Name ditolak".
+
+The spec converts it at run time into the KESH watchlist template at
+`e2e/.tmp/dttot-watchlist-upload.xlsx` (gitignored — do not commit), taking 5
+rows: 4 people with a full identity set plus 1 `Korporasi` to exercise the
+`Entity_Name` branch. Mapping:
+
+| DTTOT source     | KESH template                                            |
+| ---------------- | -------------------------------------------------------- |
+| `Nama`           | `Full_Name` / `Entity_Name` (first segment), `Alias_Name` (remaining `alias …` segments, `;`-joined) |
+| `Terduga`        | `Subject_Type` (`Orang`/`Korporasi` — accepted verbatim) |
+| `Kode Densus`    | `Unique_ID` (`DTTOT-<kode>`) and `Sanction_Number`        |
+| `Tanggal Lahir`  | `Date_of_Birth` (dd/mm/yyyy → ISO) + `Raw_Date_of_Birth`  |
+| `Tempat Lahir`   | `Place_of_Birth`                                          |
+| `WN/Asal Negara` | `Nationality`                                             |
+| `Alamat`         | `Address`                                                 |
+| `Deskripsi`      | `Description`, plus `National_ID_Number` (NIK parsed out) |
+
+`Watchlist_Type` is written as `DTTOT` on every row so the per-row vs.
+upload-`list_type` match policy is exercised rather than inferred.
+
+### Duplicate-fixture cleanup
+
+The duplicate-warning test must *insert* a watchlist entry (the backend only
+warns on insert, never on an update), so it writes one row with a run-unique
+`E2E-DUP-<timestamp>` Unique ID. `afterAll` deletes every
+`unique_id LIKE 'E2E-DUP-%'` row plus the screening/transfer hits it produced —
+real DTTOT rows are keyed by their PPATK "Kode Densus" (`DTTOT-…`) and never
+match that prefix.
+
+There is no delete endpoint for watchlist entries, so cleanup shells out to
+`psql` and takes its connection from libpq's own `PG*` environment variables
+(no credentials in the repo). Set `E2E_PSQL` if `psql` is not on `PATH`:
+
+```sh
+E2E_PSQL="/c/Program Files/PostgreSQL/16/bin/psql.exe" \
+PGHOST=localhost PGPORT=5432 PGUSER=postgres PGPASSWORD=… PGDATABASE=kesh_internal \
+npx playwright test e2e/dttot-watchlist-transfer-hit.spec.ts
+```
+
+Without those, the run logs `cleanup skipped — could not run psql (…)` and
+still passes; the leftover rows are inert test data.
+
+Read the source with `raw: false`: 82 of the 531 DOB values are free text
+("01/07/1974 atau 01/01/1973", "-", multi-line lists) and only survive in
+`Raw_Date_of_Birth`, and xlsx's serial→`Date` conversion lands ~12s before
+midnight, which would shift every parseable DOB back one day.

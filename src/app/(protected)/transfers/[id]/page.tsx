@@ -17,7 +17,12 @@ import {
   transferReference,
   formatDateTime,
   transferRedFlagLabel,
+  formatMatchScore,
+  matchedFieldLabel,
+  watchlistListTypes,
+  isBlockingListType,
   TRANSFER_RED_FLAGS,
+  AUTO_RED_FLAGS,
   canSubmitTransfer,
   canSubmitTransferComplianceReview,
   canDecideTransferComplianceReview,
@@ -424,6 +429,12 @@ export default function TransferDetailPage() {
   const cr = row?.latest_compliance_review;
   const canEvaluateMonitoring = role === 'ComplianceLead' || role === 'SystemAdmin' || role === 'Director';
 
+  // Beneficiary screening results. A sanction-list hit (DTTOT/PPPSPM) gets the
+  // strong warning; PEP-only hits are shown without it.
+  const watchlistHits = row?.watchlist_hits ?? [];
+  const blockingListTypes = watchlistListTypes(watchlistHits).filter(isBlockingListType);
+  const hasBlockingHit = blockingListTypes.length > 0;
+
   async function doEvaluateMonitoring() {
     if (!id) return;
     setEvalLoading(true);
@@ -497,6 +508,67 @@ export default function TransferDetailPage() {
               {row.bulk_reference_no && <Field label="No. Referensi Bulk" value={row.bulk_reference_no} />}
             </div>
           </SectionCard>
+
+          {/* 1b. Beneficiary watchlist screening — only when the backend recorded hits */}
+          {watchlistHits.length > 0 && (
+            <SectionCard title="Hasil Screening Watchlist">
+              {hasBlockingHit && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-medium text-red-800"
+                >
+                  Beneficiary terindikasi masuk daftar {blockingListTypes.join(' / ')}. Transfer
+                  memerlukan review Compliance.
+                </div>
+              )}
+
+              <p className="text-xs text-neutral-500">
+                Nama penerima dicocokkan otomatis dengan data watchlist saat transaksi diajukan.
+                {watchlistHits.length > 1 && ` ${watchlistHits.length} entri watchlist cocok.`}
+              </p>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[820px] text-xs">
+                  <thead className="bg-neutral-50 text-neutral-600">
+                    <tr>
+                      <th className="border px-2 py-1 text-left">List Type</th>
+                      <th className="border px-2 py-1 text-left">Input Name</th>
+                      <th className="border px-2 py-1 text-left">Matched Name</th>
+                      <th className="border px-2 py-1 text-left">Matched Field</th>
+                      <th className="border px-2 py-1 text-left">Match Score</th>
+                      <th className="border px-2 py-1 text-left">Unique ID</th>
+                      <th className="border px-2 py-1 text-left">Subject Type</th>
+                      <th className="border px-2 py-1 text-left">Created At</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {watchlistHits.map((h, i) => (
+                      <tr key={`${h.unique_id ?? 'hit'}-${i}`}>
+                        <td className="border px-2 py-1">
+                          <span
+                            className={`inline-block rounded px-1.5 py-0.5 font-medium ${
+                              isBlockingListType(h.list_type)
+                                ? 'bg-red-600 text-white'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {h.list_type ?? '-'}
+                          </span>
+                        </td>
+                        <td className="border px-2 py-1">{h.input_name ?? '-'}</td>
+                        <td className="border px-2 py-1 font-medium">{h.matched_name ?? '-'}</td>
+                        <td className="border px-2 py-1">{matchedFieldLabel(h.matched_field)}</td>
+                        <td className="border px-2 py-1">{formatMatchScore(h.match_score)}</td>
+                        <td className="border px-2 py-1 font-mono">{h.unique_id ?? '-'}</td>
+                        <td className="border px-2 py-1">{h.subject_type ?? '-'}</td>
+                        <td className="border px-2 py-1">{formatDateTime(h.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+          )}
 
           {/* 2. Sender / Source */}
           <SectionCard title="Pengirim / Sumber">
@@ -756,7 +828,7 @@ export default function TransferDetailPage() {
                   <div>
                     <label className="text-xs font-medium text-neutral-600">Red flag internal</label>
                     <div className="mt-1 grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                      {TRANSFER_RED_FLAGS.map(([code, label]) => (
+                      {TRANSFER_RED_FLAGS.filter(([code]) => !AUTO_RED_FLAGS.includes(code)).map(([code, label]) => (
                         <label key={code} className="flex items-start gap-2 text-sm">
                           <input
                             type="checkbox"

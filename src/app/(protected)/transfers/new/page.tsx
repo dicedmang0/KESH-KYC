@@ -371,8 +371,9 @@ export default function NewTransferPage() {
 
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-1">
-            <label className="text-xs text-muted-foreground">Nominal</label>
+            <label className="text-xs text-muted-foreground" htmlFor="transfer-amount">Nominal</label>
             <input
+              id="transfer-amount"
               type="number"
               min={TRANSFER_MIN_AMOUNT}
               max={effectiveMaxAmount}
@@ -411,8 +412,9 @@ export default function NewTransferPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground">Bank Penerima</label>
+            <label className="text-xs text-muted-foreground" htmlFor="transfer-bank">Bank Penerima</label>
             <select
+              id="transfer-bank"
               className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"
               value={selectedBankCode}
               onChange={(e) => onBankChange(e.target.value)}
@@ -438,8 +440,9 @@ export default function NewTransferPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground">Nomor Rekening</label>
+            <label className="text-xs text-muted-foreground" htmlFor="transfer-account-number">Nomor Rekening</label>
             <input
+              id="transfer-account-number"
               inputMode="numeric"
               className={`mt-1 w-full border rounded-lg px-3 py-2 text-sm ${acctError ? 'border-red-400' : ''}`}
               value={form.beneficiaryAccountNumber}
@@ -448,8 +451,9 @@ export default function NewTransferPage() {
             {acctError && <p className="mt-1 text-xs text-red-600">{acctError}</p>}
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Nama Rekening</label>
+            <label className="text-xs text-muted-foreground" htmlFor="transfer-account-name">Nama Rekening</label>
             <input
+              id="transfer-account-name"
               className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
               value={form.beneficiaryAccountName}
               onChange={(e) => setForm((s) => ({ ...s, beneficiaryAccountName: e.target.value }))}
@@ -458,8 +462,9 @@ export default function NewTransferPage() {
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground">Hubungan dengan Pengirim *</label>
+          <label className="text-xs text-muted-foreground" htmlFor="transfer-relationship">Hubungan dengan Pengirim *</label>
           <select
+            id="transfer-relationship"
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"
             value={form.beneficiary_relationship_to_sender}
             onChange={(e) => setForm((s) => ({ ...s, beneficiary_relationship_to_sender: e.target.value }))}
@@ -482,8 +487,9 @@ export default function NewTransferPage() {
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Tujuan Transaksi</label>
+            <label className="text-xs text-muted-foreground" htmlFor="transfer-purpose">Tujuan Transaksi</label>
             <input
+              id="transfer-purpose"
               className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
               value={form.transaction_purpose}
               onChange={(e) => setForm((s) => ({ ...s, transaction_purpose: e.target.value }))}

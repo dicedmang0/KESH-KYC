@@ -10,7 +10,7 @@ import {
   formatDateTime,
   type BulkBatchDetail,
 } from '@/lib/transfers';
-import { TransferStatusBadge } from '@/components/transfer-badges';
+import { TransferStatusBadge, WatchlistHitBadge } from '@/components/transfer-badges';
 
 function Field({ label, value }: { label: string; value?: React.ReactNode }) {
   const empty = value === null || value === undefined || value === '';
@@ -111,7 +111,14 @@ export default function BulkBatchDetailPage() {
               transfers.map((t) => (
                 <div key={t.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm border-t items-center min-w-[900px]">
                   <div className="col-span-2 font-mono text-xs break-all">{transferReference(t)}</div>
-                  <div className="col-span-2 break-words">{t.beneficiary_account_name}</div>
+                  <div className="col-span-2 break-words">
+                    {t.beneficiary_account_name}
+                    {t.has_watchlist_hit && (
+                      <div className="mt-1">
+                        <WatchlistHitBadge hasHit listTypes={t.watchlist_list_types} />
+                      </div>
+                    )}
+                  </div>
                   <div className="col-span-2 break-words">{t.beneficiary_bank_name}</div>
                   <div className="col-span-2 break-all">{t.beneficiary_account_number}</div>
                   <div className="col-span-2 font-medium text-right whitespace-nowrap">{formatTransferAmount(t)}</div>

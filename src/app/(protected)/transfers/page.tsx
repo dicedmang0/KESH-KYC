@@ -16,7 +16,7 @@ import {
 import { useAuth } from '@/app/providers';
 import { formatCif } from '@/lib/utils';
 import { Pagination } from '@/components/pagination';
-import { TransferStatusBadge, TransferResultBadge } from '@/components/transfer-badges';
+import { TransferStatusBadge, TransferResultBadge, WatchlistHitBadge } from '@/components/transfer-badges';
 
 type ListTab = 'single' | 'bulk';
 
@@ -217,6 +217,13 @@ export default function TransfersPage() {
                   <div className="col-span-2 max-w-[220px] break-words">
                     <div className="font-medium">{r.beneficiary_account_name}</div>
                     <div className="text-xs text-muted-foreground break-all">{r.beneficiary_account_number}</div>
+                    {/* Screening is on the beneficiary name, so the marker lives
+                        in this cell — it wraps here instead of widening Status. */}
+                    {r.has_watchlist_hit && (
+                      <div className="mt-1">
+                        <WatchlistHitBadge hasHit listTypes={r.watchlist_list_types} />
+                      </div>
+                    )}
                   </div>
                   <div className="col-span-2 break-words">
                     <div className="font-medium">{r.beneficiary_bank_name}</div>

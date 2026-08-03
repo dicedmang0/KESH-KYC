@@ -67,9 +67,19 @@ export const TRANSFER_RED_FLAGS = [
   ["RBA_HIGH", "Profil risiko tinggi"],
   ["RBA_INCOMPLETE", "RBA belum lengkap"],
   ["WATCHLIST_NEAR_MATCH", "Watchlist near match"],
+  // Raised automatically by beneficiary screening on submit (not user-picked).
+  ["WATCHLIST_HIT", "Watchlist hit"],
+  ["DTTOT_HIT", "DTTOT hit"],
   ["DOCUMENT_OR_INFORMATION_UNUSUAL", "Dokumen/informasi tidak wajar"],
   ["OTHER", "Lainnya"],
 ] as const;
+
+/**
+ * Red flags the backend sets itself from watchlist screening. They must not
+ * appear in the manual "Ajukan Review Compliance" checklist — a user picking
+ * them by hand would claim a screening result that never happened.
+ */
+export const AUTO_RED_FLAGS: readonly string[] = ["WATCHLIST_HIT", "DTTOT_HIT"];
 
 export type TransferRedFlag = (typeof TRANSFER_RED_FLAGS)[number][0];
 
@@ -98,6 +108,48 @@ export type ComplianceReview = {
   decision_notes?: string | null;
 };
 
+/** One beneficiary-name match against the watchlist, recorded on submit. */
+export type WatchlistHit = {
+  list_type: string | null;
+  input_name: string | null;
+  matched_name: string | null;
+  matched_field: string | null;
+  match_score: number | string | null;
+  unique_id: string | null;
+  subject_type: string | null;
+  created_at: string | null;
+};
+
+/** Sanction lists that must block a transfer rather than merely warn. */
+const BLOCKING_LIST_TYPES = ["DTTOT", "PPPSPM", "DPPPSPM"];
+
+export function isBlockingListType(listType?: string | null): boolean {
+  return BLOCKING_LIST_TYPES.includes(String(listType ?? '').toUpperCase());
+}
+
+/** Distinct list types across a hit set, sanction lists first. */
+export function watchlistListTypes(hits?: WatchlistHit[] | null): string[] {
+  const seen = [...new Set((hits ?? []).map((h) => String(h.list_type ?? '').toUpperCase()).filter(Boolean))];
+  return seen.sort((a, b) => Number(isBlockingListType(b)) - Number(isBlockingListType(a)));
+}
+
+/** match_score arrives as a pg NUMERIC (string) or float — render as a percentage. */
+export function formatMatchScore(score?: number | string | null): string {
+  const n = Number(score);
+  return Number.isFinite(n) ? `${(n * 100).toFixed(1)}%` : '-';
+}
+
+const MATCHED_FIELD_LABELS: Record<string, string> = {
+  FULL_NAME: 'Nama Lengkap',
+  ENTITY_NAME: 'Nama Entitas',
+  ALIAS_NAME: 'Alias',
+};
+
+export function matchedFieldLabel(field?: string | null): string {
+  const key = String(field ?? '').toUpperCase();
+  return MATCHED_FIELD_LABELS[key] ?? (field || '-');
+}
+
 /**
  * Curated row returned by the list endpoint (GET /transfers).
  * Backend no longer SELECT *, so only these fields are guaranteed here.
@@ -125,6 +177,10 @@ export type TransferListRow = {
   result: TransferResult;
   compliance_review_status?: string | null;
   latest_compliance_review?: ComplianceReview | null;
+  // Beneficiary watchlist screening summary (list endpoint only — detail
+  // carries the full `watchlist_hits` array instead).
+  has_watchlist_hit?: boolean | null;
+  watchlist_list_types?: string[] | null;
   // Bulk transfer batch info (migration 0057), present when created via /transfers/bulk.
   batch_id?: number | string | null;
   batch_no?: string | null;
@@ -143,6 +199,9 @@ export type TransferListRow = {
 export type TransferDetail = TransferListRow & {
   branch_id?: number | null;
   description?: string | null;
+
+  /** Beneficiary watchlist matches recorded at submit. Empty/absent = clean. */
+  watchlist_hits?: WatchlistHit[] | null;
 
   // Transfer metadata (migration 0030)
   source_of_funds?: string | null;
