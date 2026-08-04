@@ -48,9 +48,21 @@ export type TransferStatus =
   | "SUBMITTED"
   | "PENDING_FINANCE_STAFF_REVIEW"
   | "PENDING_FINANCE_MANAGER_APPROVAL"
+  | "REVISION_REQUIRED"
   | "APPROVED"
   | "REJECTED"
   | "COMPLETED";
+
+/**
+ * Statuses FrontDesk may still edit and (re)submit. REVISION_REQUIRED is a
+ * transfer FinanceStaff returned for correction — non-final, and resubmitting
+ * replays the whole flow (screening → supervisor → finance → manager).
+ */
+export const EDITABLE_TRANSFER_STATUSES: readonly TransferStatus[] = ["DRAFT", "REVISION_REQUIRED"];
+
+export function isEditableTransferStatus(status?: TransferStatus | string | null): boolean {
+  return EDITABLE_TRANSFER_STATUSES.includes(status as TransferStatus);
+}
 
 export type TransferResult = "SUCCESS" | "FAILED" | null;
 
@@ -235,6 +247,13 @@ export type TransferDetail = TransferListRow & {
   approved_by?: number | string | null;
   rejected_by?: number | string | null;
   rejected_at?: string | null;
+
+  // FinanceStaff layer-2 review. `finance_notes` doubles as the reason shown to
+  // FrontDesk when the transfer was returned (status REVISION_REQUIRED).
+  finance_reviewed_by?: number | string | null;
+  finance_reviewed_at?: string | null;
+  finance_notes?: string | null;
+
   result_updated_by?: number | string | null;
   result_updated_at?: string | null;
 
@@ -305,12 +324,20 @@ export type CreateTransferBody = {
 
 export type TransferReviewAction = "APPROVE" | "REJECT";
 
+/** FinanceStaff may also RETURN a transfer for correction — non-final, sends it back to FrontDesk. */
+export type FinanceReviewAction = TransferReviewAction | "RETURN";
+
 export type TransferReviewBody = {
   action?: TransferReviewAction;
   notes?: string;
   decision?: TransferReviewAction;
   decision_notes?: string;
   reject_reason?: string;
+};
+
+/** RETURN requires `notes` — the backend rejects it without a reason. */
+export type FinanceReviewBody = Omit<TransferReviewBody, "action"> & {
+  action: FinanceReviewAction;
 };
 
 export type DecideTransferBody = TransferReviewBody;
@@ -429,6 +456,14 @@ export function getTransferSnapPreview(id: number | string) {
 
 export function createTransfer(body: CreateTransferBody) {
   return apiFetch<TransferDetail>(`/transfers`, { method: "POST", body });
+}
+
+/**
+ * PATCH /transfers/:id — edit a DRAFT or returned (REVISION_REQUIRED) transfer.
+ * The backend replaces the core fields outright, so send the full body.
+ */
+export function updateTransfer(id: number | string, body: CreateTransferBody) {
+  return apiFetch<TransferDetail>(`/transfers/${id}`, { method: "PATCH", body });
 }
 
 // ── Bulk transfer (POST /transfers/bulk) ─────────────────────────────────────
@@ -550,7 +585,7 @@ export function decideTransferComplianceReview(
   });
 }
 
-function toActionPayload(body: TransferReviewBody = { action: "APPROVE" }) {
+function toActionPayload(body: TransferReviewBody | FinanceReviewBody = { action: "APPROVE" }) {
   const action = body.action ?? body.decision ?? "APPROVE";
   const notes = body.notes ?? body.decision_notes ?? body.reject_reason;
 
@@ -572,7 +607,7 @@ export function supervisorReviewTransfer(
 
 export function financeReviewTransfer(
   id: number | string,
-  body: TransferReviewBody = { action: "APPROVE" },
+  body: TransferReviewBody | FinanceReviewBody = { action: "APPROVE" },
 ) {
   return apiFetch<TransferDetail>(`/transfers/${id}/finance-review`, {
     method: "POST",

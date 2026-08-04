@@ -49,6 +49,24 @@ for the workflow under test. Specs:
   Targets application `13686` (Mira Ariani) by default — override with
   `E2E_WATCHLIST_APP_ID`.
 
+- `transfer-finance-return.spec.ts` — FinanceStaff returning a transfer for
+  correction. Walks a transfer through the UI to
+  `PENDING_FINANCE_STAFF_REVIEW` (FrontDesk create+submit →
+  OperationSupervisor layer 1), then: "Kembalikan Transaksi" without a reason
+  is blocked client-side (no request fired), with a reason it posts
+  `{ action: "RETURN", notes }` and the transfer becomes `REVISION_REQUIRED` /
+  "Dikembalikan" on both detail and list; FinanceManager gets no final
+  approve/reject action on it; FrontDesk edits the amount (`PATCH
+  /transfers/:id`) and resubmits, landing back at the *start* of the normal
+  flow (`SUBMITTED`), not back at FinanceStaff.
+- `kyb-deed-split.spec.ts` — KYB Business Identity's split deed fields: PT
+  cannot be saved without "No. Akta Pendirian" (validation fires, no POST),
+  "No. Akta Perubahan Terakhir" is optional (sent as `null`, detail shows
+  "—"), both values round-trip to the business detail, and a pre-split record
+  still shows its deprecated `deed_number` under No. Akta Pendirian. The
+  legacy check auto-detects a suitable old application and skips with an
+  explanation if none exists — pin one with `E2E_LEGACY_DEED_APP_ID`.
+
 Default FE base URL for this suite is `http://localhost:3100` (not `:3000`) —
 see "Why :3100" below.
 
@@ -131,6 +149,18 @@ Local/dev database only. Do not point this at production or a devtunnel.
      `screening_results` row per re-screen, so the hit count grows between runs
      — the spec reads the expected count from the API each run instead of
      hardcoding it.
+   - `transfer-finance-return.spec.ts` **creates its own** FrontDesk,
+     OperationSupervisor, FinanceStaff and FinanceManager accounts each run
+     (unique timestamped emails, password `Test@12345`) and reuses an existing
+     `APPROVED` application as the sender, same as the bulk specs. The
+     beneficiary name it types is deliberately not a watchlist name, so the
+     transfer takes the clean `SUBMITTED` path rather than compliance review.
+   - `kyb-deed-split.spec.ts` needs the seeded **ComplianceLead**
+     (`admin@example.com` / `Admin123!`, override via `E2E_EMAIL` /
+     `E2E_PASSWORD`) — it creates its own Business/KYB applications through the
+     wizard. The legacy-fallback test additionally needs a pre-split business
+     record (one with `deed_number` but no `deed_establishment_number`); it
+     scans for one and skips if the local DB has none.
    - `bulk-transfer-list-import.spec.ts` has the same requirements as
      `bulk-transfer-reference.spec.ts` above (own FrontDesk account, reuses an
      existing `APPROVED` application, never touches KYC/KYB itself). It builds
@@ -154,6 +184,8 @@ npx playwright test e2e/bulk-transfer-reference.spec.ts
 npx playwright test e2e/bulk-transfer-list-import.spec.ts
 npx playwright test e2e/dttot-watchlist-transfer-hit.spec.ts
 npx playwright test e2e/kyc-watchlist-screening.spec.ts
+npx playwright test e2e/transfer-finance-return.spec.ts
+npx playwright test e2e/kyb-deed-split.spec.ts
 
 # headed / debugging:
 npx playwright test --headed

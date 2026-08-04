@@ -19,6 +19,25 @@ function fmtDate(v?: string | null): string {
   return d.toLocaleString('id-ID');
 }
 
+/**
+ * `date_of_birth` is a DATE column the API serialises as a UTC instant
+ * ("1982-05-01T17:00:00.000Z" is midnight in Jakarta), so it must be formatted
+ * in Asia/Jakarta or it reads one day early. Free-text DOBs (the 82 PPATK rows
+ * that carry "01/07/1974 atau 01/01/1973", "-", …) fail `Date` parsing and pass
+ * through unchanged.
+ */
+function fmtDob(v?: string | null): string {
+  if (!v) return '-';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return v;
+  return d.toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Asia/Jakarta',
+  });
+}
+
 function val(v?: string | null): string {
   return v && String(v).trim() ? String(v) : '-';
 }
@@ -64,7 +83,7 @@ function DetailModal({
           <DetailRow label="Full Name" value={entry.full_name} />
           <DetailRow label="Entity Name" value={entry.entity_name} />
           <DetailRow label="Alias" value={entry.alias_name} />
-          <DetailRow label="Date of Birth" value={entry.date_of_birth} />
+          <DetailRow label="Date of Birth" value={fmtDob(entry.date_of_birth)} />
           <DetailRow label="Raw Date of Birth" value={entry.raw_date_of_birth} />
           <DetailRow label="Place of Birth" value={entry.place_of_birth} />
           <DetailRow label="Nationality" value={entry.nationality} />
@@ -249,7 +268,9 @@ export default function WatchlistEntries({ refreshKey = 0 }: { refreshKey?: numb
                   <td className="border px-2 py-1">{subjectLabel(r.subject_type)}</td>
                   <td className="border px-2 py-1">{val(r.full_name ?? r.entity_name)}</td>
                   <td className="border px-2 py-1">{val(r.alias_name)}</td>
-                  <td className="border px-2 py-1">{val(r.date_of_birth ?? r.raw_date_of_birth)}</td>
+                  <td className="border px-2 py-1">
+                    {r.date_of_birth ? fmtDob(r.date_of_birth) : val(r.raw_date_of_birth)}
+                  </td>
                   <td className="border px-2 py-1">{val(r.nationality)}</td>
                   <td className="border px-2 py-1">{val(r.national_id_number)}</td>
                   <td className="border px-2 py-1">{val(r.position_title)}</td>

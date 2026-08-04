@@ -94,7 +94,10 @@ type Business = {
   legal_form?: string | null;
   incorporation_place?: string | null;
   incorporation_date?: string | null;
+  // Akta dipecah dua (migrasi 0061); deed_number tetap ada untuk data lama.
   deed_number?: string | null;
+  deed_establishment_number?: string | null;
+  deed_latest_amendment_number?: string | null;
   business_license_number?: string | null;
   nib?: string | null;
   npwp?: string | null;
@@ -2337,7 +2340,12 @@ export default function UserDetailPage() {
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Informasi Identitas Badan Usaha</p>
           <Row label="Nama Badan Usaha" value={business?.legal_name} />
           <Row label="Bentuk Badan Usaha" value={business?.legal_form} />
-          <Row label="Nomor Akta Pendirian & Perubahan Terakhir" value={business?.deed_number} />
+          {/* Data lama hanya punya deed_number — tampilkan sebagai akta pendirian. */}
+          <Row
+            label="No. Akta Pendirian"
+            value={business?.deed_establishment_number || business?.deed_number}
+          />
+          <Row label="No. Akta Perubahan Terakhir" value={business?.deed_latest_amendment_number} />
           <Row label="Tanggal Pendirian" value={business?.incorporation_date} />
           <Row label="Tempat Pendirian" value={business?.incorporation_place} />
           <Row label="Nomor Izin Usaha (NIB/OSS/SIUP)" value={business?.business_license_number || business?.nib} />

@@ -172,6 +172,7 @@ export default function TransfersPage() {
               <option value="SUBMITTED">Menunggu Review Operation Supervisor</option>
               <option value="PENDING_FINANCE_STAFF_REVIEW">Menunggu Review Finance Staff</option>
               <option value="PENDING_FINANCE_MANAGER_APPROVAL">Menunggu Approval Finance Manager</option>
+              <option value="REVISION_REQUIRED">Dikembalikan</option>
               <option value="REJECTED">Ditolak</option>
               <option value="COMPLETED">Selesai</option>
             </select>

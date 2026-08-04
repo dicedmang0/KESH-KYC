@@ -6,6 +6,7 @@ import { getRoleFromToken } from '@/lib/api';
 import {
   getTransfer,
   getTransferSnapPreview,
+  getTransferBanks,
   submitTransfer,
   submitTransferComplianceReview,
   decideTransferComplianceReview,
@@ -13,6 +14,7 @@ import {
   financeReviewTransfer,
   decideTransfer,
   setTransferResult,
+  updateTransfer,
   formatTransferAmount,
   transferReference,
   formatDateTime,
@@ -21,6 +23,11 @@ import {
   matchedFieldLabel,
   watchlistListTypes,
   isBlockingListType,
+  isEditableTransferStatus,
+  BENEFICIARY_RELATIONSHIP_OPTIONS,
+  FALLBACK_BANKS,
+  TRANSFER_MIN_AMOUNT,
+  TRANSFER_MAX_AMOUNT,
   TRANSFER_RED_FLAGS,
   AUTO_RED_FLAGS,
   canSubmitTransfer,
@@ -30,6 +37,7 @@ import {
   canFinanceReviewTransfer,
   canApproveTransfer,
   canUpdateTransferResult,
+  type TransferBank,
   type TransferDetail,
   type ComplianceReviewAction,
 } from '@/lib/transfers';
@@ -150,11 +158,29 @@ export default function TransferDetailPage() {
   const [actionErr, setActionErr] = useState('');
 
   // panel: which action form is open
-  const [panel, setPanel] = useState<'none' | 'approve' | 'reject' | 'result'>('none');
+  const [panel, setPanel] = useState<'none' | 'approve' | 'reject' | 'result' | 'return' | 'edit'>('none');
 
   // decision form
   const [decisionNotes, setDecisionNotes] = useState('');
   const [rejectReason, setRejectReason] = useState('');
+
+  // FinanceStaff return form — reason is mandatory
+  const [returnNotes, setReturnNotes] = useState('');
+
+  // FrontDesk edit form (DRAFT / returned transfers)
+  const [banks, setBanks] = useState<TransferBank[]>(FALLBACK_BANKS);
+  const [editForm, setEditForm] = useState({
+    amount: '',
+    beneficiaryAccountName: '',
+    beneficiaryAccountNumber: '',
+    beneficiaryBankName: '',
+    beneficiaryBankCode: '',
+    beneficiary_relationship_to_sender: '',
+    source_of_funds: '',
+    transaction_purpose: '',
+    description: '',
+    requestedTransferAt: '',
+  });
 
   // compliance review — FrontDesk submit modal
   const [complianceModalOpen, setComplianceModalOpen] = useState(false);
@@ -209,6 +235,13 @@ export default function TransferDetailPage() {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Bank dropdown for the edit form (falls back to the built-in list).
+  useEffect(() => {
+    getTransferBanks()
+      .then((list) => { if (list && list.length) setBanks(list); })
+      .catch(() => { /* keep FALLBACK_BANKS */ });
+  }, []);
 
   function handleActionError(e: unknown) {
     const msg = e instanceof Error ? e.message : 'Aksi gagal';
@@ -325,6 +358,101 @@ export default function TransferDetailPage() {
     }
   }
 
+  /** FinanceStaff sends the transfer back to FrontDesk for correction (non-final). */
+  async function doFinanceReturn() {
+    if (!id) return;
+    if (!returnNotes.trim()) {
+      setActionErr('Alasan pengembalian wajib diisi.');
+      return;
+    }
+    setActionLoading(true);
+    setActionErr('');
+    try {
+      await financeReviewTransfer(id, { action: 'RETURN', notes: returnNotes.trim() });
+      setPanel('none');
+      setReturnNotes('');
+      toast.success('Transaksi dikembalikan ke FrontDesk untuk diperbaiki.');
+      await reload();
+    } catch (e) {
+      handleActionError(e);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  function openEditPanel() {
+    if (!row) return;
+    setEditForm({
+      amount: String(row.amount ?? ''),
+      beneficiaryAccountName: row.beneficiary_account_name ?? '',
+      beneficiaryAccountNumber: row.beneficiary_account_number ?? '',
+      beneficiaryBankName: row.beneficiary_bank_name ?? '',
+      beneficiaryBankCode: row.beneficiary_bank_code ?? '',
+      beneficiary_relationship_to_sender: row.beneficiary_relationship_to_sender ?? '',
+      source_of_funds: row.source_of_funds ?? '',
+      transaction_purpose: row.transaction_purpose ?? '',
+      description: row.description ?? '',
+      // date input needs YYYY-MM-DD
+      requestedTransferAt: (row.requested_transfer_at ?? '').slice(0, 10),
+    });
+    setActionErr('');
+    setPanel(panel === 'edit' ? 'none' : 'edit');
+  }
+
+  /**
+   * Save edits to a DRAFT/returned transfer. PATCH replaces the core fields
+   * outright, so the whole form is sent even when only one field changed.
+   */
+  async function doUpdate() {
+    if (!id || !row) return;
+    const f = editForm;
+    const amount = Number(f.amount);
+    if (!Number.isInteger(amount) || amount < TRANSFER_MIN_AMOUNT || amount > TRANSFER_MAX_AMOUNT) {
+      setActionErr(
+        `Nominal harus bilangan bulat antara ${TRANSFER_MIN_AMOUNT.toLocaleString('id-ID')} dan ${TRANSFER_MAX_AMOUNT.toLocaleString('id-ID')}.`,
+      );
+      return;
+    }
+    if (!/^\d+$/.test(f.beneficiaryAccountNumber.trim())) {
+      setActionErr('Nomor rekening penerima harus berisi digit saja.');
+      return;
+    }
+    if (!f.beneficiaryAccountName.trim() || !f.beneficiaryBankName.trim()) {
+      setActionErr('Nama rekening dan bank penerima wajib diisi.');
+      return;
+    }
+    if (!f.beneficiary_relationship_to_sender.trim()) {
+      setActionErr('Hubungan dengan pengirim wajib diisi.');
+      return;
+    }
+    const c = (v: string) => (v.trim() ? v.trim() : undefined);
+    setActionLoading(true);
+    setActionErr('');
+    try {
+      await updateTransfer(id, {
+        amount,
+        currency: row.currency || 'IDR',
+        sender_application_id: Number(row.sender_application_id),
+        beneficiaryAccountName: f.beneficiaryAccountName.trim(),
+        beneficiaryAccountNumber: f.beneficiaryAccountNumber.trim(),
+        beneficiaryBankName: f.beneficiaryBankName.trim(),
+        beneficiaryBankCode: c(f.beneficiaryBankCode),
+        beneficiary_relationship_to_sender: f.beneficiary_relationship_to_sender.trim(),
+        source_of_funds: c(f.source_of_funds),
+        transaction_purpose: c(f.transaction_purpose),
+        description: c(f.description),
+        requestedTransferAt: c(f.requestedTransferAt),
+      });
+      setPanel('none');
+      toast.success('Perubahan transaksi tersimpan.');
+      await reload();
+    } catch (e) {
+      handleActionError(e);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function doDecide(decision: 'APPROVE' | 'REJECT') {
     if (!id) return;
     if (decision === 'REJECT' && !rejectReason.trim()) {
@@ -413,7 +541,11 @@ export default function TransferDetailPage() {
   }
 
   // Role + status conditions for action visibility
-  const canSubmit = canSubmitTransfer(role) && row?.status === 'DRAFT';
+  const isReturned = row?.status === 'REVISION_REQUIRED';
+  // A returned transfer is editable and re-submittable, and resubmitting replays
+  // the full flow (screening → supervisor → finance → manager) — no shortcut back.
+  const canSubmit = canSubmitTransfer(role) && isEditableTransferStatus(row?.status);
+  const canEdit = canSubmitTransfer(role) && isEditableTransferStatus(row?.status);
   const canSubmitCompliance = canSubmitTransferComplianceReview(role) && row?.status === 'DRAFT';
   const canReviewCompliance = canDecideTransferComplianceReview(role) && row?.status === 'PENDING_COMPLIANCE_REVIEW';
   const canSupervisorReview = canSupervisorReviewTransfer(role) && row?.status === 'SUBMITTED';
@@ -421,11 +553,13 @@ export default function TransferDetailPage() {
   const supervisorBlockedByCompliance =
     canSupervisorReviewTransfer(role) && row?.status === 'PENDING_COMPLIANCE_REVIEW';
   const canFinanceReview = canFinanceReviewTransfer(role) && row?.status === 'PENDING_FINANCE_STAFF_REVIEW';
+  // FinanceManager only ever acts on PENDING_FINANCE_MANAGER_APPROVAL, so a
+  // returned transfer never offers the final approve/reject actions.
   const canDecide = canApproveTransfer(role) && row?.status === 'PENDING_FINANCE_MANAGER_APPROVAL';
   const canSetResult = canUpdateTransferResult(role) && row?.status === 'COMPLETED' && row?.result !== 'SUCCESS';
   // canReviewCompliance renders its own panel, so it is excluded here.
   const hasAnyAction =
-    canSubmit || canSubmitCompliance || canSupervisorReview || canFinanceReview || canDecide || canSetResult;
+    canSubmit || canEdit || canSubmitCompliance || canSupervisorReview || canFinanceReview || canDecide || canSetResult;
   const cr = row?.latest_compliance_review;
   const canEvaluateMonitoring = role === 'ComplianceLead' || role === 'SystemAdmin' || role === 'Director';
 
@@ -508,6 +642,24 @@ export default function TransferDetailPage() {
               {row.bulk_reference_no && <Field label="No. Referensi Bulk" value={row.bulk_reference_no} />}
             </div>
           </SectionCard>
+
+          {/* Returned by FinanceStaff — the reason is what FrontDesk must fix */}
+          {isReturned && (
+            <div
+              role="alert"
+              className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              <p className="font-semibold">Transaksi dikembalikan oleh Finance Staff untuk diperbaiki.</p>
+              <p className="mt-1">
+                <span className="text-amber-700">Alasan pengembalian: </span>
+                {row.finance_notes || '-'}
+              </p>
+              <p className="mt-1 text-xs text-amber-700">
+                Transaksi ini belum ditolak. Setelah diperbaiki dan diajukan ulang, alur review
+                berjalan kembali dari awal.
+              </p>
+            </div>
+          )}
 
           {/* 1b. Beneficiary watchlist screening — only when the backend recorded hits */}
           {watchlistHits.length > 0 && (
@@ -609,6 +761,9 @@ export default function TransferDetailPage() {
               <Field label="Dibuat Oleh" value={row.created_by} />
               <Field label="Diajukan Oleh" value={row.submitted_by} />
               <Field label="Diajukan Pada" value={formatDateTime(row.submitted_at)} />
+              <Field label="Direview Finance Staff Oleh" value={row.finance_reviewed_by} />
+              <Field label="Direview Finance Staff Pada" value={formatDateTime(row.finance_reviewed_at)} />
+              <Field label="Catatan Finance Staff" value={row.finance_notes} />
               <Field label="Disetujui Oleh" value={row.approved_by} />
               <Field label="Disetujui Pada" value={formatDateTime(row.approved_at)} />
               <Field label="Ditolak Oleh" value={row.rejected_by} />
@@ -751,13 +906,22 @@ export default function TransferDetailPage() {
           {hasAnyAction && (
             <SectionCard title="Aksi">
               <div className="flex flex-wrap gap-2">
+                {canEdit && (
+                  <button
+                    className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
+                    disabled={actionLoading}
+                    onClick={openEditPanel}
+                  >
+                    {panel === 'edit' ? 'Tutup Form Ubah' : 'Ubah Transaksi'}
+                  </button>
+                )}
                 {canSubmit && (
                   <button
                     className="rounded-lg bg-amber-600 px-3 py-2 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
                     disabled={actionLoading}
                     onClick={doSubmit}
                   >
-                    Ajukan Transaksi
+                    {isReturned ? 'Ajukan Ulang Transaksi' : 'Ajukan Transaksi'}
                   </button>
                 )}
                 {canSubmitCompliance && (
@@ -779,13 +943,22 @@ export default function TransferDetailPage() {
                   </button>
                 )}
                 {canFinanceReview && (
-                  <button
-                    className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
-                    disabled={actionLoading}
-                    onClick={doFinanceReview}
-                  >
-                    {actionLoading ? 'Menyimpan…' : 'Review Finance Staff'}
-                  </button>
+                  <>
+                    <button
+                      className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+                      disabled={actionLoading}
+                      onClick={doFinanceReview}
+                    >
+                      {actionLoading ? 'Menyimpan…' : 'Review Finance Staff'}
+                    </button>
+                    <button
+                      className="rounded-lg bg-amber-600 px-3 py-2 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
+                      disabled={actionLoading}
+                      onClick={() => { setPanel(panel === 'return' ? 'none' : 'return'); setActionErr(''); }}
+                    >
+                      Kembalikan Transaksi
+                    </button>
+                  </>
                 )}
                 {canDecide && (
                   <>
@@ -870,6 +1043,179 @@ export default function TransferDetailPage() {
                       Batal
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* FinanceStaff return form — notes are mandatory */}
+              {canFinanceReview && panel === 'return' && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50/40 p-3 space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-neutral-800">Kembalikan Transaksi</h3>
+                    <p className="text-xs text-neutral-500">
+                      Transaksi dikembalikan ke FrontDesk untuk diperbaiki — bukan penolakan.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground" htmlFor="finance-return-notes">
+                      Alasan pengembalian <span className="text-red-600">*</span>
+                    </label>
+                    <textarea
+                      id="finance-return-notes"
+                      rows={3}
+                      className={inputCls}
+                      value={returnNotes}
+                      onChange={(e) => { setReturnNotes(e.target.value); setActionErr(''); }}
+                      placeholder="Contoh: Nominal tidak sesuai bukti transfer"
+                    />
+                  </div>
+                  <button
+                    className="rounded-lg bg-amber-600 px-3 py-2 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
+                    disabled={actionLoading}
+                    onClick={doFinanceReturn}
+                  >
+                    {actionLoading ? 'Menyimpan…' : 'Konfirmasi Kembalikan'}
+                  </button>
+                </div>
+              )}
+
+              {/* FrontDesk edit form — DRAFT or returned transfers */}
+              {canEdit && panel === 'edit' && (
+                <div className="rounded-lg border p-3 space-y-3">
+                  <p className="text-xs text-neutral-500">
+                    Perbaiki data transaksi, simpan, lalu ajukan ulang. Pengajuan ulang tetap
+                    melalui screening dan seluruh tahap review.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground" htmlFor="edit-amount">Nominal *</label>
+                      <input
+                        id="edit-amount"
+                        type="number"
+                        className={inputCls}
+                        value={editForm.amount}
+                        onChange={(e) => setEditForm((s) => ({ ...s, amount: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground" htmlFor="edit-beneficiary-name">
+                        Nama Rekening Penerima *
+                      </label>
+                      <input
+                        id="edit-beneficiary-name"
+                        className={inputCls}
+                        value={editForm.beneficiaryAccountName}
+                        onChange={(e) => setEditForm((s) => ({ ...s, beneficiaryAccountName: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground" htmlFor="edit-beneficiary-number">
+                        Nomor Rekening Penerima *
+                      </label>
+                      <input
+                        id="edit-beneficiary-number"
+                        className={inputCls}
+                        value={editForm.beneficiaryAccountNumber}
+                        onChange={(e) => setEditForm((s) => ({ ...s, beneficiaryAccountNumber: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground" htmlFor="edit-bank">Bank Penerima *</label>
+                      <select
+                        id="edit-bank"
+                        className={inputCls}
+                        value={editForm.beneficiaryBankName}
+                        onChange={(e) => {
+                          const name = e.target.value;
+                          const bank = banks.find((b) => (b.name ?? '') === name);
+                          setEditForm((s) => ({
+                            ...s,
+                            beneficiaryBankName: name,
+                            beneficiaryBankCode: bank?.code ?? '',
+                          }));
+                        }}
+                      >
+                        {/* Keep the stored bank selectable even if it is not in the list. */}
+                        {!banks.some((b) => (b.name ?? '') === editForm.beneficiaryBankName) && (
+                          <option value={editForm.beneficiaryBankName}>{editForm.beneficiaryBankName || '— Pilih —'}</option>
+                        )}
+                        {banks.map((b) => (
+                          <option key={`${b.code}-${b.name}`} value={b.name ?? ''}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground" htmlFor="edit-relationship">
+                        Hubungan dengan Pengirim *
+                      </label>
+                      <select
+                        id="edit-relationship"
+                        className={inputCls}
+                        value={editForm.beneficiary_relationship_to_sender}
+                        onChange={(e) =>
+                          setEditForm((s) => ({ ...s, beneficiary_relationship_to_sender: e.target.value }))
+                        }
+                      >
+                        <option value="">— Pilih —</option>
+                        {!BENEFICIARY_RELATIONSHIP_OPTIONS.includes(
+                          editForm.beneficiary_relationship_to_sender as (typeof BENEFICIARY_RELATIONSHIP_OPTIONS)[number],
+                        ) && editForm.beneficiary_relationship_to_sender && (
+                          <option value={editForm.beneficiary_relationship_to_sender}>
+                            {editForm.beneficiary_relationship_to_sender}
+                          </option>
+                        )}
+                        {BENEFICIARY_RELATIONSHIP_OPTIONS.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground" htmlFor="edit-requested-at">
+                        Tanggal Transfer Diminta
+                      </label>
+                      <input
+                        id="edit-requested-at"
+                        type="date"
+                        className={inputCls}
+                        value={editForm.requestedTransferAt}
+                        onChange={(e) => setEditForm((s) => ({ ...s, requestedTransferAt: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground" htmlFor="edit-sof">Sumber Dana</label>
+                      <input
+                        id="edit-sof"
+                        className={inputCls}
+                        value={editForm.source_of_funds}
+                        onChange={(e) => setEditForm((s) => ({ ...s, source_of_funds: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground" htmlFor="edit-purpose">Tujuan Transaksi</label>
+                      <input
+                        id="edit-purpose"
+                        className={inputCls}
+                        value={editForm.transaction_purpose}
+                        onChange={(e) => setEditForm((s) => ({ ...s, transaction_purpose: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground" htmlFor="edit-description">Keterangan</label>
+                    <textarea
+                      id="edit-description"
+                      rows={2}
+                      className={inputCls}
+                      value={editForm.description}
+                      onChange={(e) => setEditForm((s) => ({ ...s, description: e.target.value }))}
+                    />
+                  </div>
+                  <button
+                    className="rounded-lg bg-kesh-700 px-3 py-2 text-sm text-white hover:bg-kesh-600 disabled:opacity-50"
+                    disabled={actionLoading}
+                    onClick={doUpdate}
+                  >
+                    {actionLoading ? 'Menyimpan…' : 'Simpan Perubahan'}
+                  </button>
                 </div>
               )}
 

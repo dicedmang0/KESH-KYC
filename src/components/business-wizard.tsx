@@ -141,7 +141,9 @@ export default function BusinessWizard() {
   const [legal_name, setLegalName] = useState("");
   const [legal_form, setLegalForm] = useState("PT");
   const [legal_form_other, setLegalFormOther] = useState("");
-  const [deed_number, setDeedNumber] = useState("");
+  // Akta dipecah dua (migrasi 0061): pendirian wajib untuk PT, perubahan terakhir opsional.
+  const [deed_establishment_number, setDeedEstablishmentNumber] = useState("");
+  const [deed_latest_amendment_number, setDeedLatestAmendmentNumber] = useState("");
   const [incorporation_place, setIncorpPlace] = useState("Indonesia");
   const [incorporation_date, setIncorpDate] = useState("");
   // Nomor Izin Usaha (NIB/OSS/SIUP/dll) — primary payload business_license_number.
@@ -235,7 +237,7 @@ export default function BusinessWizard() {
       setNpwpErr("");
     }
     // B.1 Nomor Akta Pendirian — wajib hanya untuk badan usaha PT.
-    if (isPT && !deed_number.trim()) {
+    if (isPT && !deed_establishment_number.trim()) {
       setDeedErr("Nomor Akta Pendirian wajib diisi untuk badan usaha PT.");
       ok = false;
     } else {
@@ -287,7 +289,8 @@ export default function BusinessWizard() {
         legal_name,
         legal_form,
         legal_form_other: isLainnya(legal_form) ? legal_form_other || null : null,
-        deed_number: deed_number || null,
+        deed_establishment_number: deed_establishment_number.trim() || null,
+        deed_latest_amendment_number: deed_latest_amendment_number.trim() || null,
         incorporation_place,
         incorporation_date,
         // Satu input "Nomor Izin Usaha" → business_license_number (nib tidak diduplikasi).
@@ -654,20 +657,28 @@ export default function BusinessWizard() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
-              <label className="grid gap-1 md:col-span-2">
+              <label className="grid gap-1">
                 <span className="text-sm font-medium">
-                  Nomor Akta Pendirian &amp; Perubahan Terakhir
+                  No. Akta Pendirian
                   {isPT && <span className="text-red-500"> *</span>}
                 </span>
                 <input
                   className={`rounded-md border px-3 py-2 text-sm${deedErr ? " border-red-400" : ""}`}
-                  value={deed_number}
+                  value={deed_establishment_number}
                   onChange={(e) => {
-                    setDeedNumber(e.target.value);
+                    setDeedEstablishmentNumber(e.target.value);
                     setDeedErr("");
                   }}
                 />
                 {deedErr && <p className="text-xs text-red-600">{deedErr}</p>}
+              </label>
+              <label className="grid gap-1">
+                <span className="text-sm font-medium">No. Akta Perubahan Terakhir</span>
+                <input
+                  className="rounded-md border px-3 py-2 text-sm"
+                  value={deed_latest_amendment_number}
+                  onChange={(e) => setDeedLatestAmendmentNumber(e.target.value)}
+                />
               </label>
               <label className="grid gap-1">
                 <span className="text-sm font-medium">Tanggal Pendirian *</span>

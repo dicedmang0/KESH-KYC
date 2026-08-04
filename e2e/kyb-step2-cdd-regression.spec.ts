@@ -85,8 +85,9 @@ test.describe('KYB Business wizard — Step 2 no longer calls Individual CDD end
 
     // 4–5. Step 1: Identitas — fill everything the backend's CreateBusinessDto requires.
     await page.getByLabel('Nama Badan Usaha').fill(`PW E2E Business ${ts}`);
-    // Bentuk Badan Usaha left at its "PT" default → Nomor Akta Pendirian is required.
-    await page.getByLabel('Nomor Akta Pendirian').fill(`AKTA-${ts}`);
+    // Bentuk Badan Usaha left at its "PT" default → No. Akta Pendirian is required.
+    // (Akta Perubahan Terakhir is a separate, optional field — left empty here.)
+    await page.getByLabel('No. Akta Pendirian').fill(`AKTA-${ts}`);
     await page.getByLabel('Tanggal Pendirian').fill('2020-01-15');
     // Tempat Pendirian left at its "Indonesia" default.
     await page.getByLabel('Nomor Izin Usaha').fill(`NIB-${ts}`);
