@@ -7,7 +7,9 @@ import { toast } from '@/lib/toast';
 import { formatCif, isLainnya } from '@/lib/utils';
 // Watchlist display helpers are shared with the transfer screening UI.
 import { formatDateTime, formatMatchScore, isBlockingListType, matchedFieldLabel } from '@/lib/transfers';
+import { BUSINESS_DOC_TYPES, businessDocLabel } from '@/lib/business-docs';
 import LainnyaField from '@/components/lainnya-field';
+import BusinessIdentityForm from '@/components/business-identity-form';
 import EddForm, { DEFAULT_EDD, type EddFormData } from '@/components/EddForm';
 import WebcamCapture from '@/components/WebcamCapture';
 import DataReviewCard from '@/components/DataReviewCard';
@@ -811,6 +813,8 @@ export default function UserDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
+  // Business identity edit mode (PATCH /applications/:id/business).
+  const [editingBusiness, setEditingBusiness] = useState(false);
 
   // Document upload (DRAFT only)
   const [docType, setDocType] = useState('KTP');
@@ -1182,9 +1186,15 @@ export default function UserDetailPage() {
     try {
       const form = new FormData();
       form.append('file', docFile);
-      const effectiveDocType = isWic && !WIC_DOC_OPTIONS.some((opt) => opt.value === docType)
-        ? 'WIC_IDENTITY_DOCUMENT'
-        : docType;
+      // Guard the untouched-dropdown case: `docType` defaults to 'KTP', which is
+      // meaningless for a Business application and would never satisfy submit.
+      const isBusiness = app?.type === 'BUSINESS';
+      const effectiveDocType =
+        isBusiness && !BUSINESS_DOC_TYPES.some((t) => t.code === docType)
+          ? BUSINESS_DOC_TYPES[0].code
+          : isWic && !WIC_DOC_OPTIONS.some((opt) => opt.value === docType)
+          ? 'WIC_IDENTITY_DOCUMENT'
+          : docType;
       form.append('doc_type', effectiveDocType);
       await apiUpload(`/applications/${id}/documents/upload`, form);
       setDocFile(null);
@@ -1492,13 +1502,19 @@ export default function UserDetailPage() {
   if (err) return <p className="p-6 text-sm text-red-600">{err}</p>;
   if (!app) return <p className="p-6 text-sm text-slate-500">Data tidak ditemukan.</p>;
 
-  // Read-only roles (FinanceStaff/FinanceManager can view Manajemen Pengguna Jasa;
-  // Auditor is read-only) never see edit/upload/submit/party affordances.
-  const canWrite = !['FinanceStaff', 'FinanceManager', 'Auditor'].includes(userRole ?? '');
+  // Write affordances mirror the backend's @Roles, taking the narrowest of the
+  // endpoints behind these buttons: PATCH :id/business, PATCH :id/submit and
+  // DELETE :id/documents/:docId are all FrontDesk/ComplianceLead only (plus the
+  // SystemAdmin/Director guard bypass). BranchAdmin is deliberately excluded —
+  // it may upload documents and manage parties but cannot edit the business
+  // identity, delete a document or submit, so a BranchAdmin-only edit journey
+  // dead-ends in a 403. Finance, Auditor and OperationSupervisor are read-only.
+  const canWrite = ['FrontDesk', 'ComplianceLead', 'SystemAdmin', 'Director'].includes(userRole ?? '');
+  // DRAFT and REVISION_REQUIRED are the two statuses the backend still accepts
+  // edits and a (re)submit for.
   const canSubmit = canWrite && (app.status === 'DRAFT' || app.status === 'REVISION_REQUIRED');
   const canDecide = app.status === 'SUBMITTED' || app.status === 'IN_REVIEW';
-  // OperationSupervisor may view parties but cannot add/delete them.
-  const canManageParties = canSubmit && userRole !== 'OperationSupervisor';
+  const canManageParties = canSubmit;
 
   const displayName = app.type === 'INDIVIDUAL' ? person?.full_name : business?.legal_name;
 
@@ -1586,7 +1602,9 @@ export default function UserDetailPage() {
       {/* Revision banner */}
       {app.status === 'REVISION_REQUIRED' && (
         <div className="rounded-md border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800 space-y-1">
-          <p className="font-semibold">Aplikasi dikembalikan untuk perbaikan data.</p>
+          <p className="font-semibold">
+            Aplikasi dikembalikan untuk perbaikan. Silakan perbarui data lalu submit ulang.
+          </p>
           {app.revision_reason && (
             <p>Alasan: <span className="font-medium">{app.revision_reason}</span></p>
           )}
@@ -1596,6 +1614,12 @@ export default function UserDetailPage() {
           {app.revision_requested_at && (
             <p className="text-xs text-orange-700">
               Tanggal: {new Date(app.revision_requested_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}
+            </p>
+          )}
+          {app.type === 'BUSINESS' && canSubmit && (
+            <p className="text-xs text-orange-700">
+              Gunakan &quot;Ubah Identitas&quot; pada Informasi Identitas Badan Usaha, perbarui dokumen
+              dan pihak terkait bila perlu, lalu tekan &quot;Ajukan Ulang&quot;.
             </p>
           )}
         </div>
@@ -2337,7 +2361,33 @@ export default function UserDetailPage() {
         )
       ) : (
         <div className="rounded-xl border p-4 space-y-2">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Informasi Identitas Badan Usaha</p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Informasi Identitas Badan Usaha</p>
+            {/* Same gate as the backend: FrontDesk/ComplianceLead (+SystemAdmin/
+                Director bypass) on DRAFT or REVISION_REQUIRED. */}
+            {canSubmit && (
+              <button
+                type="button"
+                onClick={() => setEditingBusiness((v) => !v)}
+                className="rounded-md border px-2.5 py-1 text-xs hover:bg-slate-50"
+              >
+                {editingBusiness ? 'Batal' : 'Ubah Identitas'}
+              </button>
+            )}
+          </div>
+
+          {canSubmit && editingBusiness && business ? (
+            <BusinessIdentityForm
+              appId={app.id ?? id}
+              business={business}
+              onCancel={() => setEditingBusiness(false)}
+              onSaved={async () => {
+                setEditingBusiness(false);
+                await load();
+              }}
+            />
+          ) : (
+          <>
           <Row label="Nama Badan Usaha" value={business?.legal_name} />
           <Row label="Bentuk Badan Usaha" value={business?.legal_form} />
           {/* Data lama hanya punya deed_number — tampilkan sebagai akta pendirian. */}
@@ -2378,6 +2428,10 @@ export default function UserDetailPage() {
               : null}
           />
 
+          </>
+          )}
+
+          {/* Screening summary stays visible while editing — it is read-only. */}
           <p className="text-xs font-semibold text-slate-600 border-b pb-1 mb-2 mt-4">Screening DTTOT / PPPSPM</p>
           <div className="flex flex-wrap gap-2 text-sm">
             <div className="flex items-center gap-2">
@@ -2705,7 +2759,7 @@ export default function UserDetailPage() {
                 const { statusLabel, statusCls } = getDocStatusInfo(d);
                 return (
                   <li key={String(d.id)} className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="font-medium text-slate-700">{d.doc_type}</span>
+                    <span className="font-medium text-slate-700">{businessDocLabel(d.doc_type)}</span>
                     <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${statusCls}`}>
                       {statusLabel}
                     </span>
@@ -2744,8 +2798,11 @@ export default function UserDetailPage() {
                     onChange={(e) => setDocType(e.target.value)}
                     className="rounded-md border bg-white px-2 py-1.5 text-sm"
                   >
-                    {['AKTA_PENDIRIAN', 'NIB_SIUP', 'NPWP_BADAN', 'KTP_KUASA'].map((t) => (
-                      <option key={t} value={t}>{t}</option>
+                    {/* Tipe dokumen KYB sesuai validasi submit backend — daftar
+                        legacy (AKTA_PENDIRIAN/NIB_SIUP/…) tidak punya padanan
+                        untuk dokumen pengurus/pemegang saham/BO. */}
+                    {BUSINESS_DOC_TYPES.map((t) => (
+                      <option key={t.code} value={t.code}>{t.name}</option>
                     ))}
                   </select>
                 </div>

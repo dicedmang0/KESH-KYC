@@ -66,6 +66,19 @@ for the workflow under test. Specs:
   still shows its deprecated `deed_number` under No. Akta Pendirian. The
   legacy check auto-detects a suitable old application and skips with an
   explanation if none exists — pin one with `E2E_LEGACY_DEED_APP_ID`.
+- `kyb-documents-and-revision.spec.ts` — KYB Step 3 document cards and the
+  returned-application flow: an uploaded document immediately shows "Berhasil
+  Terupload" + filename + "Lihat", survives a page reload (the wizard resumes
+  via `?app_id=`), and satisfies "Simpan & Lanjut" without re-selecting files;
+  then SystemAdmin returns the application, FrontDesk replaces a
+  `BUSINESS_NPWP` document, edits the business identity (`PATCH
+  /applications/:id/business` — asserts the payload carries only the two
+  touched fields and that no second application is created) and resubmits out
+  of `REVISION_REQUIRED` with no approve/reject affordance, while Auditor,
+  FinanceStaff and OperationSupervisor see nothing writable. Creates its own
+  FrontDesk/Auditor/OperationSupervisor/FinanceStaff users via Settings —
+  needs the seeded **SystemAdmin** (`E2E_SYSADMIN_EMAIL` /
+  `E2E_SYSADMIN_PASSWORD`).
 
 Default FE base URL for this suite is `http://localhost:3100` (not `:3000`) —
 see "Why :3100" below.
@@ -186,6 +199,7 @@ npx playwright test e2e/dttot-watchlist-transfer-hit.spec.ts
 npx playwright test e2e/kyc-watchlist-screening.spec.ts
 npx playwright test e2e/transfer-finance-return.spec.ts
 npx playwright test e2e/kyb-deed-split.spec.ts
+npx playwright test e2e/kyb-documents-and-revision.spec.ts
 
 # headed / debugging:
 npx playwright test --headed

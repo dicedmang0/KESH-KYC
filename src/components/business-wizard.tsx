@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch, apiUpload } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { formatCif, isLainnya } from "@/lib/utils";
+import {
+  BUSINESS_ALWAYS_REQUIRED_DOCS,
+  BUSINESS_BO_DOC,
+  BUSINESS_SHAREHOLDER_DOC,
+  type BusinessDocType,
+} from "@/lib/business-docs";
 import LainnyaField from "@/components/lainnya-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -61,7 +67,30 @@ type PartyRow = {
   source_of_wealth?: string | null;
 };
 
-type BusinessDocType = { code: string; name: string };
+type BusinessDocument = {
+  id: number | string;
+  doc_type: string;
+  file_uri?: string | null;
+  file_url?: string | null;
+  status?: string | null;
+  extracted_json?: { original_name?: string } | null;
+  original_name?: string | null;
+};
+
+/** A document counts as uploaded once it has a file, mirroring the detail page. */
+function isUploaded(d?: BusinessDocument): boolean {
+  const hasFile = !!(d?.file_uri ?? d?.file_url);
+  return (
+    d?.status === "UPLOADED" ||
+    d?.status === "APPROVED" ||
+    (d?.status === "PENDING" && hasFile) ||
+    (!d?.status && hasFile)
+  );
+}
+
+function docFilename(d?: BusinessDocument): string | null {
+  return d?.extracted_json?.original_name ?? d?.original_name ?? null;
+}
 
 function getCifRelationshipLabel(value?: string | null): string {
   if (value === "OUR_CUSTOMER") return "Our Customer";
@@ -79,19 +108,96 @@ function toRefList<T>(r: unknown): T[] {
 }
 
 // Always-required business documents (form terbaru).
-const ALWAYS_REQUIRED_DOCS: BusinessDocType[] = [
-  { code: "BUSINESS_DEED_ESTABLISHMENT_AMENDMENT", name: "Akta Pendirian & Perubahan" },
-  { code: "BUSINESS_LICENSE", name: "NIB / Izin Usaha" },
-  { code: "BUSINESS_NPWP", name: "NPWP Badan Usaha" },
-  { code: "BUSINESS_MANAGEMENT_IDENTITY", name: "Dokumen Identitas Pengurus" },
-];
-const SHAREHOLDER_DOC: BusinessDocType = {
-  code: "BUSINESS_SHAREHOLDER_IDENTITY_25",
-  name: "Dokumen Identitas Pemegang Saham ≥25%",
-};
-const BO_DOC: BusinessDocType = { code: "BUSINESS_BO_DOCUMENT", name: "Dokumen BO" };
+const ALWAYS_REQUIRED_DOCS = BUSINESS_ALWAYS_REQUIRED_DOCS;
+const SHAREHOLDER_DOC = BUSINESS_SHAREHOLDER_DOC;
+const BO_DOC = BUSINESS_BO_DOC;
 
 type Step = 1 | 2 | 3 | 4;
+
+/**
+ * One required-document slot on Step 3. Declared at module scope on purpose:
+ * as a function nested in the wizard it got a new identity on every render, so
+ * React remounted the <input type="file"> and the browser reset it to
+ * "No file chosen" the instant a file was picked.
+ */
+function DocCard({
+  code,
+  name,
+  required,
+  doc,
+  busy,
+  onPick,
+  onView,
+  onDelete,
+}: {
+  code: string;
+  name: string;
+  required: boolean;
+  doc?: BusinessDocument;
+  busy: boolean;
+  onPick: (code: string, file: File) => void;
+  onView: (docId: number | string) => void;
+  onDelete: (docId: number | string) => void;
+}) {
+  const uploaded = isUploaded(doc);
+  const filename = docFilename(doc);
+  return (
+    <div className="rounded-md border border-dashed p-4">
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">{name}</span>
+        {required ? (
+          <span className="text-red-500">*</span>
+        ) : (
+          <span className="text-xs text-slate-400">(Opsional / tidak wajib untuk data saat ini)</span>
+        )}
+        <span
+          className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+            uploaded ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
+          }`}
+        >
+          {uploaded ? "Berhasil Terupload" : "Belum Terupload"}
+        </span>
+      </div>
+      {uploaded && doc && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+          {filename && <span className="text-slate-500">{filename}</span>}
+          <button
+            type="button"
+            onClick={() => onView(doc.id)}
+            className="text-kesh-700 underline hover:text-kesh-600"
+          >
+            Lihat
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(doc.id)}
+            className="text-red-600 hover:underline"
+          >
+            Hapus
+          </button>
+        </div>
+      )}
+      <label className="grid gap-1">
+        <span className="text-xs text-slate-500">
+          {uploaded ? "Ganti File" : "Pilih File"}
+        </span>
+        <input
+          type="file"
+          data-doc-type={code}
+          accept="image/png,image/jpeg,application/pdf"
+          disabled={busy}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            // Reset the input so re-picking the same filename still fires onChange.
+            e.target.value = "";
+            if (file) onPick(code, file);
+          }}
+        />
+      </label>
+      {busy && <p className="mt-1 text-xs text-slate-500">Mengunggah…</p>}
+    </div>
+  );
+}
 
 function Stepper({ step }: { step: Step }) {
   const items = [
@@ -123,9 +229,13 @@ function Stepper({ step }: { step: Step }) {
 
 export default function BusinessWizard() {
   const router = useRouter();
+  // ?app_id= is written into the URL after Step 1 so a browser refresh resumes
+  // the same application (and its already-uploaded documents) instead of
+  // silently starting a second one.
+  const resumeAppId = useSearchParams().get("app_id");
 
   // ----- State umum -----
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<Step>(resumeAppId ? 2 : 1);
   const [saving, setSaving] = useState(false);
 
   // banner per step
@@ -135,7 +245,7 @@ export default function BusinessWizard() {
   const [submitOK, setSubmitOK] = useState<string | null>(null);
 
   // setelah Step 1 berhasil → pegang appId untuk step berikutnya
-  const [appId, setAppId] = useState<number | string | null>(null);
+  const [appId, setAppId] = useState<number | string | null>(resumeAppId);
 
   // ----- STEP 1: Identitas Badan Usaha + PIC -----
   const [legal_name, setLegalName] = useState("");
@@ -282,6 +392,13 @@ export default function BusinessWizard() {
   async function saveCompany() {
     setErrCompany(null);
     setSubmitOK(null);
+    // Aplikasi sudah dibuat: POST lagi hanya akan membuat duplikat, dan backend
+    // belum punya endpoint PATCH untuk identitas badan usaha.
+    if (appId) {
+      toast.error("Aplikasi sudah dibuat — identitas badan usaha tidak dapat diubah lagi.");
+      setStep(2);
+      return;
+    }
     if (!validateCompany()) return;
     setSaving(true);
     try {
@@ -332,6 +449,7 @@ export default function BusinessWizard() {
       const id = res?.id;
       if (!id) throw new Error("Gagal membuat aplikasi (id kosong)");
       setAppId(id);
+      router.replace(`/applications/new?type=business&app_id=${id}`);
       setStep(2);
     } catch (e: unknown) {
       const msg = friendlyBusinessError(e, "Gagal menyimpan informasi badan usaha");
@@ -475,7 +593,28 @@ export default function BusinessWizard() {
   // ----- STEP 3: Documents -----
   // Optional override of the always-required labels from backend reference.
   const [docTypes, setDocTypes] = useState<BusinessDocType[]>(ALWAYS_REQUIRED_DOCS);
-  const [docFiles, setDocFiles] = useState<Record<string, File | null>>({});
+  // Dokumen yang sudah tersimpan di backend, dipetakan per doc_type.
+  const [existingDocs, setExistingDocs] = useState<Record<string, BusinessDocument>>({});
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+
+  const loadDocs = useCallback(async () => {
+    if (!appId) return;
+    try {
+      const rows = await apiFetch<BusinessDocument[]>(`/applications/${appId}/documents`);
+      const byType: Record<string, BusinessDocument> = {};
+      for (const d of Array.isArray(rows) ? rows : []) {
+        // Backend keeps every upload; the newest row for a type wins.
+        byType[d.doc_type] = d;
+      }
+      setExistingDocs(byType);
+    } catch {
+      /* biarkan kartu kosong — user masih bisa upload ulang */
+    }
+  }, [appId]);
+
+  useEffect(() => {
+    if (step === 3) loadDocs();
+  }, [step, loadDocs]);
 
   useEffect(() => {
     if (step !== 3) return;
@@ -501,15 +640,55 @@ export default function BusinessWizard() {
   );
   const needsBoDoc = activeParties.some((p) => p.role === "BO");
 
-  async function uploadDoc(file: File, docType: string) {
-    if (!appId || !file) return;
-    const form = new FormData();
-    form.append("file", file);
-    form.append("doc_type", docType);
-    await apiUpload(`/applications/${appId}/documents/upload`, form, true);
+  /** Upload langsung saat file dipilih, lalu segarkan status kartu. */
+  async function uploadDoc(docType: string, file: File) {
+    if (!appId) return;
+    setErrDocs(null);
+    setUploadingDoc(docType);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("doc_type", docType);
+      await apiUpload(`/applications/${appId}/documents/upload`, form, true);
+      await loadDocs();
+      toast.success("Dokumen berhasil diunggah.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Upload dokumen gagal";
+      setErrDocs(msg);
+      toast.error(msg);
+    } finally {
+      setUploadingDoc(null);
+    }
   }
 
-  async function saveDocumentsThenNext() {
+  async function viewDoc(docId: number | string) {
+    if (!appId) return;
+    // Pre-open without noopener so the window reference stays navigable.
+    const newTab = window.open("about:blank", "_blank");
+    try {
+      const resp = await apiFetch<{ signed_url?: string }>(
+        `/applications/${appId}/documents/${docId}/url`,
+      );
+      if (resp?.signed_url) newTab?.location.replace(resp.signed_url);
+      else throw new Error("no url");
+    } catch {
+      newTab?.close();
+      toast.error("Gagal membuka dokumen. Silakan coba lagi.");
+    }
+  }
+
+  async function deleteDoc(docId: number | string) {
+    if (!appId) return;
+    try {
+      await apiFetch(`/applications/${appId}/documents/${docId}`, { method: "DELETE" });
+      await loadDocs();
+      toast.success("Dokumen berhasil dihapus.");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Gagal menghapus dokumen");
+    }
+  }
+
+  function saveDocumentsThenNext() {
     setErrDocs(null);
 
     const requiredCodes = [
@@ -520,48 +699,14 @@ export default function BusinessWizard() {
     const labelFor = (code: string) =>
       [...docTypes, SHAREHOLDER_DOC, BO_DOC].find((d) => d.code === code)?.name ?? code;
 
-    const missing = requiredCodes.filter((code) => !docFiles[code]);
+    // Dokumen yang sudah tersimpan di backend sudah memenuhi syarat — user tidak
+    // perlu memilih ulang file yang sudah diunggah.
+    const missing = requiredCodes.filter((code) => !isUploaded(existingDocs[code]));
     if (missing.length > 0) {
       setErrDocs(`Dokumen wajib belum lengkap: ${missing.map(labelFor).join(", ")}`);
       return;
     }
-
-    setSaving(true);
-    try {
-      // Upload every selected file (required + any optional conditional docs).
-      for (const [code, file] of Object.entries(docFiles)) {
-        if (file) await uploadDoc(file, code);
-      }
-      setStep(4);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Upload dokumen gagal";
-      setErrDocs(msg);
-      toast.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function DocCard({ code, name, required }: { code: string; name: string; required: boolean }) {
-    return (
-      <div className="rounded-md border border-dashed p-4">
-        <div className="mb-1 flex items-center gap-2">
-          <span className="text-sm font-medium">{name}</span>
-          {required ? (
-            <span className="text-red-500">*</span>
-          ) : (
-            <span className="text-xs text-slate-400">(Opsional / tidak wajib untuk data saat ini)</span>
-          )}
-        </div>
-        <input
-          type="file"
-          accept="image/png,image/jpeg,application/pdf"
-          onChange={(e) =>
-            setDocFiles((s) => ({ ...s, [code]: e.target.files?.[0] || null }))
-          }
-        />
-      </div>
-    );
+    setStep(4);
   }
 
   // ----- STEP 4: Review & Submit -----
@@ -1293,15 +1438,23 @@ export default function BusinessWizard() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
-              {docTypes.map((d) => (
-                <DocCard key={d.code} code={d.code} name={d.name} required />
+              {[
+                ...docTypes.map((d) => ({ ...d, required: true })),
+                { ...SHAREHOLDER_DOC, required: needsShareholderDoc },
+                { ...BO_DOC, required: needsBoDoc },
+              ].map((d) => (
+                <DocCard
+                  key={d.code}
+                  code={d.code}
+                  name={d.name}
+                  required={d.required}
+                  doc={existingDocs[d.code]}
+                  busy={uploadingDoc === d.code}
+                  onPick={uploadDoc}
+                  onView={viewDoc}
+                  onDelete={deleteDoc}
+                />
               ))}
-              <DocCard
-                code={SHAREHOLDER_DOC.code}
-                name={SHAREHOLDER_DOC.name}
-                required={needsShareholderDoc}
-              />
-              <DocCard code={BO_DOC.code} name={BO_DOC.name} required={needsBoDoc} />
             </div>
 
             <div className="flex justify-between">
@@ -1314,11 +1467,11 @@ export default function BusinessWizard() {
               </button>
               <button
                 type="button"
-                disabled={saving}
+                disabled={!!uploadingDoc}
                 onClick={saveDocumentsThenNext}
                 className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 disabled:opacity-50 transition-colors"
               >
-                {saving ? "Mengunggah..." : "Simpan & Lanjut"}
+                {uploadingDoc ? "Mengunggah..." : "Simpan & Lanjut"}
               </button>
             </div>
           </CardContent>
