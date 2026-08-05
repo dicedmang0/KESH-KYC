@@ -46,6 +46,11 @@ export type Complaint = {
   customer_type?: string | null;
   transfer_id?: number | string | null;
   transaction_reference?: string | null;
+  customer_contact?: string | null;
+  transaction_amount?: string | number | null;
+  transaction_date?: string | null;
+  transaction_status?: string | null;
+  transaction_partner_reference_no?: string | null;
   category?: ComplaintCategory | null;
   channel?: ComplaintChannel | null;
   priority?: ComplaintPriority | null;
@@ -72,6 +77,15 @@ export type Complaint = {
   customer_communication_notes?: string | null;
   closing_notes?: string | null;
   created_by?: string | null;
+  // Nama aktor (COALESCE(users.name, users.email)) — UI memakai ini; *_by
+  // hanya ID numerik internal dan tidak pernah ditampilkan ke user.
+  created_by_name?: string | null;
+  data_verified_by_name?: string | null;
+  operation_investigated_by_name?: string | null;
+  aml_reviewed_by_name?: string | null;
+  finance_reviewed_by_name?: string | null;
+  resolved_by_name?: string | null;
+  closed_by_name?: string | null;
   created_at?: string | null;
   resolved_at?: string | null;
   closed_at?: string | null;
@@ -400,12 +414,24 @@ export function canCreateComplaint(role?: string | null): boolean {
   return isRole(role, 'ComplaintHandling');
 }
 
+// Setiap aksi workflow hanya sah pada tahapnya sendiri. Tanpa gate tahap ini
+// form lama tetap terlihat setelah tiket pindah tahap (mis. Ops SPV masih
+// melihat form investigasi saat status sudah AML_REVIEW) dan baru ditolak
+// backend dengan 400 setelah user menekan simpan.
 export function canVerifyComplaintData(role?: string | null, c?: Complaint | null): boolean {
-  return isRole(role, 'ComplaintHandling') && !isFinal(c?.status);
+  return (
+    isRole(role, 'ComplaintHandling') &&
+    !isFinal(c?.status) &&
+    (c?.status === 'OPEN' || c?.status === 'WAITING_CUSTOMER_DATA')
+  );
 }
 
 export function canOperationInvestigate(role?: string | null, c?: Complaint | null): boolean {
-  return isRole(role, 'OperationSupervisor') && !isFinal(c?.status);
+  return (
+    isRole(role, 'OperationSupervisor') &&
+    !isFinal(c?.status) &&
+    c?.status === 'OPERATION_INVESTIGATION'
+  );
 }
 
 // Backend hanya menerima AML review saat status AML_REVIEW / AML_HOLD.

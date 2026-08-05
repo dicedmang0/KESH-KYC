@@ -99,8 +99,8 @@ export default function StatementRefundDetailPage() {
   const [modal, setModal] = useState<ModalKind>(null);
 
   // match form
-  const [matchTransferId, setMatchTransferId] = useState('');
-  const [matchComplaintId, setMatchComplaintId] = useState('');
+  const [matchTransferRefNo, setMatchTransferRefNo] = useState('');
+  const [matchComplaintNo, setMatchComplaintNo] = useState('');
   const [matchNotes, setMatchNotes] = useState('');
   // decision form
   const [financeNotes, setFinanceNotes] = useState('');
@@ -152,7 +152,7 @@ export default function StatementRefundDetailPage() {
       await refresh();
       toast.success(okMsg);
       setModal(null);
-      setMatchTransferId(''); setMatchComplaintId(''); setMatchNotes('');
+      setMatchTransferRefNo(''); setMatchComplaintNo(''); setMatchNotes('');
       setFinanceNotes(''); setRejectReason('');
     } catch (e: unknown) {
       // Backend menolak match nominal berbeda tanpa catatan — tampilkan pesannya.
@@ -239,8 +239,8 @@ export default function StatementRefundDetailPage() {
           {showMatch && (
             <button
               onClick={() => {
-                setMatchTransferId(refund.original_transfer_id ? String(refund.original_transfer_id) : '');
-                setMatchComplaintId(refund.complaint_id ? String(refund.complaint_id) : '');
+                setMatchTransferRefNo(refund.original_transfer_reference_no ?? '');
+                setMatchComplaintNo(refund.complaint_no ?? refund.complaint?.complaint_no ?? '');
                 setMatchNotes(refund.investigation_notes ?? '');
                 setModal('match');
               }}
@@ -305,8 +305,10 @@ export default function StatementRefundDetailPage() {
             : undefined
         } />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="Dibuat Oleh" value={refund.created_by} />
+          {/* Nama aktor, bukan ID numerik internal. */}
+          <Field label="Dibuat Oleh" value={refund.created_by_name} />
           <Field label="Tanggal Dibuat" value={formatDateTime(refund.created_at)} />
+          <Field label="Diajukan Oleh" value={refund.submitted_by_name} />
           <Field label="Diajukan Pada" value={formatDateTime(refund.submitted_at)} />
         </div>
       </Section>
@@ -315,10 +317,17 @@ export default function StatementRefundDetailPage() {
       <Section title="Pengaduan Terkait">
         {refund.complaint ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Field label="No. Pengaduan" value={
-              <Link href={`/complaints/${refund.complaint.id}`} className="font-mono text-kesh-700 hover:underline">
-                {refund.complaint.complaint_no ?? `#${refund.complaint.id}`}
-              </Link>
+            {/* Identitas pengaduan adalah nomornya; complaint_id internal tidak
+                pernah ditampilkan. Data lama tanpa nomor tampil sebagai em dash. */}
+            <Field label="Nomor Pengaduan" value={
+              (refund.complaint_no ?? refund.complaint.complaint_no) ? (
+                <Link
+                  href={`/complaints/${refund.complaint.id}`}
+                  className="font-mono text-kesh-700 hover:underline break-all"
+                >
+                  {refund.complaint_no ?? refund.complaint.complaint_no}
+                </Link>
+              ) : undefined
             } />
             <Field label="Status Pengaduan" value={refund.complaint.status} />
             <Field label="Nama Customer" value={refund.complaint.customer_name} />
@@ -331,19 +340,26 @@ export default function StatementRefundDetailPage() {
       </Section>
 
       {/* 3. Transfer */}
-      <Section title="Transaksi Asal">
+      <Section title="Transaksi Awal">
         {refund.transfer ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Field label="ID Transaksi" value={
-              <Link href={`/transfers/${refund.transfer.id}`} className="text-kesh-700 hover:underline">
-                #{refund.transfer.id}
-              </Link>
+            {/* Identitas utama transaksi awal adalah nomor referensi partner.
+                ID internal tetap ditampilkan, tapi sebagai keterangan kecil. */}
+            <Field label="Nomor Referensi Transaksi Awal" value={
+              <>
+                <Link
+                  href={`/transfers/${refund.transfer.id}`}
+                  className="font-mono text-kesh-700 hover:underline break-all"
+                >
+                  {refund.original_transfer_reference_no ?? refund.transfer.partner_reference_no ?? `#${refund.transfer.id}`}
+                </Link>
+                <div className="text-xs font-normal text-slate-400">
+                  Internal Transfer ID: {refund.transfer.id}
+                </div>
+              </>
             } />
-            <Field label="No. Referensi" value={
+            <Field label="No. Referensi Internal" value={
               refund.transfer.reference_no ? <span className="font-mono">{refund.transfer.reference_no}</span> : undefined
-            } />
-            <Field label="No. Referensi Partner" value={
-              refund.transfer.partner_reference_no ? <span className="font-mono">{refund.transfer.partner_reference_no}</span> : undefined
             } />
             <Field label="Nominal Transaksi" value={formatMonitoringAmount(refund.transfer.amount, refund.transfer.currency ?? 'IDR')} />
             <Field label="Status Transaksi" value={refund.transfer.status} />
@@ -372,7 +388,7 @@ export default function StatementRefundDetailPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Field label="Metode Match" value={matchMethodLabel(refund.match_method)} />
           <Field label="Match Confidence" value={matchConfidenceLabel(refund.match_confidence)} />
-          <Field label="Dicocokkan Oleh" value={refund.matched_by} />
+          <Field label="Dicocokkan Oleh" value={refund.matched_by_name} />
           <Field label="Tanggal Match" value={formatDateTime(refund.matched_at)} />
         </div>
         <Field label="Catatan Investigasi" value={
@@ -385,9 +401,9 @@ export default function StatementRefundDetailPage() {
       {/* 5. Finance */}
       <Section title="Approval Finance">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="Disetujui Oleh" value={refund.approved_by} />
+          <Field label="Disetujui Oleh" value={refund.approved_by_name} />
           <Field label="Tanggal Disetujui" value={formatDateTime(refund.approved_at)} />
-          <Field label="Ditolak Oleh" value={refund.rejected_by} />
+          <Field label="Ditolak Oleh" value={refund.rejected_by_name} />
           <Field label="Tanggal Ditolak" value={formatDateTime(refund.rejected_at)} />
         </div>
         <Field label="Catatan Finance" value={
@@ -483,16 +499,15 @@ export default function StatementRefundDetailPage() {
           confirmLabel="Cocokkan"
           onClose={() => setModal(null)}
           onConfirm={() => {
-            const tid = Number(matchTransferId);
-            if (!Number.isInteger(tid) || tid <= 0) {
-              toast.error('ID transaksi asal wajib diisi.');
+            const ref = matchTransferRefNo.trim();
+            if (!ref) {
+              toast.error('Nomor referensi transaksi awal wajib diisi.');
               return;
             }
-            const cid = Number(matchComplaintId);
             run(
               () => matchStatementRefund(id, {
-                original_transfer_id: tid,
-                complaint_id: Number.isInteger(cid) && cid > 0 ? cid : undefined,
+                original_transfer_reference_no: ref,
+                complaint_no: matchComplaintNo.trim() || undefined,
                 match_method: 'MANUAL',
                 investigation_notes: matchNotes.trim() || undefined,
               }),
@@ -502,28 +517,34 @@ export default function StatementRefundDetailPage() {
         >
           <div className="space-y-3">
             <div>
-              <label htmlFor="match-transfer-id" className="text-xs text-slate-500">
-                ID Transaksi Asal <span className="text-red-600">*</span>
+              <label htmlFor="match-transfer-reference-no" className="text-xs text-slate-500">
+                Nomor Referensi Transaksi Awal <span className="text-red-600">*</span>
               </label>
               <input
-                id="match-transfer-id"
-                type="number"
-                min={1}
-                value={matchTransferId}
-                onChange={(e) => setMatchTransferId(e.target.value)}
-                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-kesh-700"
+                id="match-transfer-reference-no"
+                value={matchTransferRefNo}
+                onChange={(e) => setMatchTransferRefNo(e.target.value)}
+                placeholder="KESH-TRF-20260729-E7E4465A8616D73B"
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono outline-none focus:border-kesh-700"
               />
+              <p className="mt-1 text-xs text-slate-400">
+                Gunakan nomor referensi yang tampil pada detail transfer, contoh: KESH-TRF-…
+              </p>
             </div>
             <div>
-              <label htmlFor="match-complaint-id" className="text-xs text-slate-500">ID Pengaduan (opsional)</label>
+              <label htmlFor="match-complaint-no" className="text-xs text-slate-500">
+                Nomor Pengaduan (opsional)
+              </label>
               <input
-                id="match-complaint-id"
-                type="number"
-                min={1}
-                value={matchComplaintId}
-                onChange={(e) => setMatchComplaintId(e.target.value)}
-                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-kesh-700"
+                id="match-complaint-no"
+                value={matchComplaintNo}
+                onChange={(e) => setMatchComplaintNo(e.target.value)}
+                placeholder="KESH-CMP-20260731-004841"
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono outline-none focus:border-kesh-700"
               />
+              <p className="mt-1 text-xs text-slate-400">
+                Gunakan nomor pengaduan yang tampil pada detail pengaduan.
+              </p>
             </div>
             <div>
               <label htmlFor="match-notes" className="text-xs text-slate-500">Catatan Investigasi</label>

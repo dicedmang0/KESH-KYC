@@ -6,10 +6,23 @@ for the workflow under test. Specs:
 - `kyb-step2-cdd-regression.spec.ts` — regression test for the KYB bug where
   Step 2 "Pengurus & Pemegang Saham" → "Lanjut" incorrectly called the
   Individual-only `PATCH /api/applications/:id` CDD endpoint.
+- `receipts.spec.ts` — printable receipts: `/transfers/:id/receipt` and
+  `/complaints/:id/receipt` render outside the app shell, are keyed by the
+  customer-facing reference (`KESH-TRF-…` / `KESH-CMP-…`) rather than an
+  internal id, show officer names instead of numeric user ids, and the "Cetak
+  Resi" button stays hidden on a draft transfer. Picks an existing COMPLETED
+  transfer and an existing complaint from the local DB.
 - `complaint-refund-flow.spec.ts` — Complaint Handling + Statement Refund
   happy path (create → verify data → operation investigation → finance
   review → statement refund → match → submit → approve → resolve → close),
-  plus role-permission negative checks (FrontDesk, FinanceManager).
+  plus role-permission negative checks (FrontDesk, FinanceManager). Also
+  covers linking a refund to its original transfer by
+  `original_transfer_reference_no` (the `KESH-TRF-…` partner reference) on both
+  the create form and the match modal, the friendly "nomor referensi … tidak
+  ditemukan" error, and the reference-first detail/list display. Same for the
+  complaint linkage by `complaint_no`, plus the stage lock (Ops SPV loses the
+  investigation form once the ticket leaves OPERATION_INVESTIGATION) and the
+  actor-name fields (names, never numeric user ids).
 - `bulk-transfer-reference.spec.ts` — Bulk Transfer's batch-level "No.
   Referensi Bulk" (`bulk_reference_no`) field: required-field validation
   (submit button disabled while empty, no POST fired), successful submit
@@ -39,6 +52,16 @@ for the workflow under test. Specs:
   That row is deliberately inserted with a run-unique `E2E-DUP-<ts>` id (a
   reused id would dedupe and produce no warning) and removed again in
   `afterAll` — see "Duplicate-fixture cleanup" below.
+  Also covers `POST /transfers/:id/rescreen-watchlist`: on the DTTOT-hit
+  transfer created above (still `PENDING_COMPLIANCE_REVIEW`, so the backend
+  takes its "live" branch — full refreshed transfer at the top level, stats
+  nested under `rescreen`), FrontDesk sees no "Rescreen Watchlist" button (the
+  same role guard as `canDecideTransferComplianceReview` —
+  ComplianceLead/SystemAdmin/Director only), ComplianceLead does, the confirm
+  dialog gates the call, the request body carries no `force`, and the
+  screening section's hit table/empty-state and can-continue/still-matched
+  banners reflect whatever `rescreen` actually reports for this beneficiary
+  under current rules.
 
 - `kyc-watchlist-screening.spec.ts` — application detail (`/users/:id`)
   watchlist screening: the Screening section renders every stored hit from the

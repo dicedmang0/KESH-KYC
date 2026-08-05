@@ -196,7 +196,14 @@ export default function ComplaintDetailPage() {
   async function run(fn: () => Promise<Complaint>, successMsg: string) {
     try {
       const updated = await fn();
-      setComplaint(updated);
+      // Respons aksi datang dari UPDATE … RETURNING * sehingga hanya memuat
+      // kolom mentah (*_by numerik, tanpa nama aktor). Ambil ulang detail agar
+      // nama aktor dan data turunan ikut segar; kalau gagal, pakai respons aksi.
+      try {
+        setComplaint(await getComplaint(id));
+      } catch {
+        setComplaint(updated);
+      }
       toast.success(successMsg);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Aksi gagal. Silakan coba lagi.');
@@ -250,6 +257,14 @@ export default function ComplaintDetailPage() {
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          {/* Resi penerimaan pengaduan — tersedia untuk semua role yang boleh
+              membuka pengaduan ini (isinya read-only). */}
+          <Link
+            href={`/complaints/${id}/receipt`}
+            className="rounded-lg border border-kesh-700 px-3 py-1.5 text-sm font-medium text-kesh-700 hover:bg-kesh-50"
+          >
+            Cetak Resi Pengaduan
+          </Link>
           <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${complaintLevelBadgeClass(c.complaint_level)}`}>
             {formatComplaintLevel(c.complaint_level)}
           </span>
@@ -285,7 +300,8 @@ export default function ComplaintDetailPage() {
           />
           <Field label="Kanal" value={formatComplaintChannel(c.channel)} />
           <Field label="Prioritas" value={formatComplaintPriority(c.priority)} />
-          <Field label="Dibuat Oleh" value={c.created_by} />
+          {/* Nama aktor, bukan ID numerik internal. */}
+          <Field label="Dibuat Oleh" value={c.created_by_name} />
           <Field label="Tanggal Dibuat" value={formatDateTime(c.created_at)} />
           {c.resolved_at && <Field label="Tanggal Selesai" value={formatDateTime(c.resolved_at)} />}
           {c.closed_at && <Field label="Tanggal Ditutup" value={formatDateTime(c.closed_at)} />}
@@ -298,6 +314,7 @@ export default function ComplaintDetailPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Field label="Hasil Verifikasi" value={c.data_verification_status ? formatDataVerification(c.data_verification_status) : undefined} />
           <Field label="Tanggal Verifikasi" value={c.data_verified_at ? formatDateTime(c.data_verified_at) : undefined} />
+          <Field label="Diverifikasi Oleh" value={c.data_verified_by_name} />
         </div>
         <Notes label="Catatan Verifikasi" value={c.data_verification_notes} />
         {canVerifyComplaintData(role, c) && (
@@ -324,6 +341,7 @@ export default function ComplaintDetailPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Field label="Hasil Investigasi" value={c.operation_investigation_result ? formatOperationResult(c.operation_investigation_result) : undefined} />
           <Field label="Tanggal Investigasi" value={c.operation_investigated_at ? formatDateTime(c.operation_investigated_at) : undefined} />
+          <Field label="Investigasi Oleh" value={c.operation_investigated_by_name} />
         </div>
         <Notes label="Catatan Investigasi" value={c.operation_investigation_notes} />
         {canOperationInvestigate(role, c) && (
@@ -349,6 +367,7 @@ export default function ComplaintDetailPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Field label="Keputusan" value={c.aml_decision ? formatAmlDecision(c.aml_decision) : undefined} />
           <Field label="Tanggal Review" value={c.aml_reviewed_at ? formatDateTime(c.aml_reviewed_at) : undefined} />
+          <Field label="AML Review Oleh" value={c.aml_reviewed_by_name} />
         </div>
         <Notes label="Catatan AML" value={c.aml_notes} />
         {canAmlReview(role, c) && (
@@ -371,6 +390,7 @@ export default function ComplaintDetailPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Field label="Keputusan" value={c.finance_decision ? formatFinanceDecision(c.finance_decision) : undefined} />
           <Field label="Tanggal Review" value={c.finance_reviewed_at ? formatDateTime(c.finance_reviewed_at) : undefined} />
+          <Field label="Finance Review Oleh" value={c.finance_reviewed_by_name} />
         </div>
         <Notes label="Catatan Finance" value={c.finance_review_notes} />
         {canFinanceReview(role, c) && (
@@ -450,6 +470,10 @@ export default function ComplaintDetailPage() {
 
       {/* 7. Penyelesaian & penutupan */}
       <Section title="Penyelesaian & Penutupan">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Field label="Diselesaikan Oleh" value={c.resolved_by_name} />
+          <Field label="Ditutup Oleh" value={c.closed_by_name} />
+        </div>
         <Notes label="Catatan Penyelesaian" value={c.resolution_notes} />
         <Notes label="Catatan Komunikasi Nasabah" value={c.customer_communication_notes} />
         <Notes label="Catatan Penutupan" value={c.closing_notes} />

@@ -117,6 +117,10 @@ export type ComplianceReview = {
   reported_at?: string | null;
   reviewed_by?: number | string | null;
   reviewed_at?: string | null;
+  // Backend belum mengirim nama aktor untuk snapshot compliance review — sampai
+  // ada, UI menampilkan em dash daripada ID numerik internal.
+  reported_by_name?: string | null;
+  reviewed_by_name?: string | null;
   decision_notes?: string | null;
 };
 
@@ -247,6 +251,16 @@ export type TransferDetail = TransferListRow & {
   approved_by?: number | string | null;
   rejected_by?: number | string | null;
   rejected_at?: string | null;
+
+  // Nama aktor (COALESCE(users.name, users.email)) — UI memakai ini; *_by di
+  // atas hanya ID numerik internal dan tidak pernah ditampilkan ke user.
+  created_by_name?: string | null;
+  submitted_by_name?: string | null;
+  approved_by_name?: string | null;
+  rejected_by_name?: string | null;
+  result_updated_by_name?: string | null;
+  supervisor_reviewed_by_name?: string | null;
+  finance_reviewed_by_name?: string | null;
 
   // FinanceStaff layer-2 review. `finance_notes` doubles as the reason shown to
   // FrontDesk when the transfer was returned (status REVISION_REQUIRED).
@@ -582,6 +596,49 @@ export function decideTransferComplianceReview(
   return apiFetch<TransferDetail>(`/transfers/${id}/compliance-review`, {
     method: "POST",
     body,
+  });
+}
+
+/** Rescreen stats nested in the response when the transfer is not settled (a real rewrite happened). */
+export type RescreenWatchlistStats = {
+  read_only: false;
+  old_hit_count: number;
+  new_hit_count: number;
+  old_match_count: number;
+  new_match_count: number;
+  can_continue: boolean;
+};
+
+/** Non-final transfer: backend rewrites transfer_watchlist_hits and returns the fresh detail + stats. */
+export type RescreenWatchlistLive = TransferDetail & { rescreen: RescreenWatchlistStats };
+
+/** COMPLETED/REJECTED transfer without `force`: preview only, nothing is written. */
+export type RescreenWatchlistPreview = {
+  transfer_id: number;
+  transfer_status: string;
+  read_only: true;
+  reason: string;
+  old_hits: WatchlistHit[];
+  new_hits: unknown[];
+  old_match_count: number;
+  new_match_count: number;
+};
+
+export type RescreenWatchlistResult = RescreenWatchlistLive | RescreenWatchlistPreview;
+
+/**
+ * POST /transfers/:id/rescreen-watchlist — re-evaluate stored watchlist hits
+ * against current classifier rules (clears stale false positives, e.g. the
+ * historical "MARIA ANIRA" vs "MIRA ARIANI" 41.2% near-match). `force` is a
+ * backend-only escape hatch to rewrite a settled transfer; the UI never sends it.
+ */
+export function rescreenTransferWatchlist(
+  id: number | string,
+  payload: { force?: boolean } = {},
+) {
+  return apiFetch<RescreenWatchlistResult>(`/transfers/${id}/rescreen-watchlist`, {
+    method: "POST",
+    body: payload,
   });
 }
 

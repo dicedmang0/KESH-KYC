@@ -222,8 +222,8 @@ export default function StatementRefundsPage() {
               <th className="px-3 py-3 font-medium">Partner</th>
               <th className="px-3 py-3 font-medium whitespace-nowrap text-right">Nominal</th>
               <th className="px-3 py-3 font-medium">Bank Ref</th>
-              <th className="px-3 py-3 font-medium">Transaksi Asal</th>
-              <th className="px-3 py-3 font-medium">Complaint</th>
+              <th className="px-3 py-3 font-medium">Transaksi Awal</th>
+              <th className="px-3 py-3 font-medium">Nomor Pengaduan</th>
               <th className="px-3 py-3 font-medium whitespace-nowrap">Status</th>
               <th className="px-3 py-3 font-medium whitespace-nowrap">Match Confidence</th>
               <th className="px-3 py-3 font-medium text-right whitespace-nowrap">Aksi</th>
@@ -249,10 +249,11 @@ export default function StatementRefundsPage() {
                   <td className="px-3 py-3 min-w-[120px] font-mono text-xs text-slate-600 whitespace-normal break-all">
                     {r.bank_reference_no || '—'}
                   </td>
-                  <td className="px-3 py-3 min-w-[130px] text-xs text-slate-600 whitespace-normal break-all">
+                  <td className="px-3 py-3 min-w-[130px] font-mono text-xs text-slate-600 whitespace-normal break-all">
                     {r.original_transfer_id ? (
                       <Link href={`/transfers/${r.original_transfer_id}`} className="text-kesh-700 hover:underline">
-                        {r.transfer_reference_no || `#${r.original_transfer_id}`}
+                        {/* Nomor referensi partner dulu; ID internal hanya untuk data lama tanpa referensi. */}
+                        {r.original_transfer_reference_no || r.transfer_reference_no || `#${r.original_transfer_id}`}
                       </Link>
                     ) : (
                       <span className="text-slate-400">Belum dicocokkan</span>

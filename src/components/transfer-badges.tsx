@@ -37,6 +37,17 @@ const RESULT_LABELS: Record<"SUCCESS" | "FAILED", string> = {
   FAILED: "Gagal",
 };
 
+/** Plain-text labels — same wording as the badges, for print/receipt output. */
+export function transferStatusLabel(status?: string | null): string {
+  if (!status) return '—';
+  return STATUS_LABELS[status as TransferStatus] || status;
+}
+
+export function transferResultLabel(result?: string | null): string {
+  if (!result) return '—';
+  return RESULT_LABELS[result as 'SUCCESS' | 'FAILED'] || result;
+}
+
 export function TransferStatusBadge({
   status,
 }: {

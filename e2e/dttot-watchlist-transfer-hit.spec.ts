@@ -378,6 +378,9 @@ test.describe('DTTOT watchlist upload → transfer screening — FE-to-BE', () =
   let sender: ApprovedSender;
   let frontDesk: { email: string; password: string };
   let complianceToken: string;
+  // Set by the screening test below — reused by the rescreen test as a real
+  // PENDING_COMPLIANCE_REVIEW transfer that already carries a DTTOT hit.
+  let hitTransferId: string;
 
   test.beforeAll(async ({ browser }: { browser: Browser }) => {
     ts = Date.now().toString();
@@ -499,6 +502,7 @@ test.describe('DTTOT watchlist upload → transfer screening — FE-to-BE', () =
     const created = await createResponse;
     expect(created.ok(), await created.text().catch(() => '')).toBeTruthy();
     const transferId = String(((await created.json()) as { id: number | string }).id);
+    hitTransferId = transferId;
 
     await page.waitForURL(`**/transfers/${transferId}`);
     await expect(page.getByRole('heading', { name: `Transfer #${transferId}` })).toBeVisible();
@@ -579,6 +583,74 @@ test.describe('DTTOT watchlist upload → transfer screening — FE-to-BE', () =
     // rule code underneath, so assert on the rule code and the rule's own text.
     await expect(page.getByText('LTKM_SANCTION_RELATED').first()).toBeVisible();
     await expect(page.getByText(/Penerima transfer terkait DTTOT\/PPPSPM/).first()).toBeVisible();
+
+    await assertNoNetworkViolations(page, guards);
+  });
+
+  test('ComplianceLead can rescreen the watchlist result; FrontDesk sees no rescreen button', async ({ page }) => {
+    const guards = attachNetworkGuards(page);
+    const screening = () =>
+      page.locator('div.rounded-2xl').filter({ has: page.getByRole('heading', { name: 'Hasil Screening Watchlist' }) });
+
+    // FrontDesk shares the same role guard as OperationSupervisor/FinanceStaff/
+    // Auditor (canDecideTransferComplianceReview gates ComplianceLead/SystemAdmin/
+    // Director only) — checking one non-permitted role exercises that guard.
+    await login(page, frontDesk.email, frontDesk.password);
+    await page.goto(`/transfers/${hitTransferId}`);
+    await expect(screening()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Rescreen Watchlist' })).toHaveCount(0);
+
+    await switchRole(page, COMPLIANCE_EMAIL, COMPLIANCE_PASSWORD);
+    await page.goto(`/transfers/${hitTransferId}`);
+    const rescreenButton = screening().getByRole('button', { name: 'Rescreen Watchlist' });
+    await expect(rescreenButton).toBeVisible();
+
+    page.once('dialog', (d) => d.accept());
+    const rescreenResponse = page.waitForResponse(
+      (r) =>
+        new URL(r.url()).pathname.endsWith(`/transfers/${hitTransferId}/rescreen-watchlist`) &&
+        r.request().method() === 'POST',
+    );
+    await rescreenButton.click();
+    const res = await rescreenResponse;
+    expect(res.ok(), await res.text().catch(() => '')).toBeTruthy();
+    // The UI never sends `force` — the request body must be empty.
+    expect(JSON.parse(res.request().postData() || '{}')).toEqual({});
+
+    // The transfer is still PENDING_COMPLIANCE_REVIEW (not settled), so the
+    // backend takes the "live" branch: full refreshed transfer detail at the
+    // top level, rescreen stats nested under `rescreen`.
+    const body = (await res.json()) as {
+      rescreen: {
+        read_only: boolean;
+        old_hit_count: number;
+        new_hit_count: number;
+        old_match_count: number;
+        new_match_count: number;
+        can_continue: boolean;
+      };
+    };
+    const stats = body.rescreen;
+
+    if (stats.can_continue) {
+      await expect(
+        page.getByText(
+          'Hasil watchlist terbaru tidak menemukan match aktif. Transfer dapat dilanjutkan melalui aksi Approve to Continue oleh Compliance.',
+        ),
+      ).toBeVisible();
+    }
+    if (stats.new_match_count > 0) {
+      await expect(
+        page.getByText('Masih terdapat match watchlist aktif. Review Compliance tetap diperlukan.'),
+      ).toBeVisible();
+    }
+
+    // Detail refetched after the call — the rendered hit rows match the fresh count.
+    if (stats.new_hit_count > 0) {
+      await expect(screening().locator('tbody tr')).toHaveCount(stats.new_hit_count);
+    } else {
+      await expect(screening().getByText('Tidak ada hasil watchlist hit yang tercatat saat ini.')).toBeVisible();
+    }
 
     await assertNoNetworkViolations(page, guards);
   });

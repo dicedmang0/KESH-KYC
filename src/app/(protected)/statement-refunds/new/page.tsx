@@ -17,20 +17,13 @@ function clean(v: string): string | undefined {
   return t.length > 0 ? t : undefined;
 }
 
-function toIntOrUndefined(v: string): number | undefined {
-  const t = v.trim();
-  if (!t) return undefined;
-  const n = Number(t);
-  return Number.isInteger(n) && n > 0 ? n : undefined;
-}
-
 export default function NewStatementRefundPage() {
   const router = useRouter();
   const { token } = useAuth();
   const role = getRoleFromToken(token);
 
-  const [complaintId, setComplaintId] = useState('');
-  const [transferId, setTransferId] = useState('');
+  const [complaintNo, setComplaintNo] = useState('');
+  const [transferRefNo, setTransferRefNo] = useState('');
   const [statementDate, setStatementDate] = useState('');
   const [receivedAt, setReceivedAt] = useState('');
   const [amount, setAmount] = useState('');
@@ -74,8 +67,8 @@ export default function NewStatementRefundPage() {
         received_at: new Date(receivedAt).toISOString(),
         amount: amountNum,
         currency,
-        complaint_id: toIntOrUndefined(complaintId),
-        original_transfer_id: toIntOrUndefined(transferId),
+        complaint_no: clean(complaintNo),
+        original_transfer_reference_no: clean(transferRefNo),
         bank_account_no: clean(bankAccountNo),
         bank_name: clean(bankName),
         bank_reference_no: clean(bankRefNo),
@@ -216,30 +209,34 @@ export default function NewStatementRefundPage() {
         </h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="text-xs text-slate-500">ID Transaksi Asal</label>
+            <label htmlFor="original-transfer-reference-no" className="text-xs text-slate-500">
+              Nomor Referensi Transaksi Awal
+            </label>
             <input
-              type="number"
-              min={1}
-              value={transferId}
-              onChange={(e) => setTransferId(e.target.value)}
-              placeholder="ID transfer yang direfund"
-              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-kesh-700"
+              id="original-transfer-reference-no"
+              value={transferRefNo}
+              onChange={(e) => setTransferRefNo(e.target.value)}
+              placeholder="KESH-TRF-20260729-E7E4465A8616D73B"
+              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono outline-none focus:border-kesh-700"
             />
             <p className="mt-1 text-xs text-slate-400">
+              Gunakan nomor referensi yang tampil pada detail transfer, contoh: KESH-TRF-…
               Boleh dikosongkan — refund dapat dicocokkan belakangan lewat aksi Match.
             </p>
           </div>
           <div>
-            <label className="text-xs text-slate-500">ID Pengaduan</label>
+            <label htmlFor="complaint-no" className="text-xs text-slate-500">
+              Nomor Pengaduan
+            </label>
             <input
-              type="number"
-              min={1}
-              value={complaintId}
-              onChange={(e) => setComplaintId(e.target.value)}
-              placeholder="ID complaint terkait"
-              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-kesh-700"
+              id="complaint-no"
+              value={complaintNo}
+              onChange={(e) => setComplaintNo(e.target.value)}
+              placeholder="KESH-CMP-20260731-004841"
+              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono outline-none focus:border-kesh-700"
             />
             <p className="mt-1 text-xs text-slate-400">
+              Gunakan nomor pengaduan yang tampil pada detail pengaduan.
               Menautkan pengaduan tidak menutup pengaduan tersebut.
             </p>
           </div>

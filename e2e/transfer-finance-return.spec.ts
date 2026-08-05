@@ -263,5 +263,15 @@ test.describe('FinanceStaff return → FrontDesk edit & resubmit — FE-to-BE', 
     await page.goto(`/transfers/${transferId}`);
     await expect(summaryCard(page).getByText('Menunggu Review Operation Supervisor')).toBeVisible();
     await expect(page.getByText('Transaksi dikembalikan ke FrontDesk untuk diperbaiki.')).toHaveCount(0);
+
+    // The audit trail names the actors — never their internal numeric ids.
+    const actor = (label: string) =>
+      page.locator(`div:has(> div.text-xs:text-is("${label}")) > div.text-sm`).first();
+    await expect(actor('Dibuat Oleh')).toHaveText(`E2E FrontDesk Return ${ts}`);
+    await expect(actor('Diajukan Oleh')).toHaveText(`E2E FrontDesk Return ${ts}`);
+    await expect(actor('Direview Finance Staff Oleh')).toHaveText(`E2E FinanceStaff Return ${ts}`);
+    for (const label of ['Dibuat Oleh', 'Diajukan Oleh', 'Direview Finance Staff Oleh']) {
+      await expect(actor(label)).not.toHaveText(/^\d+$/);
+    }
   });
 });

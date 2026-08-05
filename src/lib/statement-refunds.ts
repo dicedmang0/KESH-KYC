@@ -25,9 +25,18 @@ export type BalanceCreditStatus = 'PENDING_EXTERNAL_POSTING' | 'CREDITED' | null
 export type StatementRefundListItem = {
   id: number | string;
   refund_no: string;
+  complaint_id: number | string | null;
+  // Nomor pengaduan (KESH-CMP-…) — identitas yang dipakai user; complaint_id
+  // hanya penyimpanan internal dan tidak pernah jadi tampilan utama.
   complaint_no: string | null;
+  complaint_status: string | null;
+  complaint_customer_name: string | null;
   original_transfer_id: number | string | null;
   transfer_reference_no: string | null;
+  // Nomor referensi partner transaksi awal (KESH-TRF-…) — identitas yang
+  // dipakai user, sementara original_transfer_id hanya ID internal.
+  original_transfer_reference_no: string | null;
+  original_transfer_amount: string | number | null;
   partner_name: string | null;
   partner_application_id: number | string | null;
   statement_date: string | null;
@@ -117,6 +126,18 @@ export type StatementRefund = {
   partner?: StatementRefundPartner | null;
   balance_event?: unknown | null;
   balance_credit_status?: BalanceCreditStatus;
+  original_transfer_reference_no?: string | null;
+  original_transfer_amount?: string | number | null;
+  complaint_no?: string | null;
+  complaint_status?: string | null;
+  complaint_customer_name?: string | null;
+  // Nama aktor (COALESCE(users.name, users.email)) — dipakai UI menggantikan
+  // *_by yang hanya berisi ID numerik internal.
+  created_by_name?: string | null;
+  matched_by_name?: string | null;
+  submitted_by_name?: string | null;
+  approved_by_name?: string | null;
+  rejected_by_name?: string | null;
 };
 
 export type StatementRefundListParams = {
@@ -139,7 +160,13 @@ export type StatementRefundListResponse = {
 };
 
 export type CreateStatementRefundPayload = {
+  /** Dipakai UI. Backend resolve ke complaints.complaint_no. */
+  complaint_no?: string;
+  /** Legacy — masih diterima backend, tapi UI tidak lagi meminta ID internal. */
   complaint_id?: number;
+  /** Dipakai UI. Backend resolve ke transfers.partner_reference_no. */
+  original_transfer_reference_no?: string;
+  /** Legacy — masih diterima backend, tapi UI tidak lagi meminta ID internal. */
   original_transfer_id?: number;
   statement_date: string;
   received_at: string;
@@ -159,11 +186,15 @@ export type UpdateStatementRefundPayload = {
   statement_description?: string;
   investigation_notes?: string;
   evidence_uri?: string;
+  complaint_no?: string;
   complaint_id?: number;
 };
 
+// Backend butuh salah satu dari reference/id — UI selalu mengirim reference.
 export type MatchStatementRefundPayload = {
-  original_transfer_id: number;
+  original_transfer_reference_no?: string;
+  original_transfer_id?: number;
+  complaint_no?: string;
   complaint_id?: number;
   match_method?: MatchMethod;
   investigation_notes?: string;

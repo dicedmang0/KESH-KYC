@@ -15,6 +15,7 @@ import {
   decideTransfer,
   setTransferResult,
   updateTransfer,
+  rescreenTransferWatchlist,
   formatTransferAmount,
   transferReference,
   formatDateTime,
@@ -218,6 +219,21 @@ export default function TransferDetailPage() {
   const [evalMsg, setEvalMsg] = useState('');
   const [evalErr, setEvalErr] = useState('');
 
+  // watchlist rescreen
+  // Preview branch (settled transfer, no force sent) carries no hit counts /
+  // can_continue — see RescreenWatchlistPreview. Those fields stay undefined then.
+  type RescreenBanner = {
+    read_only: boolean;
+    old_hit_count?: number;
+    new_hit_count?: number;
+    old_match_count: number;
+    new_match_count: number;
+    can_continue?: boolean;
+  };
+  const [rescreenLoading, setRescreenLoading] = useState(false);
+  const [rescreenResult, setRescreenResult] = useState<RescreenBanner | null>(null);
+  const [rescreenErr, setRescreenErr] = useState('');
+
   async function reload() {
     if (!id) return;
     setLoading(true);
@@ -233,6 +249,8 @@ export default function TransferDetailPage() {
 
   useEffect(() => {
     reload();
+    setRescreenResult(null);
+    setRescreenErr('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -527,6 +545,37 @@ export default function TransferDetailPage() {
     }
   }
 
+  async function doRescreen() {
+    if (!id) return;
+    if (!window.confirm('Rescreen akan mengevaluasi ulang hasil watchlist menggunakan aturan terbaru. Lanjutkan?')) {
+      return;
+    }
+    setRescreenLoading(true);
+    setRescreenErr('');
+    try {
+      const res = await rescreenTransferWatchlist(id);
+      if ('rescreen' in res) {
+        // Backend already returns the fresh transfer (hits rewritten) alongside
+        // the stats — using it directly is equivalent to a refetch, and atomic
+        // with the mutation.
+        setRow(res);
+        setRescreenResult(res.rescreen);
+        toast.success(
+          `Rescreen selesai — hit ${res.rescreen.old_hit_count} → ${res.rescreen.new_hit_count}, ` +
+            `match aktif ${res.rescreen.old_match_count} → ${res.rescreen.new_match_count}.`,
+        );
+      } else {
+        // Settled transfer, no force sent — preview only, nothing changed.
+        setRescreenResult({ read_only: true, old_match_count: res.old_match_count, new_match_count: res.new_match_count });
+        toast.success('Rescreen (pratinjau) selesai — transfer tidak diubah.');
+      }
+    } catch (e) {
+      setRescreenErr(e instanceof Error ? e.message : 'Gagal menjalankan rescreen watchlist');
+    } finally {
+      setRescreenLoading(false);
+    }
+  }
+
   async function loadSnap() {
     if (!id) return;
     setSnapLoading(true);
@@ -568,6 +617,13 @@ export default function TransferDetailPage() {
   const watchlistHits = row?.watchlist_hits ?? [];
   const blockingListTypes = watchlistListTypes(watchlistHits).filter(isBlockingListType);
   const hasBlockingHit = blockingListTypes.length > 0;
+  // Same roles as the compliance-review decision itself. Hidden on final
+  // statuses by default — a completed/rejected transfer has nothing to act on.
+  const canRescreen =
+    canDecideTransferComplianceReview(role) &&
+    row?.status !== 'COMPLETED' &&
+    row?.status !== 'REJECTED' &&
+    (watchlistHits.length > 0 || row?.status === 'PENDING_COMPLIANCE_REVIEW');
 
   async function doEvaluateMonitoring() {
     if (!id) return;
@@ -610,12 +666,23 @@ export default function TransferDetailPage() {
             <p className="text-sm text-neutral-500 font-mono">{transferReference(row)}</p>
           )}
         </div>
-        <button
-          className="text-sm text-kesh-700 hover:underline"
-          onClick={() => router.push('/transfers')}
-        >
-          Kembali
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Resi hanya untuk transaksi yang benar-benar selesai & berhasil. */}
+          {row && (row.result === 'SUCCESS' || row.status === 'COMPLETED') && (
+            <button
+              className="rounded-lg border border-kesh-700 px-3 py-1.5 text-sm font-medium text-kesh-700 hover:bg-kesh-50"
+              onClick={() => router.push(`/transfers/${row.id ?? id}/receipt`)}
+            >
+              Cetak Resi
+            </button>
+          )}
+          <button
+            className="text-sm text-kesh-700 hover:underline"
+            onClick={() => router.push('/transfers')}
+          >
+            Kembali
+          </button>
+        </div>
       </div>
 
       {err && (
@@ -661,8 +728,8 @@ export default function TransferDetailPage() {
             </div>
           )}
 
-          {/* 1b. Beneficiary watchlist screening — only when the backend recorded hits */}
-          {watchlistHits.length > 0 && (
+          {/* 1b. Beneficiary watchlist screening — hits, or a rescreen affordance while pending review */}
+          {(watchlistHits.length > 0 || canRescreen) && (
             <SectionCard title="Hasil Screening Watchlist">
               {hasBlockingHit && (
                 <div
@@ -674,51 +741,102 @@ export default function TransferDetailPage() {
                 </div>
               )}
 
-              <p className="text-xs text-neutral-500">
-                Nama penerima dicocokkan otomatis dengan data watchlist saat transaksi diajukan.
-                {watchlistHits.length > 1 && ` ${watchlistHits.length} entri watchlist cocok.`}
-              </p>
+              {watchlistHits.length > 0 ? (
+                <>
+                  <p className="text-xs text-neutral-500">
+                    Nama penerima dicocokkan otomatis dengan data watchlist saat transaksi diajukan.
+                    {watchlistHits.length > 1 && ` ${watchlistHits.length} entri watchlist cocok.`}
+                  </p>
 
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[820px] text-xs">
-                  <thead className="bg-neutral-50 text-neutral-600">
-                    <tr>
-                      <th className="border px-2 py-1 text-left">List Type</th>
-                      <th className="border px-2 py-1 text-left">Input Name</th>
-                      <th className="border px-2 py-1 text-left">Matched Name</th>
-                      <th className="border px-2 py-1 text-left">Matched Field</th>
-                      <th className="border px-2 py-1 text-left">Match Score</th>
-                      <th className="border px-2 py-1 text-left">Unique ID</th>
-                      <th className="border px-2 py-1 text-left">Subject Type</th>
-                      <th className="border px-2 py-1 text-left">Created At</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {watchlistHits.map((h, i) => (
-                      <tr key={`${h.unique_id ?? 'hit'}-${i}`}>
-                        <td className="border px-2 py-1">
-                          <span
-                            className={`inline-block rounded px-1.5 py-0.5 font-medium ${
-                              isBlockingListType(h.list_type)
-                                ? 'bg-red-600 text-white'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}
-                          >
-                            {h.list_type ?? '-'}
-                          </span>
-                        </td>
-                        <td className="border px-2 py-1">{h.input_name ?? '-'}</td>
-                        <td className="border px-2 py-1 font-medium">{h.matched_name ?? '-'}</td>
-                        <td className="border px-2 py-1">{matchedFieldLabel(h.matched_field)}</td>
-                        <td className="border px-2 py-1">{formatMatchScore(h.match_score)}</td>
-                        <td className="border px-2 py-1 font-mono">{h.unique_id ?? '-'}</td>
-                        <td className="border px-2 py-1">{h.subject_type ?? '-'}</td>
-                        <td className="border px-2 py-1">{formatDateTime(h.created_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[820px] text-xs">
+                      <thead className="bg-neutral-50 text-neutral-600">
+                        <tr>
+                          <th className="border px-2 py-1 text-left">List Type</th>
+                          <th className="border px-2 py-1 text-left">Input Name</th>
+                          <th className="border px-2 py-1 text-left">Matched Name</th>
+                          <th className="border px-2 py-1 text-left">Matched Field</th>
+                          <th className="border px-2 py-1 text-left">Match Score</th>
+                          <th className="border px-2 py-1 text-left">Unique ID</th>
+                          <th className="border px-2 py-1 text-left">Subject Type</th>
+                          <th className="border px-2 py-1 text-left">Created At</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {watchlistHits.map((h, i) => (
+                          <tr key={`${h.unique_id ?? 'hit'}-${i}`}>
+                            <td className="border px-2 py-1">
+                              <span
+                                className={`inline-block rounded px-1.5 py-0.5 font-medium ${
+                                  isBlockingListType(h.list_type)
+                                    ? 'bg-red-600 text-white'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}
+                              >
+                                {h.list_type ?? '-'}
+                              </span>
+                            </td>
+                            <td className="border px-2 py-1">{h.input_name ?? '-'}</td>
+                            <td className="border px-2 py-1 font-medium">{h.matched_name ?? '-'}</td>
+                            <td className="border px-2 py-1">{matchedFieldLabel(h.matched_field)}</td>
+                            <td className="border px-2 py-1">{formatMatchScore(h.match_score)}</td>
+                            <td className="border px-2 py-1 font-mono">{h.unique_id ?? '-'}</td>
+                            <td className="border px-2 py-1">{h.subject_type ?? '-'}</td>
+                            <td className="border px-2 py-1">{formatDateTime(h.created_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-neutral-500">Tidak ada hasil watchlist hit yang tercatat saat ini.</p>
+              )}
+
+              {canRescreen && (
+                <div className="space-y-2 border-t pt-3">
+                  <button
+                    className="rounded-lg border border-kesh-700 px-3 py-2 text-sm font-medium text-kesh-700 hover:bg-kesh-50 disabled:opacity-50"
+                    disabled={rescreenLoading}
+                    onClick={doRescreen}
+                  >
+                    {rescreenLoading ? 'Merescreen…' : 'Rescreen Watchlist'}
+                  </button>
+
+                  {rescreenErr && (
+                    <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+                      {rescreenErr}
+                    </div>
+                  )}
+
+                  {rescreenResult && (
+                    <div className="space-y-2">
+                      {rescreenResult.old_hit_count !== undefined && rescreenResult.new_hit_count !== undefined && (
+                        <p className="text-xs text-neutral-600">
+                          Hit: {rescreenResult.old_hit_count} → {rescreenResult.new_hit_count} · Match aktif:{' '}
+                          {rescreenResult.old_match_count} → {rescreenResult.new_match_count}
+                        </p>
+                      )}
+                      {rescreenResult.read_only && (
+                        <div className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm text-slate-700">
+                          Transfer sudah final, rescreen hanya preview dan tidak mengubah data.
+                        </div>
+                      )}
+                      {rescreenResult.can_continue && (
+                        <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700">
+                          Hasil watchlist terbaru tidak menemukan match aktif. Transfer dapat
+                          dilanjutkan melalui aksi Approve to Continue oleh Compliance.
+                        </div>
+                      )}
+                      {rescreenResult.new_match_count > 0 && (
+                        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                          Masih terdapat match watchlist aktif. Review Compliance tetap diperlukan.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </SectionCard>
           )}
 
@@ -758,17 +876,18 @@ export default function TransferDetailPage() {
           {/* 4. Timeline / Audit Trail */}
           <SectionCard title="Timeline / Jejak Audit">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <Field label="Dibuat Oleh" value={row.created_by} />
-              <Field label="Diajukan Oleh" value={row.submitted_by} />
+              {/* Nama aktor, bukan ID numerik internal. */}
+              <Field label="Dibuat Oleh" value={row.created_by_name} />
+              <Field label="Diajukan Oleh" value={row.submitted_by_name} />
               <Field label="Diajukan Pada" value={formatDateTime(row.submitted_at)} />
-              <Field label="Direview Finance Staff Oleh" value={row.finance_reviewed_by} />
+              <Field label="Direview Finance Staff Oleh" value={row.finance_reviewed_by_name} />
               <Field label="Direview Finance Staff Pada" value={formatDateTime(row.finance_reviewed_at)} />
               <Field label="Catatan Finance Staff" value={row.finance_notes} />
-              <Field label="Disetujui Oleh" value={row.approved_by} />
+              <Field label="Disetujui Oleh" value={row.approved_by_name} />
               <Field label="Disetujui Pada" value={formatDateTime(row.approved_at)} />
-              <Field label="Ditolak Oleh" value={row.rejected_by} />
+              <Field label="Ditolak Oleh" value={row.rejected_by_name} />
               <Field label="Ditolak Pada" value={formatDateTime(row.rejected_at)} />
-              <Field label="Hasil Diperbarui Oleh" value={row.result_updated_by} />
+              <Field label="Hasil Diperbarui Oleh" value={row.result_updated_by_name} />
               <Field label="Hasil Diperbarui Pada" value={formatDateTime(row.result_updated_at)} />
               <Field label="Selesai Pada" value={formatDateTime(row.completed_at)} />
               <Field label="Gagal Pada" value={formatDateTime(row.failed_at)} />
@@ -832,9 +951,9 @@ export default function TransferDetailPage() {
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <Field label="Catatan Pengajuan" value={cr.report_notes} />
-                  <Field label="Diajukan Oleh" value={cr.reported_by} />
+                  <Field label="Diajukan Oleh" value={cr.reported_by_name} />
                   <Field label="Diajukan Pada" value={formatDateTime(cr.reported_at)} />
-                  <Field label="Direview Oleh" value={cr.reviewed_by} />
+                  <Field label="Direview Oleh" value={cr.reviewed_by_name} />
                   <Field label="Direview Pada" value={formatDateTime(cr.reviewed_at)} />
                   <Field label="Catatan Keputusan Sebelumnya" value={cr.decision_notes} />
                 </div>

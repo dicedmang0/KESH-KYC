@@ -137,3 +137,18 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Printable receipts (/transfers/:id/receipt, /complaints/:id/receipt).
+   A4 with a comfortable margin, plain black on white — anything the app paints
+   for the screen (sidebar, top bar, action buttons) is either outside the
+   (print) route group or marked print:hidden. */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+}

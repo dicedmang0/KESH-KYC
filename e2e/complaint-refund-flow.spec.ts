@@ -169,6 +169,14 @@ async function switchRole(page: Page, email: string, password: string) {
   await login(page, email, password);
 }
 
+/**
+ * Value rendered next to a `Field` label — used to assert that actor fields show
+ * a person's name and never the internal numeric user id.
+ */
+function actorField(page: Page, label: string) {
+  return page.locator(`div:has(> div.text-xs:text-is("${label}")) > div.text-sm`).first();
+}
+
 /** Provision one internal admin user through the real Settings → "Buat Admin" form. */
 async function createAdminViaFE(page: Page, opts: { email: string; fullName: string; role: RoleName }) {
   await page.getByLabel('Email').fill(opts.email);
@@ -342,6 +350,8 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
     expect(createRes.status(), await createRes.text().catch(() => '')).toBe(201);
     const complaint = await createRes.json();
     const complaintId = String(complaint.id);
+    const complaintNo = String(complaint.complaint_no);
+    expect(complaintNo).toMatch(/^KESH-CMP-/);
 
     // 6. Assert complaint detail opens and status = OPEN.
     await page.waitForURL(`**/complaints/${complaintId}`);
@@ -359,6 +369,14 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
 
     // 8. Assert status becomes OPERATION_INVESTIGATION.
     await expect(page.getByText('Operation Investigation', { exact: true }).first()).toBeVisible();
+
+    // 8a. The verify-data form is stage-bound: it disappears once the ticket
+    // moved on, and the actor is named rather than numbered.
+    await expect(page.getByRole('button', { name: 'Simpan Verifikasi Data' })).toHaveCount(0);
+    await expect(
+      actorField(page, 'Diverifikasi Oleh'),
+    ).toHaveText(`E2E ComplaintHandling ${ts}`);
+    await expect(actorField(page, 'Dibuat Oleh')).toHaveText(`E2E ComplaintHandling ${ts}`);
 
     // 9–10. Switch to OperationSupervisor, open the same complaint.
     await switchRole(page, users.OperationSupervisor.email, users.OperationSupervisor.password);
@@ -382,6 +400,20 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
 
     // 13. Assert status becomes FINANCE_REVIEW.
     await expect(page.getByText('Finance Review', { exact: true }).first()).toBeVisible();
+
+    // 13a. The ticket left OPERATION_INVESTIGATION, so OperationSupervisor keeps
+    // the read-only investigation result but loses the editable form entirely.
+    await expect(page.getByRole('button', { name: 'Simpan Hasil Investigasi' })).toHaveCount(0);
+    await expect(page.getByPlaceholder('Tuliskan catatan hasil pemeriksaan…')).toHaveCount(0);
+    await expect(page.getByRole('combobox')).toHaveCount(0);
+    await expect(actorField(page, 'Hasil Investigasi')).toHaveText('Returned');
+    await expect(actorField(page, 'Investigasi Oleh')).toHaveText(`E2E OperationSupervisor ${ts}`);
+    await expect(
+      page.getByText('Anda memiliki akses baca saja pada pengaduan ini.'),
+    ).toBeVisible();
+
+    // 13b. Same lock after the ticket moves further, to REFUND_PROCESS — checked
+    // at the end of the happy path via a revisit (see step 40a).
 
     // 14–15. Switch to FinanceStaff, open the same complaint.
     await switchRole(page, users.FinanceStaff.email, users.FinanceStaff.password);
@@ -427,17 +459,30 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
     await page.getByPlaceholder('1234567890').fill(bankAccountNo);
     await page.getByPlaceholder('Referensi mutasi dari rekening koran').fill(bankRefNo);
     await page.getByPlaceholder('Keterangan mutasi pada rekening koran…').fill('Refund test dari Playwright');
-    await page.getByPlaceholder('ID transfer yang direfund').fill(testTransfer.transferId);
-    await page.getByPlaceholder('ID complaint terkait').fill(complaintId);
+    // The form asks for the partner reference number, never the internal transfer ID.
+    await page.getByLabel('Nomor Referensi Transaksi Awal').fill(testTransfer.transactionReference);
+    // Linkage is by complaint number, never the internal complaint id.
+    await page.getByLabel('Nomor Pengaduan').fill(complaintNo);
     await page
       .getByPlaceholder('Wajib diisi jika nominal refund berbeda dengan transaksi asal…')
       .fill('Refund matched dari complaint dana belum masuk.');
 
     // 22. Submit.
+    const createRefundRequest = page.waitForRequest(
+      (req) => req.url().endsWith('/statement-refunds') && req.method() === 'POST',
+    );
     const createRefundResponse = page.waitForResponse(
       (res) => res.url().endsWith('/statement-refunds') && res.request().method() === 'POST',
     );
     await page.getByRole('button', { name: 'Simpan Pencatatan Refund' }).click();
+
+    // 22a. The payload carries the reference number, not the internal id.
+    const createBody = (await createRefundRequest).postDataJSON();
+    expect(createBody.original_transfer_reference_no).toBe(testTransfer.transactionReference);
+    expect(createBody.original_transfer_id).toBeUndefined();
+    expect(createBody.complaint_no).toBe(complaintNo);
+    expect(createBody.complaint_id).toBeUndefined();
+
     const createRefundRes = await createRefundResponse;
     expect(createRefundRes.status(), await createRefundRes.text().catch(() => '')).toBe(201);
     const refund = await createRefundRes.json();
@@ -446,6 +491,25 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
     // 23. Assert redirect to statement refund detail.
     await page.waitForURL(`**/statement-refunds/${refundId}`);
 
+    // 23a. Detail shows the reference as the primary field; the internal id is
+    // demoted to muted helper text and is no longer a primary label.
+    await expect(page.getByText('Nomor Referensi Transaksi Awal')).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: testTransfer.transactionReference }),
+    ).toBeVisible();
+    await expect(page.getByText(`Internal Transfer ID: ${testTransfer.transferId}`)).toBeVisible();
+    await expect(page.getByText('ID Transaksi Asal')).toHaveCount(0);
+    await expect(page.getByText('ID Transaksi Awal')).toHaveCount(0);
+
+    // 23b. The linked complaint is shown by its number, not by "ID Pengaduan".
+    await expect(page.getByText('Nomor Pengaduan')).toBeVisible();
+    await expect(page.getByRole('link', { name: complaintNo })).toBeVisible();
+    await expect(page.getByText('ID Pengaduan')).toHaveCount(0);
+
+    // 23c. Actor fields carry names, not numeric ids.
+    await expect(actorField(page, 'Dibuat Oleh')).toHaveText(`E2E FinanceStaff ${ts}`);
+    await expect(actorField(page, 'Dibuat Oleh')).not.toHaveText(/^\d+$/);
+
     // 24. Assert refund status is MATCHED or UNMATCHED according to backend behavior.
     expect(['MATCHED', 'UNMATCHED', 'NEED_INVESTIGATION']).toContain(refund.status);
 
@@ -453,8 +517,8 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
       // 25. Use the Match Refund modal.
       await page.getByRole('button', { name: 'Match ke Transaksi' }).click();
       const dialog = page.getByRole('dialog');
-      await dialog.getByLabel('ID Transaksi Asal').fill(testTransfer.transferId);
-      await dialog.getByLabel('ID Pengaduan (opsional)').fill(complaintId);
+      await dialog.getByLabel('Nomor Referensi Transaksi Awal').fill(testTransfer.transactionReference);
+      await dialog.getByLabel('Nomor Pengaduan (opsional)').fill(complaintNo);
       await dialog.getByLabel('Catatan Investigasi').fill('Manual match test');
 
       // 26. Submit match.
@@ -525,6 +589,16 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
     await expect(page.getByRole('heading', { name: 'Refund Terkait' })).toBeVisible();
     await expect(page.getByText(refund.refund_no)).toBeVisible();
 
+    // 40a. Promised in 13b: at REFUND_PROCESS the OperationSupervisor still sees
+    // the investigation result read-only, with no way to overwrite it.
+    await switchRole(page, users.OperationSupervisor.email, users.OperationSupervisor.password);
+    await page.goto(`/complaints/${complaintId}`);
+    await expect(page.getByText('Refund Process', { exact: true }).first()).toBeVisible();
+    await expect(actorField(page, 'Hasil Investigasi')).toHaveText('Returned');
+    await expect(page.getByRole('button', { name: 'Simpan Hasil Investigasi' })).toHaveCount(0);
+    await expect(page.getByPlaceholder('Tuliskan catatan hasil pemeriksaan…')).toHaveCount(0);
+    await expect(page.getByRole('combobox')).toHaveCount(0);
+
     // 41–42. Switch to ComplaintHandling, open the same complaint.
     await switchRole(page, users.ComplaintHandling.email, users.ComplaintHandling.password);
     await page.goto(`/complaints/${complaintId}`);
@@ -567,6 +641,99 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
     await expect(page.getByRole('button', { name: 'Selesaikan Pengaduan' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Tutup Pengaduan' })).toHaveCount(0);
     await expect(page.getByText('Pengaduan sudah ditutup — halaman ini hanya dapat dibaca.')).toBeVisible();
+
+    await assertNoNetworkViolations(page, guards);
+  });
+
+  /** Fill the mandatory create-form fields, leaving the linkage section empty. */
+  async function fillRefundBasics(page: Page, bankRefNo: string, amount: number) {
+    await page.locator('input[type="date"]').fill(new Date().toISOString().slice(0, 10));
+    await page.locator('input[type="datetime-local"]').fill(new Date().toISOString().slice(0, 16));
+    await page.getByPlaceholder('100000').fill(String(amount));
+    await page.getByPlaceholder('Bank KESH').fill('Bank Test E2E');
+    await page.getByPlaceholder('1234567890').fill(`E2E-ACC-${bankRefNo}`);
+    await page.getByPlaceholder('Referensi mutasi dari rekening koran').fill(bankRefNo);
+  }
+
+  test('unknown reference number shows the backend message', async ({ page }) => {
+    const guards = attachNetworkGuards(page);
+    await login(page, users.FinanceStaff.email, users.FinanceStaff.password);
+    await page.goto('/statement-refunds/new');
+
+    await fillRefundBasics(page, `E2E-BADREF-${ts}`, 25_000);
+    await page.getByLabel('Nomor Referensi Transaksi Awal').fill(`KESH-TRF-TIDAK-ADA-${ts}`);
+
+    await page.getByRole('button', { name: 'Simpan Pencatatan Refund' }).click();
+    await expect(
+      page.getByText('Nomor referensi transaksi awal tidak ditemukan.').first(),
+    ).toBeVisible();
+    // Nothing was created — still on the form.
+    await expect(page).toHaveURL(/\/statement-refunds\/new$/);
+
+    await assertNoNetworkViolations(page, guards, [400]);
+  });
+
+  test('unknown complaint number shows the backend message', async ({ page }) => {
+    const guards = attachNetworkGuards(page);
+    await login(page, users.FinanceStaff.email, users.FinanceStaff.password);
+    await page.goto('/statement-refunds/new');
+
+    await fillRefundBasics(page, `E2E-BADCMP-${ts}`, 26_000);
+    await page.getByLabel('Nomor Pengaduan').fill(`KESH-CMP-TIDAK-ADA-${ts}`);
+
+    await page.getByRole('button', { name: 'Simpan Pencatatan Refund' }).click();
+    await expect(page.getByText('Nomor pengaduan tidak ditemukan.').first()).toBeVisible();
+    await expect(page).toHaveURL(/\/statement-refunds\/new$/);
+
+    await assertNoNetworkViolations(page, guards, [400]);
+  });
+
+  test('unmatched refund can be matched by reference number', async ({ page }) => {
+    const guards = attachNetworkGuards(page);
+    await login(page, users.FinanceStaff.email, users.FinanceStaff.password);
+    await page.goto('/statement-refunds/new');
+
+    // Created without any linkage → UNMATCHED.
+    await fillRefundBasics(page, `E2E-MATCHREF-${ts}`, testTransfer.amount);
+    const createResponse = page.waitForResponse(
+      (res) => res.url().endsWith('/statement-refunds') && res.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Simpan Pencatatan Refund' }).click();
+    const created = await (await createResponse).json();
+    expect(created.status).toBe('UNMATCHED');
+    await page.waitForURL(`**/statement-refunds/${created.id}`);
+
+    // Match through the modal, using the partner reference number.
+    await page.getByRole('button', { name: 'Match ke Transaksi' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Nomor Referensi Transaksi Awal').fill(testTransfer.transactionReference);
+    await dialog.getByLabel('Catatan Investigasi').fill('Match manual lewat nomor referensi.');
+
+    const matchRequest = page.waitForRequest(
+      (req) => req.url().includes(`/statement-refunds/${created.id}/match`) && req.method() === 'POST',
+    );
+    const matchResponse = page.waitForResponse(
+      (res) => res.url().includes(`/statement-refunds/${created.id}/match`) && res.request().method() === 'POST',
+    );
+    await dialog.getByRole('button', { name: 'Cocokkan' }).click();
+
+    const matchBody = (await matchRequest).postDataJSON();
+    expect(matchBody.original_transfer_reference_no).toBe(testTransfer.transactionReference);
+    expect(matchBody.original_transfer_id).toBeUndefined();
+
+    const matchRes = await matchResponse;
+    expect(matchRes.status(), await matchRes.text().catch(() => '')).toBe(201);
+
+    await expect(page.getByText(/Sudah Dicocokkan|Perlu Investigasi/).first()).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: testTransfer.transactionReference }),
+    ).toBeVisible();
+
+    // The list shows the reference, not the internal id.
+    await page.goto('/statement-refunds');
+    await expect(
+      page.getByRole('link', { name: testTransfer.transactionReference }).first(),
+    ).toBeVisible();
 
     await assertNoNetworkViolations(page, guards);
   });
