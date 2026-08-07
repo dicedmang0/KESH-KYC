@@ -310,8 +310,8 @@ export default function DataReviewsPage() {
                 const canJudge = showDecide && active?.status === 'SUBMITTED';
                 return (
                   <tr key={r.application_id} className="border-t hover:bg-slate-50 transition-colors align-top">
-                    <td className="px-4 py-3 font-mono text-xs text-slate-600 break-all">{formatCif(r.cif_no)}</td>
-                    <td className="px-3 py-3 min-w-[160px]">
+                    <td className="px-4 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">{formatCif(r.cif_no)}</td>
+                    <td className="px-3 py-3 min-w-[220px]">
                       <div className="font-medium text-slate-800 whitespace-normal break-words">{r.customer_name ?? '—'}</div>
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap text-xs text-slate-600">

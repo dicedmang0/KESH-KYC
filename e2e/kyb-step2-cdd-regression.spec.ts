@@ -110,14 +110,9 @@ test.describe('KYB Business wizard — Step 2 no longer calls Individual CDD end
     await page.getByLabel('Kode Pos').fill('12345');
     await page.getByLabel('Nomor Telepon Perusahaan').fill(`021${ts.slice(-8)}`);
 
-    // 6. director_share_percentage / commissioner_share_percentage — present on
-    // Step 1 in this repo (moved here from the old, broken Step-2 PATCH call).
-    const directorShare = page.getByLabel('Porsi Saham Direktur Utama');
-    const commissionerShare = page.getByLabel('Porsi Saham Komisaris');
-    await expect(directorShare).toBeVisible();
-    await expect(commissionerShare).toBeVisible();
-    await directorShare.fill('60');
-    await commissionerShare.fill('40');
+    // Porsi Saham Direktur Utama/Komisaris now live on Step 2, not here.
+    await expect(page.getByLabel('Porsi Saham Direktur Utama')).toHaveCount(0);
+    await expect(page.getByLabel('Porsi Saham Komisaris')).toHaveCount(0);
 
     const businessCreateResponse = page.waitForResponse(
       (res) => res.url().includes('/applications/business') && res.request().method() === 'POST',
@@ -165,6 +160,93 @@ test.describe('KYB Business wizard — Step 2 no longer calls Individual CDD end
     await page.getByRole('button', { name: 'Tambah', exact: true }).click();
     await readdResponse;
     await expect(page.getByRole('row', { name: new RegExp(`Direktur Test ${ts}`) })).toBeVisible();
+
+    // ── Edit pihak — baris yang sama di-PATCH, bukan dihapus lalu dibuat ulang ──
+    const directorRow = page.getByRole('row', { name: new RegExp(`Direktur Test ${ts}`) });
+    await expect(directorRow.getByRole('button', { name: 'Edit' })).toBeVisible();
+    await expect(directorRow.getByRole('button', { name: 'Hapus' })).toBeVisible();
+
+    await directorRow.getByRole('button', { name: 'Edit' }).click();
+    // Form Edit terisi nilai party yang ada.
+    await expect(page.getByText('Edit Pihak')).toBeVisible();
+    await expect(page.getByLabel('Nama', { exact: true })).toHaveValue(`Direktur Test ${ts}`);
+    await expect(page.getByLabel('Nomor Identitas')).toHaveValue(ts.slice(-16));
+
+    await page.getByLabel('Nama', { exact: true }).fill(`Direktur Edited ${ts}`);
+    const editResponse = page.waitForResponse(
+      (res) => /\/parties\/\d+$/.test(new URL(res.url()).pathname) && res.request().method() === 'PATCH',
+    );
+    await page.getByRole('button', { name: 'Simpan Perubahan' }).click();
+    const editRes = await editResponse;
+    expect(editRes.status(), await editRes.text().catch(() => '')).toBe(200);
+
+    // Baris ter-update, dan tidak ada duplikat baris lama.
+    await expect(page.getByRole('row', { name: new RegExp(`Direktur Edited ${ts}`) })).toHaveCount(1);
+    await expect(page.getByRole('row', { name: new RegExp(`Direktur Test ${ts}`) })).toHaveCount(0);
+
+    // ── Porsi saham dinamis: hanya peran yang ada yang punya field ─────────────
+    // Saat ini cuma ada Direktur → field Komisaris tidak boleh dirender.
+    await expect(page.getByText('Porsi Saham Pengurus Utama')).toBeVisible();
+    const directorShare = page.getByLabel('Porsi Saham Direktur Utama');
+    await expect(directorShare).toBeVisible();
+    await expect(page.getByLabel('Porsi Saham Komisaris')).toHaveCount(0);
+
+    // Tambah Komisaris → field porsi saham Komisaris muncul otomatis.
+    await page.getByRole('button', { name: '+ Tambah Pihak' }).click();
+    await page.getByLabel('Peran').selectOption('COMMISSIONER');
+    await page.getByLabel('Nama', { exact: true }).fill(`Komisaris Test ${ts}`);
+    await page.getByLabel('Nomor Identitas').fill(`9${ts}`.slice(-16));
+    const addCommissionerResponse = page.waitForResponse(
+      (res) => res.url().includes('/parties') && res.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Tambah', exact: true }).click();
+    expect((await addCommissionerResponse).status()).toBe(201);
+
+    const commissionerShare = page.getByLabel('Porsi Saham Komisaris');
+    await expect(commissionerShare).toBeVisible();
+
+    // Porsi Saham Direktur Utama/Komisaris now live under Step 2's "Pengurus &
+    // Pemegang Saham" and save via PATCH /applications/:id/business — never
+    // the Individual-only PATCH /applications/:id endpoint this spec guards against.
+    await directorShare.fill('60');
+    await commissionerShare.fill('40');
+
+    const saveSharesRequest = page.waitForRequest(
+      (req) => /\/applications\/\d+\/business$/.test(new URL(req.url()).pathname) && req.method() === 'PATCH',
+    );
+    const saveSharesResponse = page.waitForResponse(
+      (res) => /\/applications\/\d+\/business$/.test(new URL(res.url()).pathname) && res.request().method() === 'PATCH',
+    );
+    await page.getByRole('button', { name: 'Simpan Porsi Saham' }).click();
+    const sharesReq = await saveSharesRequest;
+    expect(sharesReq.postDataJSON()).toMatchObject({
+      director_share_percentage: 60,
+      commissioner_share_percentage: 40,
+    });
+    const sharesRes = await saveSharesResponse;
+    expect(sharesRes.status(), await sharesRes.text().catch(() => '')).toBe(200);
+
+    // Hapus Komisaris → field porsi saham Komisaris ikut hilang.
+    const commissionerRow = page.getByRole('row', { name: new RegExp(`Komisaris Test ${ts}`) });
+    const deleteCommissionerResponse = page.waitForResponse(
+      (res) => res.url().includes('/parties/') && res.request().method() === 'DELETE',
+    );
+    await commissionerRow.getByRole('button', { name: 'Hapus' }).click();
+    expect((await deleteCommissionerResponse).status()).toBe(200);
+    await expect(commissionerRow).toHaveCount(0);
+    await expect(page.getByLabel('Porsi Saham Komisaris')).toHaveCount(0);
+    await expect(directorShare).toBeVisible();
+
+    // Tabel & tombol aksi tetap terbaca di viewport sempit (mobile).
+    const editedRow = page.getByRole('row', { name: new RegExp(`Direktur Edited ${ts}`) });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(editedRow.getByRole('button', { name: 'Edit' })).toBeVisible();
+    await expect(editedRow.getByRole('button', { name: 'Hapus' })).toBeVisible();
+    // Halaman tidak boleh ikut scroll horizontal — tabel yang scroll sendiri.
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    await page.setViewportSize({ width: 1280, height: 800 });
 
     // 9–10. Click "Lanjut" — this is the exact action that used to fire the broken
     // Individual CDD PATCH. It must now be a pure client-side step transition.

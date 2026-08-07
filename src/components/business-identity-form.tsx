@@ -138,7 +138,7 @@ function initialState(b: BusinessIdentity): FormState {
 
 const NUMERIC_FIELDS = new Set(["director_share_percentage", "commissioner_share_percentage"]);
 
-const INPUT_CLASS = "rounded-md border px-3 py-2 text-sm";
+const INPUT_CLASS = "w-full min-w-0 rounded-md border px-3 py-2 text-sm";
 
 /**
  * Module scope on purpose — nested inside the form it would get a fresh
@@ -164,7 +164,7 @@ function Text({
   placeholder?: string;
 }) {
   return (
-    <label className="grid gap-1">
+    <label className="grid gap-1 min-w-0">
       <span className="text-sm font-medium">
         {label}
         {required && <span className="text-red-500"> *</span>}
@@ -324,7 +324,7 @@ export default function BusinessIdentityForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <Text label="Nama Badan Usaha" field="legal_name" value={form.legal_name} onChange={set} required />
-        <div className="grid gap-1">
+        <div className="grid gap-1 min-w-0">
           <span className="text-sm font-medium">Bentuk Badan Usaha <span className="text-red-500">*</span></span>
           <select
             id="biz-legal_form"
@@ -375,7 +375,7 @@ export default function BusinessIdentityForm({
 
       <div className="grid gap-4 md:grid-cols-3">
         <Text label="KBLI (opsional)" field="industry_code" value={form.industry_code} onChange={set} />
-        <div className="grid gap-1 md:col-span-2">
+        <div className="grid gap-1 min-w-0 md:col-span-2">
           <span className="text-sm font-medium">Bidang Usaha <span className="text-red-500">*</span></span>
           <select
             id="biz-business_activity"
@@ -400,7 +400,7 @@ export default function BusinessIdentityForm({
         </div>
       </div>
 
-      <label className="grid gap-1">
+      <label className="grid gap-1 min-w-0">
         <span className="text-sm font-medium">Alamat Kedudukan <span className="text-red-500">*</span></span>
         <textarea
           id="biz-address_line"
@@ -412,7 +412,7 @@ export default function BusinessIdentityForm({
       </label>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <label className="grid gap-1">
+        <label className="grid gap-1 min-w-0">
           <span className="text-sm font-medium">Provinsi <span className="text-red-500">*</span></span>
           <select
             id="biz-province"
@@ -440,7 +440,7 @@ export default function BusinessIdentityForm({
             <span className="text-xs text-slate-500">Tersimpan: {form.province}</span>
           )}
         </label>
-        <label className="grid gap-1">
+        <label className="grid gap-1 min-w-0">
           <span className="text-sm font-medium">Kota / Kabupaten <span className="text-red-500">*</span></span>
           <select
             id="biz-city"
@@ -479,7 +479,7 @@ export default function BusinessIdentityForm({
           <Text label="Nama Pengurus Utama / PIC" field="pic_name" value={form.pic_name} onChange={set} />
           <Text label="Jabatan" field="pic_position" value={form.pic_position} onChange={set} />
           <Text label="Nomor Identitas PIC" field="pic_identity_number" value={form.pic_identity_number} onChange={set} maxLength={16} />
-          <label className="grid gap-1">
+          <label className="grid gap-1 min-w-0">
             <span className="text-sm font-medium">Jenis Identitas PIC</span>
             <select
               id="biz-pic_identity_type"
@@ -498,7 +498,7 @@ export default function BusinessIdentityForm({
       <div className="border-t pt-4">
         <p className="mb-3 text-sm font-semibold text-slate-700">Informasi Hubungan Bisnis (RBA)</p>
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="grid gap-1">
+          <div className="grid gap-1 min-w-0">
             <span className="text-sm font-medium">Sumber Dana</span>
             <select
               id="biz-source_of_funds"
@@ -521,7 +521,7 @@ export default function BusinessIdentityForm({
               label="Keterangan Sumber Dana Lainnya"
             />
           </div>
-          <div className="grid gap-1">
+          <div className="grid gap-1 min-w-0">
             <span className="text-sm font-medium">Tujuan Hubungan Bisnis</span>
             <select
               id="biz-business_relationship_purpose"
@@ -547,7 +547,7 @@ export default function BusinessIdentityForm({
               label="Keterangan Tujuan Hubungan Bisnis Lainnya"
             />
           </div>
-          <label className="grid gap-1">
+          <label className="grid gap-1 min-w-0">
             <span className="text-sm font-medium">Saluran Distribusi</span>
             <select
               id="biz-distribution_channel"

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch, apiUpload } from "@/lib/api";
+import { updateBusinessApplication } from "@/lib/applications";
 import { toast } from "@/lib/toast";
 import { formatCif, isLainnya } from "@/lib/utils";
 import {
@@ -177,7 +178,7 @@ function DocCard({
           </button>
         </div>
       )}
-      <label className="grid gap-1">
+      <label className="grid gap-1 min-w-0">
         <span className="text-xs text-slate-500">
           {uploaded ? "Ganti File" : "Pilih File"}
         </span>
@@ -437,8 +438,8 @@ export default function BusinessWizard() {
         business_relationship_purpose: cdd_brp || null,
         business_relationship_purpose_other: isLainnya(cdd_brp) ? cdd_brp_other || null : null,
         distribution_channel: cdd_dist || null,
-        // Porsi saham — hanya disetel di sini; tidak ada endpoint PATCH bisnis
-        // untuk mengubahnya setelah aplikasi dibuat.
+        // Porsi saham diisi lewat Step 2 sekarang, jadi selalu null di sini
+        // saat aplikasi baru dibuat; state tetap dikirim agar payload konsisten.
         director_share_percentage: directorSharePct.trim() === "" ? null : Number(directorSharePct),
         commissioner_share_percentage: commissionerSharePct.trim() === "" ? null : Number(commissionerSharePct),
       };
@@ -463,6 +464,8 @@ export default function BusinessWizard() {
   // ----- STEP 2: Parties (Pengurus, Pemegang Saham, BO) -----
   const [parties, setParties] = useState<PartyRow[]>([]);
   const [addOpen, setAddOpen] = useState(false);
+  // id party yang sedang diedit; null = form dipakai untuk tambah pihak baru.
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [p_role, setPRole] = useState<PartyRole>("DIRECTOR");
   const [p_full_name, setPName] = useState("");
   const [p_id_type, setPIdType] = useState<"KTP" | "SIM" | "PASPOR" | "LAINNYA">("KTP");
@@ -478,6 +481,11 @@ export default function BusinessWizard() {
   const [p_source_wealth, setPSourceWealth] = useState("");
 
   const isOwnerRole = p_role === "SHAREHOLDER" || p_role === "BO";
+
+  // Peran yang benar-benar ada menentukan field porsi saham mana yang tampil.
+  const activeParties = parties.filter((p) => p.is_active !== false);
+  const hasDirector = activeParties.some((p) => p.role === "DIRECTOR");
+  const hasCommissioner = activeParties.some((p) => p.role === "COMMISSIONER");
 
   // Porsi saham pengurus utama (entity-level, opsional 0–100).
   const [directorSharePct, setDirectorSharePct] = useState("");
@@ -502,10 +510,60 @@ export default function BusinessWizard() {
     recomputeParties(rows);
   }
 
+  // Pre-fill porsi saham when resuming an existing application on Step 2
+  // (values are only ever set here now — Step 1 no longer collects them).
+  async function fetchShares() {
+    if (!appId) return;
+    try {
+      const resp = await apiFetch<{
+        business?: {
+          director_share_percentage?: number | string | null;
+          commissioner_share_percentage?: number | string | null;
+        };
+      }>(`/applications/${appId}`);
+      const b = resp?.business;
+      if (b) {
+        setDirectorSharePct(b.director_share_percentage != null ? String(b.director_share_percentage) : "");
+        setCommissionerSharePct(b.commissioner_share_percentage != null ? String(b.commissioner_share_percentage) : "");
+      }
+    } catch {
+      /* biarkan form kosong — user masih bisa mengisi ulang */
+    }
+  }
+
+  const [savingShares, setSavingShares] = useState(false);
+
+  async function saveShares() {
+    if (!appId) return;
+    if (!validateShares()) return;
+    setSavingShares(true);
+    try {
+      // Field yang tersembunyi (perannya tidak ada lagi) dikirim null supaya
+      // nilai lama tidak tertinggal di data badan usaha.
+      await updateBusinessApplication(appId, {
+        director_share_percentage:
+          hasDirector && directorSharePct.trim() !== "" ? Number(directorSharePct) : null,
+        commissioner_share_percentage:
+          hasCommissioner && commissionerSharePct.trim() !== "" ? Number(commissionerSharePct) : null,
+      });
+      toast.success("Porsi saham tersimpan.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Gagal menyimpan porsi saham";
+      setShareErr(msg);
+      toast.error(msg);
+    } finally {
+      setSavingShares(false);
+    }
+  }
+
   function resetPartyForm() {
+    setEditingId(null);
+    setPRole("DIRECTOR");
     setPName("");
+    setPIdType("KTP");
     setPIdNumber("");
     setPDob("");
+    setPNat("Indonesia");
     setPPhone("");
     setPEmail("");
     setPOwnership("");
@@ -514,7 +572,31 @@ export default function BusinessWizard() {
     setPSourceWealth("");
   }
 
-  async function addParty() {
+  /** Buka form yang sama dengan Tambah Pihak, terisi data baris terpilih. */
+  function openEditParty(p: PartyRow) {
+    setEditingId(p.id);
+    setPRole(p.role);
+    setPName(p.full_name ?? "");
+    setPIdType((p.identity_type as "KTP" | "SIM" | "PASPOR" | "LAINNYA") || "KTP");
+    setPIdNumber(p.identity_number ?? "");
+    setPDob(p.dob ? String(p.dob).slice(0, 10) : "");
+    setPNat(p.nationality ?? "");
+    setPPhone("");
+    setPEmail("");
+    setPOwnership(p.ownership_percentage != null ? String(p.ownership_percentage) : "");
+    setPAddress(p.address ?? "");
+    setPSourceFunds(p.source_of_funds ?? "");
+    setPSourceWealth(p.source_of_wealth ?? "");
+    setErrParties(null);
+    setAddOpen(true);
+  }
+
+  /**
+   * Tambah (POST) atau ubah (PATCH /applications/:id/parties/:partyId) satu
+   * pihak. Edit memakai baris yang sama — bukan hapus+buat ulang — supaya CIF
+   * dan audit trail party tidak hilang.
+   */
+  async function saveParty() {
     if (!appId) return;
     if (p_id_number.length > 16) {
       setErrParties("Nomor Identitas maksimal 16 karakter.");
@@ -524,29 +606,37 @@ export default function BusinessWizard() {
     setErrParties(null);
     setSaving(true);
     try {
-      await apiFetch(`/applications/${appId}/parties`, {
-        method: "POST",
-        body: JSON.stringify({
-          role: p_role,
-          full_name: p_full_name,
-          identity_type: p_id_type,
-          identity_number: p_id_number,
-          dob: p_dob || null,
-          nationality: p_nationality || null,
-          phone: p_phone || null,
-          email: p_email || null,
-          ownership_percentage: isOwnerRole && p_ownership !== "" ? Number(p_ownership) : undefined,
-          address: isOwnerRole ? p_address || undefined : undefined,
-          identity_document_type: p_id_type,
-          source_of_funds: p_role === "BO" ? p_source_funds || undefined : undefined,
-          source_of_wealth: p_role === "BO" ? p_source_wealth || undefined : undefined,
-        }),
-      });
+      const body = {
+        role: p_role,
+        full_name: p_full_name,
+        identity_type: p_id_type,
+        identity_number: p_id_number,
+        dob: p_dob || null,
+        nationality: p_nationality || null,
+        phone: p_phone || null,
+        email: p_email || null,
+        ownership_percentage: isOwnerRole && p_ownership !== "" ? Number(p_ownership) : undefined,
+        address: isOwnerRole ? p_address || undefined : undefined,
+        identity_document_type: p_id_type,
+        source_of_funds: p_role === "BO" ? p_source_funds || undefined : undefined,
+        source_of_wealth: p_role === "BO" ? p_source_wealth || undefined : undefined,
+      };
+      await apiFetch(
+        editingId
+          ? `/applications/${appId}/parties/${editingId}`
+          : `/applications/${appId}/parties`,
+        { method: editingId ? "PATCH" : "POST", body: JSON.stringify(body) },
+      );
       setAddOpen(false);
       resetPartyForm();
       await fetchParties();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Gagal menambahkan pihak";
+      const msg =
+        e instanceof Error
+          ? e.message
+          : editingId
+            ? "Gagal menyimpan perubahan pihak"
+            : "Gagal menambahkan pihak";
       setErrParties(msg);
       toast.error(msg);
     } finally {
@@ -581,7 +671,10 @@ export default function BusinessWizard() {
   }
 
   useEffect(() => {
-    if (step === 2) fetchParties();
+    if (step === 2) {
+      fetchParties();
+      fetchShares();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, appId]);
 
@@ -634,7 +727,6 @@ export default function BusinessWizard() {
   }, [step]);
 
   // Conditional document requirements derived from party composition.
-  const activeParties = parties.filter((p) => p.is_active !== false);
   const needsShareholderDoc = activeParties.some(
     (p) => p.role === "SHAREHOLDER" && Number(p.ownership_percentage ?? 0) >= 25
   );
@@ -763,18 +855,18 @@ export default function BusinessWizard() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">Nama Badan Usaha *</span>
                 <input
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                   value={legal_name}
                   onChange={(e) => setLegalName(e.target.value)}
                 />
               </label>
-              <div className="grid gap-1">
+              <div className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">Bentuk Badan Usaha *</span>
                 <select
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                   value={legal_form}
                   onChange={(e) => {
                     const v = e.target.value;
@@ -802,13 +894,13 @@ export default function BusinessWizard() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">
                   No. Akta Pendirian
                   {isPT && <span className="text-red-500"> *</span>}
                 </span>
                 <input
-                  className={`rounded-md border px-3 py-2 text-sm${deedErr ? " border-red-400" : ""}`}
+                  className={`w-full min-w-0 rounded-md border px-3 py-2 text-sm${deedErr ? " border-red-400" : ""}`}
                   value={deed_establishment_number}
                   onChange={(e) => {
                     setDeedEstablishmentNumber(e.target.value);
@@ -817,19 +909,19 @@ export default function BusinessWizard() {
                 />
                 {deedErr && <p className="text-xs text-red-600">{deedErr}</p>}
               </label>
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">No. Akta Perubahan Terakhir</span>
                 <input
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                   value={deed_latest_amendment_number}
                   onChange={(e) => setDeedLatestAmendmentNumber(e.target.value)}
                 />
               </label>
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">Tanggal Pendirian *</span>
                 <input
                   type="date"
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                   value={incorporation_date}
                   onChange={(e) => setIncorpDate(e.target.value)}
                 />
@@ -837,26 +929,26 @@ export default function BusinessWizard() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">Tempat Pendirian *</span>
                 <input
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                   value={incorporation_place}
                   onChange={(e) => setIncorpPlace(e.target.value)}
                 />
               </label>
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">Nomor Izin Usaha (NIB/OSS/SIUP/dll) *</span>
                 <input
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                   value={izin_usaha}
                   onChange={(e) => setIzinUsaha(e.target.value)}
                 />
               </label>
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">NPWP Badan Usaha *</span>
                 <input
-                  className={`rounded-md border px-3 py-2 text-sm${npwpErr ? " border-red-400" : ""}`}
+                  className={`w-full min-w-0 rounded-md border px-3 py-2 text-sm${npwpErr ? " border-red-400" : ""}`}
                   value={npwp}
                   onChange={(e) => {
                     setNpwp(e.target.value.replace(/\D/g, ""));
@@ -871,19 +963,19 @@ export default function BusinessWizard() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">KBLI (opsional)</span>
                 <input
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                   value={industry_code}
                   onChange={(e) => setKbli(e.target.value)}
                 />
               </label>
-              <div className="grid gap-1 md:col-span-2">
-                <label className="grid gap-1">
+              <div className="grid gap-1 min-w-0 md:col-span-2">
+                <label className="grid gap-1 min-w-0">
                   <span className="text-sm font-medium">Bidang Usaha *</span>
                   <select
-                    className="rounded-md border px-3 py-2 text-sm"
+                    className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                     value={business_activity}
                     onChange={(e) => {
                       const v = e.target.value;
@@ -910,10 +1002,10 @@ export default function BusinessWizard() {
               </div>
             </div>
 
-            <label className="grid gap-1">
+            <label className="grid gap-1 min-w-0">
               <span className="text-sm font-medium">Alamat Kedudukan *</span>
               <textarea
-                className="rounded-md border px-3 py-2 text-sm"
+                className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                 rows={2}
                 value={address_line}
                 onChange={(e) => setAddr(e.target.value)}
@@ -921,10 +1013,10 @@ export default function BusinessWizard() {
             </label>
 
             <div className="grid gap-4 md:grid-cols-3">
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">Provinsi *</span>
                 <select
-                  className="rounded-md border bg-white px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-md border bg-white px-3 py-2 text-sm"
                   value={business_province_code}
                   onChange={(e) => {
                     const code = e.target.value;
@@ -940,10 +1032,10 @@ export default function BusinessWizard() {
                   ))}
                 </select>
               </label>
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">Kota / Kabupaten *</span>
                 <select
-                  className="rounded-md border bg-white px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                  className="w-full min-w-0 rounded-md border bg-white px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-400"
                   value={business_city_code}
                   disabled={!business_province_code || regenciesLoading}
                   onChange={(e) => {
@@ -966,10 +1058,10 @@ export default function BusinessWizard() {
                   )}
                 </select>
               </label>
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">Kode Pos *</span>
                 <input
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                   value={postal_code}
                   onChange={(e) => setPostal(e.target.value)}
                 />
@@ -977,19 +1069,19 @@ export default function BusinessWizard() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">Nomor Telepon Perusahaan *</span>
                 <input
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                 />
               </label>
-              <label className="grid gap-1">
+              <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">Email Perusahaan</span>
                 <input
                   type="email"
-                  className="rounded-md border px-3 py-2 text-sm"
+                  className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                   value={company_email}
                   onChange={(e) => setCompanyEmail(e.target.value)}
                 />
@@ -1000,26 +1092,26 @@ export default function BusinessWizard() {
             <div className="border-t pt-4">
               <p className="mb-3 text-sm font-semibold text-slate-700">Pengurus Utama / PIC</p>
               <div className="grid gap-4 md:grid-cols-2">
-                <label className="grid gap-1">
+                <label className="grid gap-1 min-w-0">
                   <span className="text-sm font-medium">Nama Pengurus Utama / PIC</span>
                   <input
-                    className="rounded-md border px-3 py-2 text-sm"
+                    className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                     value={pic_name}
                     onChange={(e) => setPicName(e.target.value)}
                   />
                 </label>
-                <label className="grid gap-1">
+                <label className="grid gap-1 min-w-0">
                   <span className="text-sm font-medium">Jabatan</span>
                   <input
-                    className="rounded-md border px-3 py-2 text-sm"
+                    className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                     value={pic_position}
                     onChange={(e) => setPicPosition(e.target.value)}
                   />
                 </label>
-                <label className="grid gap-1">
+                <label className="grid gap-1 min-w-0">
                   <span className="text-sm font-medium">Nomor Identitas</span>
                   <input
-                    className={`rounded-md border px-3 py-2 text-sm${picIdErr ? " border-red-400" : ""}`}
+                    className={`w-full min-w-0 rounded-md border px-3 py-2 text-sm${picIdErr ? " border-red-400" : ""}`}
                     value={pic_identity_number}
                     onChange={(e) => {
                       setPicIdNumber(e.target.value);
@@ -1033,10 +1125,10 @@ export default function BusinessWizard() {
                     <p className="text-xs text-slate-400">Maksimal 16 karakter.</p>
                   )}
                 </label>
-                <label className="grid gap-1">
+                <label className="grid gap-1 min-w-0">
                   <span className="text-sm font-medium">Jenis Identitas</span>
                   <select
-                    className="rounded-md border px-3 py-2 text-sm"
+                    className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                     value={pic_identity_type}
                     onChange={(e) => setPicIdType(e.target.value as "KTP" | "PASPOR")}
                   >
@@ -1052,10 +1144,10 @@ export default function BusinessWizard() {
               <p className="mb-1 text-sm font-semibold text-slate-700">Informasi Hubungan Bisnis (RBA)</p>
               <p className="mb-3 text-xs text-slate-500">Pilihan ini digunakan untuk perhitungan Risk Based Approach sesuai SOP.</p>
               <div className="grid gap-4 md:grid-cols-3">
-                <div className="grid gap-1">
+                <div className="grid gap-1 min-w-0">
                   <span className="text-sm font-medium">Sumber Dana</span>
                   <select
-                    className="rounded-md border px-3 py-2 text-sm"
+                    className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                     value={cdd_sof}
                     onChange={(e) => {
                       const v = e.target.value;
@@ -1075,10 +1167,10 @@ export default function BusinessWizard() {
                     label="Keterangan Sumber Dana Lainnya"
                   />
                 </div>
-                <div className="grid gap-1">
+                <div className="grid gap-1 min-w-0">
                   <span className="text-sm font-medium">Tujuan Hubungan Bisnis</span>
                   <select
-                    className="rounded-md border px-3 py-2 text-sm"
+                    className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                     value={cdd_brp}
                     onChange={(e) => {
                       const v = e.target.value;
@@ -1098,10 +1190,10 @@ export default function BusinessWizard() {
                     label="Keterangan Tujuan Hubungan Bisnis Lainnya"
                   />
                 </div>
-                <label className="grid gap-1">
+                <label className="grid gap-1 min-w-0">
                   <span className="text-sm font-medium">Saluran Distribusi</span>
                   <select
-                    className="rounded-md border px-3 py-2 text-sm"
+                    className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                     value={cdd_dist}
                     onChange={(e) => setCddDist(e.target.value)}
                   >
@@ -1112,50 +1204,6 @@ export default function BusinessWizard() {
                   </select>
                 </label>
               </div>
-            </div>
-
-            {/* Porsi saham pengurus utama (opsional) — kolom di tabel business,
-                hanya bisa disetel saat aplikasi dibuat (tidak ada endpoint PATCH bisnis). */}
-            <div className="rounded-xl border p-4 space-y-3">
-              <p className="text-sm font-semibold text-slate-700">Porsi Saham Pengurus Utama</p>
-              <p className="text-xs text-slate-500">
-                Opsional, isi jika direktur/komisaris memiliki porsi saham.
-              </p>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="grid gap-1">
-                  <span className="text-sm font-medium">Porsi Saham Direktur Utama (%)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.01"
-                    className={`rounded-md border px-3 py-2 text-sm${shareErr ? " border-red-400" : ""}`}
-                    value={directorSharePct}
-                    onChange={(e) => {
-                      setDirectorSharePct(e.target.value);
-                      setShareErr("");
-                    }}
-                    placeholder="0 - 100"
-                  />
-                </label>
-                <label className="grid gap-1">
-                  <span className="text-sm font-medium">Porsi Saham Komisaris (%)</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.01"
-                    className={`rounded-md border px-3 py-2 text-sm${shareErr ? " border-red-400" : ""}`}
-                    value={commissionerSharePct}
-                    onChange={(e) => {
-                      setCommissionerSharePct(e.target.value);
-                      setShareErr("");
-                    }}
-                    placeholder="0 - 100"
-                  />
-                </label>
-              </div>
-              {shareErr && <p className="text-xs text-red-600">{shareErr}</p>}
             </div>
 
             <div className="flex justify-end">
@@ -1179,21 +1227,27 @@ export default function BusinessWizard() {
             <CardTitle className="text-base">Informasi Pengurus &amp; Pemegang Saham</CardTitle>
             <button
               type="button"
-              onClick={() => setAddOpen(true)}
+              onClick={() => {
+                resetPartyForm();
+                setAddOpen(true);
+              }}
               className="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50"
             >
               + Tambah Pihak
             </button>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Modal sederhana Add Party */}
+            {/* Modal sederhana Tambah / Edit Party */}
             {addOpen && (
               <div className="rounded-xl border p-4">
+                <p className="mb-3 text-sm font-semibold text-slate-700">
+                  {editingId ? "Edit Pihak" : "Tambah Pihak"}
+                </p>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <label className="grid gap-1">
+                  <label className="grid gap-1 min-w-0">
                     <span className="text-sm font-medium">Peran</span>
                     <select
-                      className="rounded-md border px-3 py-2 text-sm"
+                      className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                       value={p_role}
                       onChange={(e) => setPRole(e.target.value as PartyRole)}
                     >
@@ -1204,18 +1258,18 @@ export default function BusinessWizard() {
                       ))}
                     </select>
                   </label>
-                  <label className="grid gap-1">
+                  <label className="grid gap-1 min-w-0">
                     <span className="text-sm font-medium">Nama</span>
                     <input
-                      className="rounded-md border px-3 py-2 text-sm"
+                      className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                       value={p_full_name}
                       onChange={(e) => setPName(e.target.value)}
                     />
                   </label>
-                  <label className="grid gap-1">
+                  <label className="grid gap-1 min-w-0">
                     <span className="text-sm font-medium">Jenis Identitas</span>
                     <select
-                      className="rounded-md border px-3 py-2 text-sm"
+                      className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                       value={p_id_type}
                       onChange={(e) =>
                         setPIdType(e.target.value as "KTP" | "SIM" | "PASPOR" | "LAINNYA")
@@ -1227,46 +1281,46 @@ export default function BusinessWizard() {
                       <option>LAINNYA</option>
                     </select>
                   </label>
-                  <label className="grid gap-1">
+                  <label className="grid gap-1 min-w-0">
                     <span className="text-sm font-medium">Nomor Identitas</span>
                     <input
-                      className="rounded-md border px-3 py-2 text-sm"
+                      className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                       value={p_id_number}
                       onChange={(e) => setPIdNumber(e.target.value)}
                       maxLength={16}
                     />
                     <span className="text-xs text-slate-400">Maksimal 16 karakter.</span>
                   </label>
-                  <label className="grid gap-1">
+                  <label className="grid gap-1 min-w-0">
                     <span className="text-sm font-medium">Tgl Lahir</span>
                     <input
                       type="date"
-                      className="rounded-md border px-3 py-2 text-sm"
+                      className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                       value={p_dob}
                       onChange={(e) => setPDob(e.target.value)}
                     />
                   </label>
-                  <label className="grid gap-1">
+                  <label className="grid gap-1 min-w-0">
                     <span className="text-sm font-medium">Kewarganegaraan</span>
                     <input
-                      className="rounded-md border px-3 py-2 text-sm"
+                      className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                       value={p_nationality}
                       onChange={(e) => setPNat(e.target.value)}
                     />
                   </label>
-                  <label className="grid gap-1">
+                  <label className="grid gap-1 min-w-0">
                     <span className="text-sm font-medium">Telepon</span>
                     <input
-                      className="rounded-md border px-3 py-2 text-sm"
+                      className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                       value={p_phone}
                       onChange={(e) => setPPhone(e.target.value)}
                     />
                   </label>
-                  <label className="grid gap-1">
+                  <label className="grid gap-1 min-w-0">
                     <span className="text-sm font-medium">Email</span>
                     <input
                       type="email"
-                      className="rounded-md border px-3 py-2 text-sm"
+                      className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                       value={p_email}
                       onChange={(e) => setPEmail(e.target.value)}
                     />
@@ -1275,21 +1329,21 @@ export default function BusinessWizard() {
                   {/* Pemegang Saham / BO detail */}
                   {isOwnerRole && (
                     <>
-                      <label className="grid gap-1">
+                      <label className="grid gap-1 min-w-0">
                         <span className="text-sm font-medium">Persentase Kepemilikan (%)</span>
                         <input
                           type="number"
                           min={0}
                           max={100}
-                          className="rounded-md border px-3 py-2 text-sm"
+                          className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                           value={p_ownership}
                           onChange={(e) => setPOwnership(e.target.value)}
                         />
                       </label>
-                      <label className="grid gap-1">
+                      <label className="grid gap-1 min-w-0">
                         <span className="text-sm font-medium">Alamat</span>
                         <input
-                          className="rounded-md border px-3 py-2 text-sm"
+                          className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                           value={p_address}
                           onChange={(e) => setPAddress(e.target.value)}
                         />
@@ -1298,18 +1352,18 @@ export default function BusinessWizard() {
                   )}
                   {p_role === "BO" && (
                     <>
-                      <label className="grid gap-1">
+                      <label className="grid gap-1 min-w-0">
                         <span className="text-sm font-medium">Sumber Dana BO</span>
                         <input
-                          className="rounded-md border px-3 py-2 text-sm"
+                          className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                           value={p_source_funds}
                           onChange={(e) => setPSourceFunds(e.target.value)}
                         />
                       </label>
-                      <label className="grid gap-1">
+                      <label className="grid gap-1 min-w-0">
                         <span className="text-sm font-medium">Sumber Kekayaan BO</span>
                         <input
-                          className="rounded-md border px-3 py-2 text-sm"
+                          className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
                           value={p_source_wealth}
                           onChange={(e) => setPSourceWealth(e.target.value)}
                         />
@@ -1331,10 +1385,10 @@ export default function BusinessWizard() {
                   <button
                     type="button"
                     className="rounded-md bg-kesh-700 px-3 py-1.5 text-sm text-white hover:bg-kesh-600 transition-colors"
-                    onClick={addParty}
+                    onClick={saveParty}
                     disabled={saving}
                   >
-                    {saving ? "Menyimpan..." : "Tambah"}
+                    {saving ? "Menyimpan..." : editingId ? "Simpan Perubahan" : "Tambah"}
                   </button>
                 </div>
               </div>
@@ -1348,7 +1402,7 @@ export default function BusinessWizard() {
 
             {/* Tabel parties */}
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="min-w-[860px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nama</TableHead>
@@ -1357,7 +1411,7 @@ export default function BusinessWizard() {
                     <TableHead>Kepemilikan</TableHead>
                     <TableHead>CIF</TableHead>
                     <TableHead>Parameter CIF</TableHead>
-                    <TableHead className="text-right">Aksi</TableHead>
+                    <TableHead className="whitespace-nowrap text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1392,20 +1446,95 @@ export default function BusinessWizard() {
                         </TableCell>
                         <TableCell>{formatCif(p.cif_no)}</TableCell>
                         <TableCell>{getCifRelationshipLabel(p.cif_relationship_type)}</TableCell>
-                        <TableCell className="text-right">
-                          <button
-                            type="button"
-                            className="rounded-md border px-2 py-1 text-sm hover:bg-slate-50"
-                            onClick={() => removeParty(p.id)}
-                          >
-                            Hapus
-                          </button>
+                        <TableCell className="whitespace-nowrap text-right">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              className="rounded-md border px-2 py-1 text-sm hover:bg-slate-50"
+                              onClick={() => openEditParty(p)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-md border px-2 py-1 text-sm hover:bg-slate-50"
+                              onClick={() => removeParty(p.id)}
+                            >
+                              Hapus
+                            </button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
                   )}
                 </TableBody>
               </Table>
+            </div>
+
+            {/* Porsi saham pengurus utama (opsional) — disetel via PATCH
+                /applications/:id/business, terpisah dari alur tambah/hapus pihak. */}
+            <div className="rounded-xl border p-4 space-y-3">
+              <p className="text-sm font-semibold text-slate-700">Porsi Saham Pengurus Utama</p>
+              <p className="text-xs text-slate-500">
+                Opsional, isi jika direktur/komisaris memiliki porsi saham.
+              </p>
+              {!hasDirector && !hasCommissioner ? (
+                <p className="text-sm text-slate-500">
+                  Tambahkan Direktur/Komisaris untuk mengisi porsi saham.
+                </p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {hasDirector && (
+                      <label className="grid gap-1 min-w-0">
+                        <span className="text-sm font-medium">Porsi Saham Direktur Utama (%)</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step="0.01"
+                          className={`w-full min-w-0 rounded-md border px-3 py-2 text-sm${shareErr ? " border-red-400" : ""}`}
+                          value={directorSharePct}
+                          onChange={(e) => {
+                            setDirectorSharePct(e.target.value);
+                            setShareErr("");
+                          }}
+                          placeholder="0 - 100"
+                        />
+                      </label>
+                    )}
+                    {hasCommissioner && (
+                      <label className="grid gap-1 min-w-0">
+                        <span className="text-sm font-medium">Porsi Saham Komisaris (%)</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step="0.01"
+                          className={`w-full min-w-0 rounded-md border px-3 py-2 text-sm${shareErr ? " border-red-400" : ""}`}
+                          value={commissionerSharePct}
+                          onChange={(e) => {
+                            setCommissionerSharePct(e.target.value);
+                            setShareErr("");
+                          }}
+                          placeholder="0 - 100"
+                        />
+                      </label>
+                    )}
+                  </div>
+                  {shareErr && <p className="text-xs text-red-600">{shareErr}</p>}
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={saveShares}
+                      disabled={savingShares}
+                      className="rounded-md border px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {savingShares ? "Menyimpan..." : "Simpan Porsi Saham"}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="flex justify-between">
