@@ -27,6 +27,7 @@ type ApplicationDetail = {
   revision_reason?: string | null;
   revision_requested_by?: string | null;
   revision_requested_at?: string | null;
+  decision_reason?: string | null;
   // Backend-generated decision/review timestamps (read-only display).
   decided_at?: string | null;
   decision_at?: string | null;
@@ -812,7 +813,8 @@ export default function UserDetailPage() {
   const [err, setErr] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
-  const [showRejectInput, setShowRejectInput] = useState(false);
+  // Which reason-requiring decision the input row is collecting for (null = hidden).
+  const [pendingDecision, setPendingDecision] = useState<'REJECTED' | 'RETURN_FOR_REVISION' | null>(null);
   // Business identity edit mode (PATCH /applications/:id/business).
   const [editingBusiness, setEditingBusiness] = useState(false);
 
@@ -1156,20 +1158,21 @@ export default function UserDetailPage() {
     }
   }
 
-  async function reject() {
-    if (!id) return;
+  async function submitDecision() {
+    if (!id || !pendingDecision) return;
+    const isReject = pendingDecision === 'REJECTED';
     if (!rejectReason.trim()) {
-      toast.error('Alasan perbaikan wajib diisi.');
+      toast.error(isReject ? 'Alasan penolakan wajib diisi.' : 'Alasan perbaikan wajib diisi.');
       return;
     }
     setActionLoading(true);
     try {
       await apiFetch(`/applications/${id}/decision`, {
         method: 'PATCH',
-        body: { decision: 'RETURN_FOR_REVISION', reason: rejectReason.trim() },
+        body: { decision: pendingDecision, reason: rejectReason.trim() },
       });
-      toast.success('Aplikasi dikembalikan untuk perbaikan.');
-      setShowRejectInput(false);
+      toast.success(isReject ? 'Aplikasi berhasil ditolak.' : 'Aplikasi dikembalikan untuk perbaikan.');
+      setPendingDecision(null);
       setRejectReason('');
       await load();
     } catch (e: unknown) {
@@ -1678,15 +1681,25 @@ export default function UserDetailPage() {
 
           {canDecide && canDecideByRole && (
             <>
+              {/* Sanksi aktif memblokir approval di backend — jangan tawarkan tombolnya. */}
+              {!complianceBlocking && (
+                <button
+                  onClick={approve}
+                  disabled={actionLoading || approveBlocked}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                >
+                  Setujui
+                </button>
+              )}
               <button
-                onClick={approve}
-                disabled={actionLoading || approveBlocked}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                onClick={() => { setPendingDecision('REJECTED'); setRejectReason(''); }}
+                disabled={actionLoading}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
-                Setujui
+                Tolak…
               </button>
               <button
-                onClick={() => setShowRejectInput(true)}
+                onClick={() => { setPendingDecision('RETURN_FOR_REVISION'); setRejectReason(''); }}
                 disabled={actionLoading}
                 className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
               >
@@ -1697,7 +1710,13 @@ export default function UserDetailPage() {
         </div>
 
         {/* Helper text — rendered below button group, not inside row */}
-        {approveBlocked && canDecide && canDecideByRole && (
+        {canDecide && canDecideByRole && complianceBlocking && (
+          <p className="text-xs text-red-700">
+            Aplikasi tidak dapat disetujui karena masih terdapat match DTTOT/PPPSPM aktif.
+            Pilih Tolak atau selesaikan review watchlist terlebih dahulu.
+          </p>
+        )}
+        {approveBlocked && !complianceBlocking && canDecide && canDecideByRole && (
           <p className="text-xs text-amber-700">
             Approve hanya bisa dilakukan setelah EDD selesai.
           </p>
@@ -1713,27 +1732,37 @@ export default function UserDetailPage() {
           </div>
         )}
 
-        {/* Reject reason input */}
-        {showRejectInput && (
+        {/* Reason input — shared by Tolak and Kembalikan untuk Revisi */}
+        {pendingDecision && (
           <div className="flex flex-wrap gap-2 items-end">
             <div className="flex-1 min-w-[220px]">
-              <label className="text-xs text-slate-500">Alasan Perbaikan *</label>
+              <label className="text-xs text-slate-500">
+                {pendingDecision === 'REJECTED' ? 'Alasan Penolakan *' : 'Alasan Perbaikan *'}
+              </label>
               <input
                 className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Tuliskan alasan yang perlu diperbaiki..."
+                placeholder={
+                  pendingDecision === 'REJECTED'
+                    ? 'Tuliskan alasan penolakan...'
+                    : 'Tuliskan alasan yang perlu diperbaiki...'
+                }
               />
             </div>
             <button
-              onClick={reject}
+              onClick={submitDecision}
               disabled={actionLoading}
-              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              className={`rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 transition-colors ${
+                pendingDecision === 'REJECTED'
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-amber-600 hover:bg-amber-700'
+              }`}
             >
-              Kembalikan
+              {pendingDecision === 'REJECTED' ? 'Tolak' : 'Kembalikan'}
             </button>
             <button
-              onClick={() => { setShowRejectInput(false); setRejectReason(''); }}
+              onClick={() => { setPendingDecision(null); setRejectReason(''); }}
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
             >
               Batal
@@ -1745,6 +1774,14 @@ export default function UserDetailPage() {
         {app.status === 'APPROVED' && (
           <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
             <p className="font-medium">Aplikasi telah disetujui.</p>
+          </div>
+        )}
+
+        {/* Rejected notice */}
+        {app.status === 'REJECTED' && (
+          <div className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
+            <p className="font-medium">Aplikasi telah ditolak.</p>
+            {app.decision_reason && <p className="mt-1">Alasan: {app.decision_reason}</p>}
           </div>
         )}
 
