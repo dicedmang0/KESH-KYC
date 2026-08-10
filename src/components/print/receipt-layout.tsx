@@ -5,29 +5,68 @@
 // they never render the app sidebar/topbar — on screen or on paper — and the
 // only chrome here (Cetak / Kembali) is print:hidden.
 //
-// Black on white by design: receipts are handed to the customer, so no brand
-// colours, no badges, no background fills that eat toner.
+// Laid out for an 80mm thermal printer: a 64-column character grid, black on
+// white, no letter-spacing, no background fills. The physical sizing lives in
+// globals.css under `.receipt` — including the two calibration knobs.
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-export function ReceiptRow({ label, value }: { label: string; value?: React.ReactNode }) {
+/** Characters per line the receipt is laid out for. */
+export const RECEIPT_COLS = 64;
+
+/** 26 label + 2 separator + 36 value = 64. Labels must fit 26 characters. */
+const LABEL_COLS = 26;
+
+/** A horizontal rule drawn with characters, so it is exactly 64 columns. */
+function Rule({ char = '-' }: { char?: string }) {
+  return <div aria-hidden>{char.repeat(RECEIPT_COLS)}</div>;
+}
+
+export function ReceiptRow({
+  label,
+  value,
+  /** Long free text: label on its own line, value across all 64 columns. */
+  block,
+}: {
+  label: string;
+  value?: React.ReactNode;
+  block?: boolean;
+}) {
   const empty = value === null || value === undefined || value === '';
+  // A plain hyphen, not an em dash: thermal fonts do not all carry one.
+  const shown = empty ? '-' : value;
+
+  if (block) {
+    return (
+      <div data-receipt-row={label}>
+        <div>{label}:</div>
+        <div data-receipt-value className="break-words whitespace-pre-wrap">
+          {shown}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex gap-3 py-1 text-sm">
-      <div className="w-56 shrink-0 text-neutral-600">{label}</div>
-      <div className="flex-1 font-medium break-words">{empty ? '—' : value}</div>
+    <div data-receipt-row={label} className="flex">
+      <div className="shrink-0" style={{ width: `${LABEL_COLS}ch` }}>
+        {label}
+      </div>
+      <div className="w-[2ch] shrink-0">:</div>
+      <div data-receipt-value className="min-w-0 flex-1 break-words">
+        {shown}
+      </div>
     </div>
   );
 }
 
 export function ReceiptSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-t border-neutral-300 pt-3">
-      <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-700">
-        {title}
-      </h2>
-      <div className="divide-y divide-neutral-100">{children}</div>
+    <section>
+      <Rule />
+      <div className="font-bold uppercase">{title}</div>
+      {children}
     </section>
   );
 }
@@ -56,7 +95,7 @@ export default function ReceiptLayout({
   useEffect(() => setPrintedAt(new Date().toLocaleString('id-ID')), []);
 
   return (
-    <div className="mx-auto max-w-[210mm] bg-white p-6 text-neutral-900 print:p-0">
+    <div className="receipt mx-auto p-2 print:p-0">
       <div className="mb-4 flex gap-2 print:hidden">
         <button
           onClick={() => window.print()}
@@ -72,44 +111,23 @@ export default function ReceiptLayout({
         </button>
       </div>
 
-      <header className="border-b-2 border-neutral-800 pb-3">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xl font-bold tracking-wide">KESH</p>
-            <p className="text-xs text-neutral-600">PT Radhana Solusi Indonesia</p>
-          </div>
-          <div className="text-right text-xs text-neutral-600">
-            <p>Dicetak pada</p>
-            <p className="font-medium text-neutral-800">{printedAt || '—'}</p>
-          </div>
-        </div>
-        <h1 className="mt-3 text-base font-bold uppercase tracking-wide">{title}</h1>
-        <p className="mt-0.5 text-sm">
-          <span className="text-neutral-600">{documentLabel}: </span>
-          <span className="font-mono font-semibold break-all">{documentNo || '—'}</span>
-        </p>
+      <header className="text-center">
+        <div className="font-bold">KESH</div>
+        <div>PT Radhana Solusi Indonesia</div>
+        <Rule char="=" />
+        <h1 className="font-bold uppercase">{title}</h1>
+        <div className="break-all">{documentNo || '-'}</div>
+        <div>{documentLabel}</div>
+        <div>Dicetak: {printedAt || '-'}</div>
       </header>
 
-      <div className="mt-4 space-y-4">{children}</div>
+      {children}
 
-      <p className="mt-6 border-t border-neutral-300 pt-3 text-xs text-neutral-600">
-        {footerNote}
-      </p>
+      <Rule char="=" />
+      <p className="break-words">{footerNote}</p>
 
-      <div className="mt-8 grid grid-cols-2 gap-8 text-center text-xs">
-        <div>
-          <p className="text-neutral-600">Petugas</p>
-          <div className="mt-12 border-t border-neutral-400 pt-1">Nama &amp; Tanda Tangan</div>
-        </div>
-        <div>
-          <p className="text-neutral-600">Customer</p>
-          <div className="mt-12 border-t border-neutral-400 pt-1">Nama &amp; Tanda Tangan</div>
-        </div>
-      </div>
-
-      <div className="mt-8 border-t border-dashed border-neutral-400 pt-1 text-center text-[10px] text-neutral-400">
-        — — — potong di sini — — —
-      </div>
+      {/* Feeds a little paper clear of the cutter before the tear line. */}
+      <div className="mt-[2em] text-center">{'- '.repeat(16).trim()}</div>
     </div>
   );
 }

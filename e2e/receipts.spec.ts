@@ -36,7 +36,19 @@ async function login(page: Page, email: string, password: string) {
 
 /** Value rendered next to a receipt row label. */
 function row(page: Page, label: string) {
-  return page.locator(`div:has(> div.w-56:text-is("${label}")) > div.flex-1`).first();
+  return page.locator(`[data-receipt-row="${label}"] [data-receipt-value]`).first();
+}
+
+/** The 80mm thermal layout is a fixed 64-column grid — nothing may exceed it. */
+async function expectFitsThermalWidth(page: Page) {
+  const overflow = await page.evaluate(() => {
+    const receipt = document.querySelector('.receipt') as HTMLElement | null;
+    if (!receipt) return 'no .receipt element';
+    return receipt.scrollWidth > receipt.clientWidth
+      ? `receipt overflows 64 columns: ${receipt.scrollWidth} > ${receipt.clientWidth}`
+      : '';
+  });
+  expect(overflow).toBe('');
 }
 
 /** The app shell must not render on a receipt page — not even on screen. */
@@ -118,6 +130,7 @@ test.describe('Printable receipts — FE-to-BE', () => {
 
     await expect(page.getByText('Simpan bukti ini sebagai referensi transaksi.')).toBeVisible();
     await expectNoAppShell(page);
+    await expectFitsThermalWidth(page);
 
     // Kembali returns to the detail page it came from.
     await expect(page.getByRole('button', { name: 'Cetak' })).toBeVisible();
@@ -154,10 +167,10 @@ test.describe('Printable receipts — FE-to-BE', () => {
       }
     }
     if (complaint.transaction_amount != null) {
-      await expect(row(page, 'Nominal')).not.toHaveText('—');
+      await expect(row(page, 'Nominal')).not.toHaveText('-');
     }
     if (complaint.transaction_date) {
-      await expect(row(page, 'Tanggal Transaksi')).not.toHaveText('—');
+      await expect(row(page, 'Tanggal Transaksi')).not.toHaveText('-');
     }
     if (complaint.transaction_status) {
       await expect(row(page, 'Status Transaksi')).toHaveText(complaint.transaction_status);
@@ -167,6 +180,7 @@ test.describe('Printable receipts — FE-to-BE', () => {
       page.getByText('Nomor pengaduan ini dapat digunakan untuk pengecekan status.'),
     ).toBeVisible();
     await expectNoAppShell(page);
+    await expectFitsThermalWidth(page);
   });
 
   test('a draft transfer offers no receipt', async ({ page }) => {

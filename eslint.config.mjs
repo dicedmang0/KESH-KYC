@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Playwright's generated HTML report is bundled third-party JS — gitignored
+    // already, and linting it buries real findings under thousands of warnings.
+    "playwright-report/**",
+    "test-results/**",
   ]),
 ]);
 

@@ -139,16 +139,54 @@
 }
 
 /* Printable receipts (/transfers/:id/receipt, /complaints/:id/receipt).
-   A4 with a comfortable margin, plain black on white — anything the app paints
-   for the screen (sidebar, top bar, action buttons) is either outside the
-   (print) route group or marked print:hidden. */
+   Target hardware: 80mm thermal roll, 64 characters per line, plain black on
+   white — anything the app paints for the screen (sidebar, top bar, action
+   buttons) is either outside the (print) route group or marked print:hidden.
+
+   The whole receipt is a fixed 64-column character grid: every row is sized in
+   `ch`, so the columns line up whatever monospace font the printer driver ends
+   up using. Nothing here may set letter-spacing — it would drift the grid. */
+.receipt {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+  font-variant-ligatures: none;
+  letter-spacing: 0;
+  /* 64 columns exactly; on screen at a size a human can proofread. */
+  width: 64ch;
+  font-size: 13px;
+  line-height: 1.15;
+  color: #000;
+  background: #fff;
+}
+
 @media print {
+  /* `auto` height, not a fixed page: a continuous roll must not be padded out
+     to a page boundary, or every receipt ends with a hand of blank paper. */
   @page {
-    size: A4;
-    margin: 14mm;
+    size: 80mm auto;
+    margin: 0;
   }
   body {
     background: #fff;
     color: #000;
+  }
+  /* Calibration knobs — the only two numbers that depend on the hardware.
+     At 203 dpi an 80mm roll images 72mm (576 dots), so 64 chars = 9 dots each,
+     which is the printer's Font B (9x17 dots).
+       --thermal-cw  character advance = 72mm / 64
+       --thermal-lh  line pitch = 19 dots @203dpi (17 glyph + the 2 dot ceiling
+                     on line spacing; CSS font-size is the em box, ~1.15x
+                     smaller than the glyph cell, hence the ratio below)
+     Different roll width or a 180/300 dpi head: change these, nothing else. */
+  .receipt {
+    --thermal-cw: 1.125mm;
+    --thermal-lh: 2.375mm;
+    /* Monospace advance is ~0.6em, so this sizes a character to --thermal-cw.
+       Fonts narrower than that simply under-fill the 72mm — never overflow. */
+    font-size: calc(var(--thermal-cw) / 0.6);
+    line-height: var(--thermal-lh);
+    width: 64ch;
+    max-width: 72mm;
+    margin: 0 auto;
+    padding: 0;
   }
 }

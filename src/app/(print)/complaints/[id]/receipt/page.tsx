@@ -1,7 +1,8 @@
 'use client';
 
 // Printable complaint intake receipt — see the sibling transfer receipt for why
-// this lives in the (print) route group.
+// this lives in the (print) route group, and for the 26-character label limit
+// the 80mm thermal layout imposes.
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -100,19 +101,11 @@ export default function ComplaintReceiptPage() {
         <ReceiptRow label="Status Transaksi" value={c.transaction_status} />
       </ReceiptSection>
 
+      {/* Free text runs full width — a 26-column label gutter beside it would
+          wrap the description to twice the paper. */}
       <ReceiptSection title="Detail Pengaduan">
-        <ReceiptRow
-          label="Ringkasan / Deskripsi Pengaduan"
-          value={c.complaint_notes ? <span className="whitespace-pre-wrap">{c.complaint_notes}</span> : null}
-        />
-        <ReceiptRow
-          label="Catatan Awal"
-          value={
-            c.data_verification_notes
-              ? <span className="whitespace-pre-wrap">{c.data_verification_notes}</span>
-              : null
-          }
-        />
+        <ReceiptRow block label="Deskripsi Pengaduan" value={c.complaint_notes} />
+        <ReceiptRow block label="Catatan Awal" value={c.data_verification_notes} />
         {/* Nama petugas, bukan ID numerik internal. */}
         <ReceiptRow label="Petugas Penerima" value={c.created_by_name} />
       </ReceiptSection>

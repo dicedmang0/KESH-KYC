@@ -24,7 +24,13 @@ export type BusinessIdentityPayload = Partial<{
   city: string;
   province: string;
   business_province_code: string | null;
+  business_province_name: string | null;
   business_city_code: string | null;
+  business_city_name: string | null;
+  business_district_code: string | null;
+  business_district_name: string | null;
+  business_village_code: string | null;
+  business_village_name: string | null;
   postal_code: string;
   business_activity: string;
   business_activity_other: string | null;

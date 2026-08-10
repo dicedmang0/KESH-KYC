@@ -13,6 +13,8 @@ export type ReportStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | '
 
 export type Report = {
   id: number | string;
+  /** UUID publik dari backend — identitas teknis sekunder, bukan tampilan utama. */
+  public_id?: string | null;
   report_no?: string | null;
   report_type?: ReportType | null;
   generation_mode?: GenerationMode | null;

@@ -18,6 +18,8 @@ type Status = 'DRAFT' | 'SUBMITTED' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'R
 
 type ApplicationDetail = {
   id: number | string;
+  /** UUID publik dari backend — identitas teknis sekunder; rute tetap pakai id. */
+  public_id?: string | null;
   type: 'INDIVIDUAL' | 'BUSINESS';
   status: Status;
   created_at: string;
@@ -108,6 +110,14 @@ type Business = {
   address_line?: string | null;
   city?: string | null;
   province?: string | null;
+  business_province_code?: string | null;
+  business_province_name?: string | null;
+  business_city_code?: string | null;
+  business_city_name?: string | null;
+  business_district_code?: string | null;
+  business_district_name?: string | null;
+  business_village_code?: string | null;
+  business_village_name?: string | null;
   postal_code?: string | null;
   phone?: string | null;
   industry_code?: string | null;
@@ -2439,9 +2449,12 @@ export default function UserDetailPage() {
           <Row label="NPWP Badan Usaha" value={business?.npwp} />
           <Row label="KBLI" value={business?.industry_code} />
           <Row label="Bidang Usaha" value={business?.business_activity} />
-          <Row label="Alamat Kedudukan" value={business?.address_line} />
-          <Row label="Kota" value={business?.city} />
-          <Row label="Provinsi" value={business?.province} />
+          {/* Baris lama tanpa kolom wilayah jatuh ke "—" lewat Row. */}
+          <Row label="Alamat" value={business?.address_line} />
+          <Row label="Provinsi" value={business?.business_province_name || business?.province} />
+          <Row label="Kota / Kabupaten" value={business?.business_city_name || business?.city} />
+          <Row label="Kecamatan" value={business?.business_district_name} />
+          <Row label="Kelurahan / Desa" value={business?.business_village_name} />
           <Row label="Kode Pos" value={business?.postal_code} />
           <Row label="Nomor Telepon Perusahaan" value={business?.phone} />
           <Row label="Email Perusahaan" value={business?.company_email} />

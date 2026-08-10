@@ -25,6 +25,8 @@ type Status = "DRAFT" | "SUBMITTED" | "IN_REVIEW" | "APPROVED" | "REJECTED" | "R
 
 type Item = {
   id: number | string;
+  /** UUID publik dari backend — identitas teknis sekunder; rute tetap pakai id. */
+  public_id?: string | null;
   application_type: AppType;
   status: Status;
   created_at: string;

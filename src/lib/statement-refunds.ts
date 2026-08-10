@@ -24,6 +24,8 @@ export type BalanceCreditStatus = 'PENDING_EXTERNAL_POSTING' | 'CREDITED' | null
 
 export type StatementRefundListItem = {
   id: number | string;
+  /** UUID publik dari backend — identitas teknis sekunder; tampilan utama refund_no. */
+  public_id?: string | null;
   refund_no: string;
   complaint_id: number | string | null;
   // Nomor pengaduan (KESH-CMP-…) — identitas yang dipakai user; complaint_id
@@ -88,6 +90,8 @@ export type StatementRefundPartner = {
 
 export type StatementRefund = {
   id: number | string;
+  /** UUID publik dari backend — identitas teknis sekunder; tampilan utama refund_no. */
+  public_id?: string | null;
   refund_no: string;
   complaint_id: number | string | null;
   original_transfer_id: number | string | null;

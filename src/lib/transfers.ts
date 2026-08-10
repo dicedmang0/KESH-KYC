@@ -172,6 +172,9 @@ export function matchedFieldLabel(field?: string | null): string {
  */
 export type TransferListRow = {
   id: number;
+  /** UUID publik dari backend. Identitas teknis sekunder — tampilan utama tetap
+   *  partner_reference_no, dan rute masih memakai id numerik. */
+  public_id?: string | null;
   partner_reference_no: string | null;
   reference_no: string | null;
   sender_application_id: number | string | null;

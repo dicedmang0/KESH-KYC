@@ -39,6 +39,8 @@ export type FinanceDecision = 'NO_REFUND' | 'REFUND_REQUIRED';
 
 export type Complaint = {
   id: number | string;
+  /** UUID publik dari backend — identitas teknis sekunder, bukan tampilan utama. */
+  public_id?: string | null;
   complaint_no?: string | null;
   customer_application_id?: number | string | null;
   customer_name?: string | null;

@@ -37,7 +37,13 @@ export type BusinessIdentity = {
   city?: string | null;
   province?: string | null;
   business_province_code?: string | null;
+  business_province_name?: string | null;
   business_city_code?: string | null;
+  business_city_name?: string | null;
+  business_district_code?: string | null;
+  business_district_name?: string | null;
+  business_village_code?: string | null;
+  business_village_name?: string | null;
   postal_code?: string | null;
   business_activity?: string | null;
   business_activity_other?: string | null;
@@ -116,6 +122,10 @@ function initialState(b: BusinessIdentity): FormState {
     province: s(b.province),
     business_province_code: s(b.business_province_code),
     business_city_code: s(b.business_city_code),
+    business_district_code: s(b.business_district_code),
+    business_district_name: s(b.business_district_name),
+    business_village_code: s(b.business_village_code),
+    business_village_name: s(b.business_village_name),
     postal_code: s(b.postal_code),
     business_activity: s(b.business_activity),
     business_activity_other: s(b.business_activity_other),
@@ -204,6 +214,8 @@ export default function BusinessIdentityForm({
   const [distList, setDistList] = useState<RefItem[]>([]);
   const [provinces, setProvinces] = useState<RefItem[]>([]);
   const [regencies, setRegencies] = useState<RefItem[]>([]);
+  const [districts, setDistricts] = useState<RefItem[]>([]);
+  const [villages, setVillages] = useState<RefItem[]>([]);
 
   const set = (key: string, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -238,6 +250,32 @@ export default function BusinessIdentityForm({
       .then((r) => setRegencies(toRefList(r)))
       .catch(() => setRegencies([]));
   }, [form.business_province_code]);
+
+  // Keyed on the stored code, so the prefilled value loads its own options on
+  // first render — no separate "hydrate from detail" pass needed.
+  useEffect(() => {
+    if (!form.business_city_code) {
+      setDistricts([]);
+      return;
+    }
+    apiFetch<unknown>(
+      `/references/districts?regency_code=${encodeURIComponent(form.business_city_code)}`,
+    )
+      .then((r) => setDistricts(toRefList(r)))
+      .catch(() => setDistricts([]));
+  }, [form.business_city_code]);
+
+  useEffect(() => {
+    if (!form.business_district_code) {
+      setVillages([]);
+      return;
+    }
+    apiFetch<unknown>(
+      `/references/villages?district_code=${encodeURIComponent(form.business_district_code)}`,
+    )
+      .then((r) => setVillages(toRefList(r)))
+      .catch(() => setVillages([]));
+  }, [form.business_district_code]);
 
   const isPT = form.legal_form.trim().replace(/\.$/, "").toUpperCase() === "PT";
 
@@ -411,7 +449,7 @@ export default function BusinessIdentityForm({
         />
       </label>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <label className="grid gap-1 min-w-0">
           <span className="text-sm font-medium">Provinsi <span className="text-red-500">*</span></span>
           <select
@@ -428,6 +466,10 @@ export default function BusinessIdentityForm({
                 province: provinces.find((p) => p.code === code)?.name || "",
                 business_city_code: "",
                 city: "",
+                business_district_code: "",
+                business_district_name: "",
+                business_village_code: "",
+                business_village_name: "",
               }));
             }}
           >
@@ -453,6 +495,10 @@ export default function BusinessIdentityForm({
                 ...f,
                 business_city_code: code,
                 city: regencies.find((r) => r.code === code)?.name || "",
+                business_district_code: "",
+                business_district_name: "",
+                business_village_code: "",
+                business_village_name: "",
               }));
             }}
           >
@@ -463,6 +509,58 @@ export default function BusinessIdentityForm({
           </select>
           {!form.business_city_code && form.city && (
             <span className="text-xs text-slate-500">Tersimpan: {form.city}</span>
+          )}
+        </label>
+        <label className="grid gap-1 min-w-0">
+          <span className="text-sm font-medium">Kecamatan</span>
+          <select
+            id="biz-district"
+            className={`${input} bg-white disabled:bg-slate-50`}
+            value={form.business_district_code}
+            disabled={!form.business_city_code}
+            onChange={(e) => {
+              const code = e.target.value;
+              setForm((f) => ({
+                ...f,
+                business_district_code: code,
+                business_district_name: districts.find((d) => d.code === code)?.name || "",
+                business_village_code: "",
+                business_village_name: "",
+              }));
+            }}
+          >
+            <option value="">— Pilih Kecamatan —</option>
+            {districts.map((d) => (
+              <option key={d.code} value={d.code}>{d.name}</option>
+            ))}
+          </select>
+          {!form.business_district_code && form.business_district_name && (
+            <span className="text-xs text-slate-500">Tersimpan: {form.business_district_name}</span>
+          )}
+        </label>
+        <label className="grid gap-1 min-w-0">
+          <span className="text-sm font-medium">Kelurahan / Desa</span>
+          <select
+            id="biz-village"
+            className={`${input} bg-white disabled:bg-slate-50`}
+            value={form.business_village_code}
+            disabled={!form.business_district_code}
+            onChange={(e) => {
+              const code = e.target.value;
+              setForm((f) => ({
+                ...f,
+                business_village_code: code,
+                business_village_name: villages.find((v) => v.code === code)?.name || "",
+              }));
+            }}
+          >
+            <option value="">— Pilih Kelurahan/Desa —</option>
+            {villages.map((v) => (
+              <option key={v.code} value={v.code}>{v.name}</option>
+            ))}
+          </select>
+          {!form.business_village_code && form.business_village_name && (
+            <span className="text-xs text-slate-500">Tersimpan: {form.business_village_name}</span>
           )}
         </label>
         <Text label="Kode Pos" field="postal_code" value={form.postal_code} onChange={set} required />

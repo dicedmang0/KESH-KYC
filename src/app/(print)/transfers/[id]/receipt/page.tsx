@@ -3,6 +3,9 @@
 // Printable transfer receipt. Lives in the (print) route group: same URL space
 // as /transfers/:id, but outside the (protected) layout, so no sidebar/topbar
 // is rendered here at all.
+//
+// 80mm thermal: labels below must stay within 26 characters (see ReceiptRow),
+// or they wrap into the value column.
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -17,12 +20,12 @@ import {
 import { transferStatusLabel, transferResultLabel } from '@/components/transfer-badges';
 import ReceiptLayout, { ReceiptRow, ReceiptSection } from '@/components/print/receipt-layout';
 
-/** Absent dates render as the receipt's em dash, not the app's "-". */
-const dt = (v?: string | null) => (v ? formatDateTime(v) : null);
-
 const FOOTER_NOTE =
   'Bukti ini diterbitkan oleh PT Radhana Solusi Indonesia / KESH. ' +
   'Simpan bukti ini sebagai referensi transaksi.';
+
+/** Absent dates fall through to ReceiptRow's own placeholder. */
+const dt = (v?: string | null) => (v ? formatDateTime(v) : null);
 
 export default function TransferReceiptPage() {
   const params = useParams();
@@ -97,9 +100,8 @@ export default function TransferReceiptPage() {
       <ReceiptSection title="Petugas">
         <ReceiptRow label="Dibuat Oleh" value={row.created_by_name} />
         <ReceiptRow label="Diajukan Oleh" value={row.submitted_by_name} />
-        <ReceiptRow label="Direview Finance Staff Oleh" value={row.finance_reviewed_by_name} />
+        <ReceiptRow label="Direview Finance Oleh" value={row.finance_reviewed_by_name} />
         <ReceiptRow label="Disetujui Oleh" value={row.approved_by_name} />
-        <ReceiptRow label="Selesai Pada" value={dt(row.completed_at)} />
       </ReceiptSection>
     </ReceiptLayout>
   );

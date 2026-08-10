@@ -57,6 +57,8 @@ export async function getWatchlistHistory(
 // ── Stored entries ─────────────────────────────────────────────────────────
 export type WatchlistEntry = {
   id: number;
+  /** UUID publik dari backend — identitas teknis sekunder, bukan tampilan utama. */
+  public_id?: string | null;
   unique_id: string | null;
   list_type: string | null;
   source_list: string | null;

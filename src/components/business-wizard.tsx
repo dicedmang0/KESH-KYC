@@ -208,7 +208,8 @@ function Stepper({ step }: { step: Step }) {
     { n: 4, label: "Tinjauan" },
   ];
   return (
-    <div className="flex items-center gap-3">
+    // Wraps instead of forcing 615px of document width on a 375px viewport.
+    <div className="flex flex-wrap items-center gap-3">
       {items.map((it, i) => (
         <div key={it.n} className="flex items-center gap-3">
           <div
@@ -267,6 +268,10 @@ export default function BusinessWizard() {
   const [province, setProvince] = useState("");
   const [business_province_code, setBizProvinceCode] = useState("");
   const [business_city_code, setBizCityCode] = useState("");
+  const [business_district_code, setBizDistrictCode] = useState("");
+  const [business_district_name, setBizDistrictName] = useState("");
+  const [business_village_code, setBizVillageCode] = useState("");
+  const [business_village_name, setBizVillageName] = useState("");
   const [postal_code, setPostal] = useState("");
   const [business_activity, setBizAct] = useState("");
   const [business_activity_other, setBizActOther] = useState("");
@@ -303,7 +308,11 @@ export default function BusinessWizard() {
   // Alamat Kedudukan reference lists (province/city dropdown, mirror Individual CDD)
   const [provinces, setProvinces] = useState<{ code: string; name: string }[]>([]);
   const [regencies, setRegencies] = useState<{ code: string; name: string }[]>([]);
+  const [districts, setDistricts] = useState<{ code: string; name: string }[]>([]);
+  const [villages, setVillages] = useState<{ code: string; name: string }[]>([]);
   const [regenciesLoading, setRegenciesLoading] = useState(false);
+  const [districtsLoading, setDistrictsLoading] = useState(false);
+  const [villagesLoading, setVillagesLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -337,6 +346,36 @@ export default function BusinessWizard() {
       .catch(() => setRegencies([]))
       .finally(() => setRegenciesLoading(false));
   }, [business_province_code]);
+
+  // Cascade: load districts (kecamatan) when city changes
+  useEffect(() => {
+    if (!business_city_code) {
+      setDistricts([]);
+      return;
+    }
+    setDistrictsLoading(true);
+    apiFetch<unknown>(
+      `/references/districts?regency_code=${encodeURIComponent(business_city_code)}`,
+    )
+      .then((r) => setDistricts(toRefList(r)))
+      .catch(() => setDistricts([]))
+      .finally(() => setDistrictsLoading(false));
+  }, [business_city_code]);
+
+  // Cascade: load villages (kelurahan/desa) when district changes
+  useEffect(() => {
+    if (!business_district_code) {
+      setVillages([]);
+      return;
+    }
+    setVillagesLoading(true);
+    apiFetch<unknown>(
+      `/references/villages?district_code=${encodeURIComponent(business_district_code)}`,
+    )
+      .then((r) => setVillages(toRefList(r)))
+      .catch(() => setVillages([]))
+      .finally(() => setVillagesLoading(false));
+  }, [business_district_code]);
 
   function validateCompany(): boolean {
     let ok = true;
@@ -423,6 +462,10 @@ export default function BusinessWizard() {
         business_province_name: province || null,
         business_city_code: business_city_code || null,
         business_city_name: city || null,
+        business_district_code: business_district_code || null,
+        business_district_name: business_district_name || null,
+        business_village_code: business_village_code || null,
+        business_village_name: business_village_name || null,
         postal_code,
         business_activity,
         business_activity_other: isLainnya(business_activity) ? business_activity_other || null : null,
@@ -1012,7 +1055,7 @@ export default function BusinessWizard() {
               />
             </label>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2">
               <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">Provinsi *</span>
                 <select
@@ -1024,6 +1067,10 @@ export default function BusinessWizard() {
                     setProvince(provinces.find((p) => p.code === code)?.name || "");
                     setBizCityCode("");
                     setCity("");
+                    setBizDistrictCode("");
+                    setBizDistrictName("");
+                    setBizVillageCode("");
+                    setBizVillageName("");
                   }}
                 >
                   <option value="">— Pilih Provinsi —</option>
@@ -1042,6 +1089,10 @@ export default function BusinessWizard() {
                     const code = e.target.value;
                     setBizCityCode(code);
                     setCity(regencies.find((r) => r.code === code)?.name || "");
+                    setBizDistrictCode("");
+                    setBizDistrictName("");
+                    setBizVillageCode("");
+                    setBizVillageName("");
                   }}
                 >
                   {regenciesLoading ? (
@@ -1053,6 +1104,60 @@ export default function BusinessWizard() {
                       <option value="">— Pilih Kota/Kabupaten —</option>
                       {regencies.map((r) => (
                         <option key={r.code} value={r.code}>{r.name}</option>
+                      ))}
+                    </>
+                  )}
+                </select>
+              </label>
+              <label className="grid gap-1 min-w-0">
+                <span className="text-sm font-medium">Kecamatan</span>
+                <select
+                  className="w-full min-w-0 rounded-md border bg-white px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                  value={business_district_code}
+                  disabled={!business_city_code || districtsLoading}
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    setBizDistrictCode(code);
+                    setBizDistrictName(districts.find((d) => d.code === code)?.name || "");
+                    setBizVillageCode("");
+                    setBizVillageName("");
+                  }}
+                >
+                  {districtsLoading ? (
+                    <option disabled>Memuat...</option>
+                  ) : business_city_code && districts.length === 0 ? (
+                    <option disabled>Data kecamatan belum tersedia untuk kota/kabupaten ini.</option>
+                  ) : (
+                    <>
+                      <option value="">— Pilih Kecamatan —</option>
+                      {districts.map((d) => (
+                        <option key={d.code} value={d.code}>{d.name}</option>
+                      ))}
+                    </>
+                  )}
+                </select>
+              </label>
+              <label className="grid gap-1 min-w-0">
+                <span className="text-sm font-medium">Kelurahan / Desa</span>
+                <select
+                  className="w-full min-w-0 rounded-md border bg-white px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                  value={business_village_code}
+                  disabled={!business_district_code || villagesLoading}
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    setBizVillageCode(code);
+                    setBizVillageName(villages.find((v) => v.code === code)?.name || "");
+                  }}
+                >
+                  {villagesLoading ? (
+                    <option disabled>Memuat...</option>
+                  ) : business_district_code && villages.length === 0 ? (
+                    <option disabled>Data kelurahan/desa belum tersedia untuk kecamatan ini.</option>
+                  ) : (
+                    <>
+                      <option value="">— Pilih Kelurahan/Desa —</option>
+                      {villages.map((v) => (
+                        <option key={v.code} value={v.code}>{v.name}</option>
                       ))}
                     </>
                   )}
