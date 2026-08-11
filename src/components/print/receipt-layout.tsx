@@ -5,20 +5,20 @@
 // they never render the app sidebar/topbar — on screen or on paper — and the
 // only chrome here (Cetak / Kembali) is print:hidden.
 //
-// Laid out for an 80mm thermal printer: a 64-column character grid, black on
-// white, no letter-spacing, no background fills. The physical sizing lives in
-// globals.css under `.receipt` — including the two calibration knobs.
+// Laid out for 80mm x 210mm stock: a fixed character grid, black on white, no
+// letter-spacing, no background fills. The physical sizing lives in globals.css
+// under `.receipt`, where --receipt-cols is the single knob.
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-/** Characters per line the receipt is laid out for. */
-export const RECEIPT_COLS = 64;
+/** Characters per line. Must match --receipt-cols in globals.css. */
+export const RECEIPT_COLS = 44;
 
-/** 26 label + 2 separator + 36 value = 64. Labels must fit 26 characters. */
-const LABEL_COLS = 26;
+/** 18 label + 2 separator + 24 value = 44. Labels must fit 18 characters. */
+const LABEL_COLS = 18;
 
-/** A horizontal rule drawn with characters, so it is exactly 64 columns. */
+/** A horizontal rule drawn with characters, so it is exactly RECEIPT_COLS columns. */
 function Rule({ char = '-' }: { char?: string }) {
   return <div aria-hidden>{char.repeat(RECEIPT_COLS)}</div>;
 }
@@ -26,7 +26,7 @@ function Rule({ char = '-' }: { char?: string }) {
 export function ReceiptRow({
   label,
   value,
-  /** Long free text: label on its own line, value across all 64 columns. */
+  /** Long free text: label on its own line, value across all columns. */
   block,
 }: {
   label: string;

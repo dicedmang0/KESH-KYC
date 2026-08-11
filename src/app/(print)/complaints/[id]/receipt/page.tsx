@@ -1,8 +1,8 @@
 'use client';
 
 // Printable complaint intake receipt — see the sibling transfer receipt for why
-// this lives in the (print) route group, and for the 26-character label limit
-// the 80mm thermal layout imposes.
+// this lives in the (print) route group, and for the 18-character label limit
+// the 80mm layout imposes.
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -90,7 +90,7 @@ export default function ComplaintReceiptPage() {
 
       <ReceiptSection title="Transaksi Terkait">
         <ReceiptRow
-          label="Nomor Referensi Transaksi"
+          label="No. Ref Transaksi"
           value={c.transaction_partner_reference_no || c.transaction_reference}
         />
         <ReceiptRow

@@ -39,16 +39,45 @@ function row(page: Page, label: string) {
   return page.locator(`[data-receipt-row="${label}"] [data-receipt-value]`).first();
 }
 
-/** The 80mm thermal layout is a fixed 64-column grid — nothing may exceed it. */
+/** The 80mm thermal layout is a fixed character grid — nothing may exceed it. */
 async function expectFitsThermalWidth(page: Page) {
   const overflow = await page.evaluate(() => {
     const receipt = document.querySelector('.receipt') as HTMLElement | null;
     if (!receipt) return 'no .receipt element';
     return receipt.scrollWidth > receipt.clientWidth
-      ? `receipt overflows 64 columns: ${receipt.scrollWidth} > ${receipt.clientWidth}`
+      ? `receipt overflows the grid: ${receipt.scrollWidth} > ${receipt.clientWidth}`
       : '';
   });
   expect(overflow).toBe('');
+}
+
+/**
+ * The paper size must actually parse. An invalid `@page size` (e.g. `80mm auto`
+ * — the grammar takes `auto` OR lengths, never a mix) is dropped silently, the
+ * page falls back to the driver's default paper, and the printer scales the
+ * whole receipt down to squeeze it onto 80mm. A dropped value reads back as ''.
+ */
+async function expectPageSizeParses(page: Page) {
+  const size = await page.evaluate(() => {
+    for (const sheet of Array.from(document.styleSheets)) {
+      let rules: CSSRule[];
+      try {
+        rules = Array.from(sheet.cssRules);
+      } catch {
+        continue; // cross-origin sheet
+      }
+      for (const rule of rules) {
+        if (!(rule instanceof CSSMediaRule) || !rule.conditionText.includes('print')) continue;
+        for (const inner of Array.from(rule.cssRules)) {
+          if (inner.constructor.name === 'CSSPageRule') {
+            return (inner as CSSPageRule).style.getPropertyValue('size');
+          }
+        }
+      }
+    }
+    return 'no @page rule found';
+  });
+  expect(size).toBe('80mm 210mm');
 }
 
 /** The app shell must not render on a receipt page — not even on screen. */
@@ -119,7 +148,7 @@ test.describe('Printable receipts — FE-to-BE', () => {
     const reference = transfer.partner_reference_no!;
     expect(reference).toMatch(/^KESH-TRF-/);
     await expect(page.getByText(reference).first()).toBeVisible();
-    await expect(row(page, 'Nomor Referensi Transaksi')).toHaveText(reference);
+    await expect(row(page, 'No. Ref Transaksi')).toHaveText(reference);
     await expect(page.getByText(`Transfer #${transfer.id}`)).toHaveCount(0);
 
     // Officer rows carry names/emails; a bare number would mean the *_name
@@ -131,6 +160,7 @@ test.describe('Printable receipts — FE-to-BE', () => {
     await expect(page.getByText('Simpan bukti ini sebagai referensi transaksi.')).toBeVisible();
     await expectNoAppShell(page);
     await expectFitsThermalWidth(page);
+    await expectPageSizeParses(page);
 
     // Kembali returns to the detail page it came from.
     await expect(page.getByRole('button', { name: 'Cetak' })).toBeVisible();
@@ -159,11 +189,11 @@ test.describe('Printable receipts — FE-to-BE', () => {
 
     if (complaint.transaction_partner_reference_no) {
       // The receipt must show the partner-facing reference, never the internal transfer id.
-      await expect(row(page, 'Nomor Referensi Transaksi')).toHaveText(
+      await expect(row(page, 'No. Ref Transaksi')).toHaveText(
         complaint.transaction_partner_reference_no,
       );
       if (complaint.transfer_id) {
-        await expect(row(page, 'Nomor Referensi Transaksi')).not.toHaveText(String(complaint.transfer_id));
+        await expect(row(page, 'No. Ref Transaksi')).not.toHaveText(String(complaint.transfer_id));
       }
     }
     if (complaint.transaction_amount != null) {
@@ -181,6 +211,7 @@ test.describe('Printable receipts — FE-to-BE', () => {
     ).toBeVisible();
     await expectNoAppShell(page);
     await expectFitsThermalWidth(page);
+    await expectPageSizeParses(page);
   });
 
   test('a draft transfer offers no receipt', async ({ page }) => {

@@ -4,7 +4,7 @@
 // as /transfers/:id, but outside the (protected) layout, so no sidebar/topbar
 // is rendered here at all.
 //
-// 80mm thermal: labels below must stay within 26 characters (see ReceiptRow),
+// 80mm stock: labels below must stay within 18 characters (see ReceiptRow),
 // or they wrap into the value column.
 
 import { useEffect, useState } from 'react';
@@ -70,7 +70,7 @@ export default function TransferReceiptPage() {
       footerNote={FOOTER_NOTE}
     >
       <ReceiptSection title="Transaksi">
-        <ReceiptRow label="Nomor Referensi Transaksi" value={transferReference(row)} />
+        <ReceiptRow label="No. Ref Transaksi" value={transferReference(row)} />
         <ReceiptRow label="Tanggal Transaksi" value={dt(row.transaction_date ?? row.created_at)} />
         <ReceiptRow label="Selesai Pada" value={dt(row.completed_at)} />
         <ReceiptRow label="Status" value={transferStatusLabel(row.status)} />
@@ -93,14 +93,14 @@ export default function TransferReceiptPage() {
         <ReceiptRow label="Nomor Rekening" value={row.beneficiary_account_number} />
         <ReceiptRow label="Bank" value={row.beneficiary_bank_name} />
         <ReceiptRow label="Kode Bank" value={row.beneficiary_bank_code} />
-        <ReceiptRow label="Hubungan dengan Pengirim" value={row.beneficiary_relationship_to_sender} />
+        <ReceiptRow label="Hub. dgn Pengirim" value={row.beneficiary_relationship_to_sender} />
       </ReceiptSection>
 
       {/* Nama petugas, bukan ID numerik internal. */}
       <ReceiptSection title="Petugas">
         <ReceiptRow label="Dibuat Oleh" value={row.created_by_name} />
         <ReceiptRow label="Diajukan Oleh" value={row.submitted_by_name} />
-        <ReceiptRow label="Direview Finance Oleh" value={row.finance_reviewed_by_name} />
+        <ReceiptRow label="Direview Finance" value={row.finance_reviewed_by_name} />
         <ReceiptRow label="Disetujui Oleh" value={row.approved_by_name} />
       </ReceiptSection>
     </ReceiptLayout>
