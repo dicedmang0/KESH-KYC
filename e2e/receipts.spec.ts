@@ -97,7 +97,22 @@ type Complaint = {
   transaction_date: string | null;
   transaction_status: string | null;
   transaction_partner_reference_no: string | null;
+  receipt_state: 'OPEN' | 'CLOSED' | null;
 };
+
+/** A complaint prints an intake slip while it runs, a settlement slip once done. */
+const RECEIPT_COPY = {
+  OPEN: {
+    title: 'Bukti Penerimaan Pengaduan',
+    footer: 'Nomor pengaduan ini dapat digunakan untuk pengecekan status.',
+    officer: 'Petugas Penerima',
+  },
+  CLOSED: {
+    title: 'Bukti Penyelesaian Pengaduan',
+    footer: 'Simpan bukti ini sebagai arsip penyelesaian pengaduan.',
+    officer: 'Petugas Penyelesaian',
+  },
+} as const;
 
 test.describe('Printable receipts — FE-to-BE', () => {
   let transfer: Transfer;
@@ -146,7 +161,9 @@ test.describe('Printable receipts — FE-to-BE', () => {
 
     // The primary identifier is the reference the customer holds, never #id.
     const reference = transfer.partner_reference_no!;
-    expect(reference).toMatch(/^KESH-TRF-/);
+    // Newly generated references are TRF-XXXXXXXX; rows created before the
+    // short format still carry KESH-TRF-… and must print just the same.
+    expect(reference).toMatch(/^(TRF-[A-HJ-NP-Z2-9]{8}|KESH-TRF-.+)$/);
     await expect(page.getByText(reference).first()).toBeVisible();
     await expect(row(page, 'No. Ref Transaksi')).toHaveText(reference);
     await expect(page.getByText(`Transfer #${transfer.id}`)).toHaveCount(0);
@@ -175,7 +192,10 @@ test.describe('Printable receipts — FE-to-BE', () => {
     await page.getByRole('link', { name: 'Cetak Resi Pengaduan' }).click();
     await page.waitForURL(`**/complaints/${complaint.id}/receipt`);
 
-    await expect(page.getByRole('heading', { name: 'Bukti Penerimaan Pengaduan' })).toBeVisible();
+    // This spec takes whatever complaint the local DB offers, so the expected
+    // copy follows that ticket's own receipt_state.
+    const copy = RECEIPT_COPY[complaint.receipt_state ?? 'OPEN'];
+    await expect(page.getByRole('heading', { name: copy.title })).toBeVisible();
     await expect(page.getByText('PT Radhana Solusi Indonesia', { exact: true })).toBeVisible();
 
     const complaintNo = complaint.complaint_no!;
@@ -206,9 +226,8 @@ test.describe('Printable receipts — FE-to-BE', () => {
       await expect(row(page, 'Status Transaksi')).toHaveText(complaint.transaction_status);
     }
 
-    await expect(
-      page.getByText('Nomor pengaduan ini dapat digunakan untuk pengecekan status.'),
-    ).toBeVisible();
+    await expect(page.getByText(copy.footer)).toBeVisible();
+    await expect(page.locator('[data-receipt-signatures]')).toContainText(copy.officer);
     await expectNoAppShell(page);
     await expectFitsThermalWidth(page);
     await expectPageSizeParses(page);

@@ -351,7 +351,9 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
     const complaint = await createRes.json();
     const complaintId = String(complaint.id);
     const complaintNo = String(complaint.complaint_no);
-    expect(complaintNo).toMatch(/^KESH-CMP-/);
+    // Newly generated: CMP-XXXXXXXX, exactly 12 characters.
+    expect(complaintNo).toMatch(/^CMP-[A-HJ-NP-Z2-9]{8}$/);
+    expect(complaintNo).toHaveLength(12);
 
     // 6. Assert complaint detail opens and status = OPEN.
     await page.waitForURL(`**/complaints/${complaintId}`);
@@ -661,7 +663,14 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
     await page.goto('/statement-refunds/new');
 
     await fillRefundBasics(page, `E2E-BADREF-${ts}`, 25_000);
-    await page.getByLabel('Nomor Referensi Transaksi Awal').fill(`KESH-TRF-TIDAK-ADA-${ts}`);
+
+    // The example shown is the new short format…
+    const transferRefInput = page.getByLabel('Nomor Referensi Transaksi Awal');
+    await expect(transferRefInput).toHaveAttribute('placeholder', 'TRF-A8K3P9Q2');
+    // …but a legacy long reference must still go in whole, never truncated to 12.
+    const legacyRef = `KESH-TRF-TIDAK-ADA-${ts}`;
+    await transferRefInput.fill(legacyRef);
+    await expect(transferRefInput).toHaveValue(legacyRef);
 
     await page.getByRole('button', { name: 'Simpan Pencatatan Refund' }).click();
     await expect(
@@ -679,7 +688,12 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
     await page.goto('/statement-refunds/new');
 
     await fillRefundBasics(page, `E2E-BADCMP-${ts}`, 26_000);
-    await page.getByLabel('Nomor Pengaduan').fill(`KESH-CMP-TIDAK-ADA-${ts}`);
+
+    const complaintNoInput = page.getByLabel('Nomor Pengaduan');
+    await expect(complaintNoInput).toHaveAttribute('placeholder', 'CMP-M4X7B2D9');
+    const legacyNo = `KESH-CMP-TIDAK-ADA-${ts}`;
+    await complaintNoInput.fill(legacyNo);
+    await expect(complaintNoInput).toHaveValue(legacyNo);
 
     await page.getByRole('button', { name: 'Simpan Pencatatan Refund' }).click();
     await expect(page.getByText('Nomor pengaduan tidak ditemukan.').first()).toBeVisible();

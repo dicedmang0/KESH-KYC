@@ -12,6 +12,25 @@ export function canCreateTransfer(role: string | null | undefined): boolean {
   return role === 'FrontDesk' || role === 'SystemAdmin' || role === 'Director';
 }
 
+/**
+ * Role yang boleh membuka /transfers dan /transfers/:id. ComplaintHandling dan
+ * Auditor sengaja di luar daftar — backend menolak mereka dengan 403, jadi UI
+ * lain tidak boleh menawarkan tautan ke sana.
+ */
+export const TRANSFER_VIEW_ROLES = [
+  'FrontDesk',
+  'OperationSupervisor',
+  'ComplianceLead',
+  'FinanceStaff',
+  'FinanceManager',
+  'SystemAdmin',
+  'Director',
+];
+
+export function canViewTransfers(role: string | null | undefined): boolean {
+  return !!role && TRANSFER_VIEW_ROLES.includes(role);
+}
+
 export function canSubmitTransfer(role: string | null | undefined): boolean {
   return role === 'FrontDesk' || role === 'SystemAdmin' || role === 'Director';
 }

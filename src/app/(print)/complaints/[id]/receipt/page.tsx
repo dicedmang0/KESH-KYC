@@ -11,18 +11,48 @@ import { formatDateTime } from '@/lib/monitoring';
 import { formatTransferAmount } from '@/lib/transfers';
 import {
   getComplaint,
+  complaintReceiptState,
   formatComplaintStatus,
   formatComplaintLevel,
   formatComplaintCategory,
   formatComplaintChannel,
   formatLevel3Risk,
   type Complaint,
+  type ComplaintReceiptState,
 } from '@/lib/complaints';
-import ReceiptLayout, { ReceiptRow, ReceiptSection } from '@/components/print/receipt-layout';
+import ReceiptLayout, {
+  ReceiptRow,
+  ReceiptSection,
+  ReceiptSignatures,
+} from '@/components/print/receipt-layout';
 
-const FOOTER_NOTE =
-  'Pengaduan telah diterima dan akan diproses sesuai prosedur internal KESH. ' +
-  'Nomor pengaduan ini dapat digunakan untuk pengecekan status.';
+/**
+ * A complaint prints twice: once as the intake slip the customer walks out
+ * with, and again when the ticket is settled. Same data, different document —
+ * so title, footer and who signs all switch on receipt_state.
+ */
+const RECEIPT_COPY: Record<ComplaintReceiptState, {
+  title: string;
+  footerNote: string;
+  officerLabel: string;
+}> = {
+  OPEN: {
+    title: 'Bukti Penerimaan Pengaduan',
+    footerNote:
+      'Pengaduan telah diterima dan akan diproses sesuai prosedur internal KESH. ' +
+      'Nomor pengaduan ini dapat digunakan untuk pengecekan status.',
+    officerLabel: 'Petugas Penerima',
+  },
+  CLOSED: {
+    title: 'Bukti Penyelesaian Pengaduan',
+    footerNote:
+      'Pengaduan telah diselesaikan/ditutup sesuai hasil penanganan. ' +
+      'Simpan bukti ini sebagai arsip penyelesaian pengaduan.',
+    officerLabel: 'Petugas Penyelesaian',
+  },
+};
+
+const CUSTOMER_SIGNATURE_LABEL = 'Pelapor/Customer';
 
 const dt = (v?: string | null) => (v ? formatDateTime(v) : null);
 
@@ -60,13 +90,15 @@ export default function ComplaintReceiptPage() {
   }
   if (!c) return null;
 
+  const copy = RECEIPT_COPY[complaintReceiptState(c)];
+
   return (
     <ReceiptLayout
-      title="Bukti Penerimaan Pengaduan"
+      title={copy.title}
       documentLabel="Nomor Pengaduan"
       documentNo={c.complaint_no}
       backHref={`/complaints/${id}`}
-      footerNote={FOOTER_NOTE}
+      footerNote={copy.footerNote}
     >
       <ReceiptSection title="Pengaduan">
         <ReceiptRow label="Nomor Pengaduan" value={c.complaint_no} />
@@ -106,9 +138,13 @@ export default function ComplaintReceiptPage() {
       <ReceiptSection title="Detail Pengaduan">
         <ReceiptRow block label="Deskripsi Pengaduan" value={c.complaint_notes} />
         <ReceiptRow block label="Catatan Awal" value={c.data_verification_notes} />
-        {/* Nama petugas, bukan ID numerik internal. */}
+        {/* Nama petugas, bukan ID numerik internal. Baris ini tetap petugas
+            penerima pada kedua resi — yang berganti hanya siapa yang tanda
+            tangan di bawah. */}
         <ReceiptRow label="Petugas Penerima" value={c.created_by_name} />
       </ReceiptSection>
+
+      <ReceiptSignatures left={copy.officerLabel} right={CUSTOMER_SIGNATURE_LABEL} />
     </ReceiptLayout>
   );
 }

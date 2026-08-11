@@ -67,6 +67,41 @@ export type PaginatedResponse<T> = {
   total: number;
 };
 
+// ── Access matrix ─────────────────────────────────────────────────────────────
+// Cermin dari report-access.ts di backend. Backend tetap yang menegakkan
+// aturan; ini hanya supaya UI tidak menawarkan aksi yang pasti ditolak 403.
+
+export const REPORT_TYPES: ReportType[] = ['ALL', 'KYC_KYB', 'LTKT', 'LTKM', 'TRANSFERS', 'COMPLAINTS'];
+
+/** Boleh semua jenis report. */
+const FULL_ACCESS_ROLES = ['SystemAdmin', 'Director', 'ComplianceLead'];
+
+/** Read-only: boleh melihat & mengunduh semua, tidak boleh generate. */
+const READ_ONLY_ROLES = ['Auditor'];
+
+/** Divisi non-compliance hanya melihat jenis report miliknya sendiri. */
+const ROLE_REPORT_TYPES: Record<string, ReportType[]> = {
+  ComplaintHandling: ['COMPLAINTS'],
+  OperationSupervisor: ['COMPLAINTS'],
+  FinanceStaff: ['TRANSFERS'],
+  FinanceManager: ['TRANSFERS'],
+};
+
+/** Jenis report yang boleh dilihat role ini. Kosong = tidak punya akses sama sekali. */
+export function allowedReportTypes(role?: string | null): ReportType[] {
+  if (!role) return [];
+  if (FULL_ACCESS_ROLES.includes(role) || READ_ONLY_ROLES.includes(role)) return REPORT_TYPES;
+  return ROLE_REPORT_TYPES[role] ?? [];
+}
+
+export function canReadReports(role?: string | null): boolean {
+  return allowedReportTypes(role).length > 0;
+}
+
+export function canGenerateReports(role?: string | null): boolean {
+  return !READ_ONLY_ROLES.includes(role ?? '') && canReadReports(role);
+}
+
 // ── API functions ─────────────────────────────────────────────────────────────
 
 function buildQuery(params: Record<string, string | number | undefined | null>): string {

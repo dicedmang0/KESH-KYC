@@ -97,7 +97,55 @@ export type Complaint = {
    * status pengaduan; penutupan tetap manual.
    */
   statement_refunds?: ComplaintLinkedRefund[] | null;
+
+  /** OPEN vs CLOSED untuk resi cetak saja — tidak memengaruhi workflow. */
+  receipt_state?: ComplaintReceiptState | null;
+  /**
+   * Ringkasan pengguna jasa & transaksi tertaut, ikut di respons detail. Field
+   * lama di root (customer_name, transaction_amount, dst.) tetap ada, jadi ini
+   * murni tambahan — bukan pengganti.
+   */
+  linked_customer?: ComplaintLinkedCustomer | null;
+  linked_transfer?: ComplaintLinkedTransfer | null;
 };
+
+export type ComplaintReceiptState = 'OPEN' | 'CLOSED';
+
+export type ComplaintLinkedCustomer = {
+  application_id?: number | string | null;
+  application_public_id?: string | null;
+  cif_no?: string | null;
+  customer_name?: string | null;
+  customer_type?: string | null;
+  customer_status?: string | null;
+  risk_level?: string | null;
+  contact?: string | null;
+};
+
+export type ComplaintLinkedTransfer = {
+  transfer_id?: number | string | null;
+  transfer_public_id?: string | null;
+  partner_reference_no?: string | null;
+  amount?: string | number | null;
+  transaction_date?: string | null;
+  status?: string | null;
+  beneficiary_account_name?: string | null;
+  beneficiary_account_number?: string | null;
+  beneficiary_bank_name?: string | null;
+};
+
+/** Status yang dianggap selesai kalau backend belum mengirim receipt_state. */
+const CLOSED_RECEIPT_STATUSES = ['RESOLVED', 'CLOSED', 'REJECTED'];
+
+/**
+ * OPEN vs CLOSED untuk resi. Backend mengirim `receipt_state`; turunan dari
+ * status hanya dipakai untuk tiket lama yang belum membawanya. Daftar putih ada
+ * di sisi CLOSED — status baru default ke OPEN, sama seperti backend.
+ */
+export function complaintReceiptState(c?: Complaint | null): ComplaintReceiptState {
+  if (c?.receipt_state === 'OPEN' || c?.receipt_state === 'CLOSED') return c.receipt_state;
+  return CLOSED_RECEIPT_STATUSES.includes(c?.status ?? '') ? 'CLOSED' : 'OPEN';
+}
 
 export type ComplaintLinkedRefund = {
   id: number | string;

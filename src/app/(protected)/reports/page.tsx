@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FileBarChart, Download, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/app/providers';
-import { getRoleFromToken } from '@/lib/api';
+import { ApiError, getRoleFromToken } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { Pagination } from '@/components/pagination';
 import {
@@ -16,6 +16,9 @@ import {
   formatReportStatus,
   totalRowCount,
   formatFileSize,
+  allowedReportTypes,
+  canReadReports,
+  canGenerateReports,
   REPORT_TYPE_LABELS,
   REPORT_STATUS_LABELS,
   REPORT_STATUS_CLASSES,
@@ -24,14 +27,8 @@ import {
   type ReportFormat,
 } from '@/lib/reports';
 
-// ── Access roles ──────────────────────────────────────────────────────────────
-const CAN_VIEW = new Set(['SystemAdmin', 'Director', 'ComplianceLead', 'Auditor']);
-const CAN_GENERATE = new Set(['SystemAdmin', 'Director', 'ComplianceLead']);
-
 // CSV can only carry a single report type — ALL / KYC_KYB are multi-sheet (XLSX only).
 const CSV_BLOCKED = new Set<ReportType>(['ALL', 'KYC_KYB']);
-
-const REPORT_TYPE_OPTIONS: ReportType[] = ['ALL', 'KYC_KYB', 'LTKT', 'LTKM', 'TRANSFERS', 'COMPLAINTS'];
 
 // ── Date / format helpers ─────────────────────────────────────────────────────
 
@@ -61,10 +58,14 @@ function StatusBadge({ s }: { s?: string | null }) {
 export default function ReportCenterPage() {
   const { token } = useAuth();
   const role = getRoleFromToken(token);
-  const canGenerate = CAN_GENERATE.has(role ?? '');
+  const canView = canReadReports(role);
+  const canGenerate = canGenerateReports(role);
+  // Divisi non-compliance hanya melihat jenis report miliknya sendiri, jadi
+  // dropdown-nya bisa berisi satu opsi saja.
+  const reportTypeOptions = allowedReportTypes(role);
 
   // Generate form state
-  const [reportType, setReportType] = useState<ReportType>('ALL');
+  const [reportType, setReportType] = useState<ReportType>(reportTypeOptions[0] ?? 'ALL');
   const [format, setFormat] = useState<ReportFormat>('XLSX');
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
@@ -103,15 +104,19 @@ export default function ReportCenterPage() {
       setReports(res.data);
       setTotal(res.total);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Gagal memuat daftar report.');
+      setError(
+        e instanceof ApiError && e.status === 403
+          ? 'Anda tidak memiliki akses ke jenis report ini.'
+          : e instanceof Error ? e.message : 'Gagal memuat daftar report.',
+      );
     } finally {
       setLoading(false);
     }
   }, [fReportType, fStatus, fDateFrom, fDateTo, page, limit]);
 
   useEffect(() => {
-    if (token && CAN_VIEW.has(role ?? '')) load();
-  }, [token, role, load]);
+    if (token && canView) load();
+  }, [token, canView, load]);
 
   // Poll a freshly generated report until it settles, then refresh the list.
   const pollNewReport = useCallback(
@@ -199,7 +204,7 @@ export default function ReportCenterPage() {
   const csvDisabled = CSV_BLOCKED.has(reportType);
 
   // ── Access guard ────────────────────────────────────────────────────────────
-  if (!CAN_VIEW.has(role ?? '')) {
+  if (!canView) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
         Anda tidak memiliki akses ke halaman Report Center.
@@ -226,8 +231,9 @@ export default function ReportCenterPage() {
           <h2 className="mb-3 text-base font-semibold">Generate Report</h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-600">Jenis Report</label>
+              <label htmlFor="generate-report-type" className="text-xs font-medium text-slate-600">Jenis Report</label>
               <select
+                id="generate-report-type"
                 value={reportType}
                 onChange={(e) => {
                   const t = e.target.value as ReportType;
@@ -236,7 +242,7 @@ export default function ReportCenterPage() {
                 }}
                 className="rounded-md border bg-white px-2 py-1.5 text-sm"
               >
-                {REPORT_TYPE_OPTIONS.map((t) => (
+                {reportTypeOptions.map((t) => (
                   <option key={t} value={t}>{REPORT_TYPE_LABELS[t]}</option>
                 ))}
               </select>
@@ -289,7 +295,7 @@ export default function ReportCenterPage() {
         </div>
       ) : (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          Auditor hanya dapat melihat dan mengunduh report yang sudah dibuat.
+          Anda hanya dapat melihat dan mengunduh report yang sudah dibuat.
         </div>
       )}
 
@@ -298,14 +304,15 @@ export default function ReportCenterPage() {
         {/* Filters */}
         <div className="flex flex-wrap items-end gap-3 border-b p-4">
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-slate-600">Jenis Report</label>
+            <label htmlFor="filter-report-type" className="text-xs font-medium text-slate-600">Jenis Report</label>
             <select
+              id="filter-report-type"
               value={fReportType}
               onChange={(e) => { setFReportType(e.target.value); setPage(1); }}
               className="rounded-md border bg-white px-2 py-1.5 text-sm"
             >
               <option value="">Semua</option>
-              {REPORT_TYPE_OPTIONS.map((t) => (
+              {reportTypeOptions.map((t) => (
                 <option key={t} value={t}>{REPORT_TYPE_LABELS[t]}</option>
               ))}
             </select>

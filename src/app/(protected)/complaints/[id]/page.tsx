@@ -8,6 +8,7 @@ import { getRoleFromToken } from '@/lib/api';
 import { formatCif } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { formatDateTime, formatMonitoringAmount } from '@/lib/monitoring';
+import { canViewTransfers } from '@/lib/transfers';
 import {
   refundStatusLabel,
   refundStatusBadgeClass,
@@ -243,6 +244,17 @@ export default function ComplaintDetailPage() {
 
   const c = complaint;
   const readOnly = isComplaintReadOnly(role, c);
+  // Ringkasan di bawah datang dari respons detail pengaduan, bukan dari
+  // /transfers/:id — ComplaintHandling memang ditolak 403 di rute itu, jadi
+  // tautannya pun hanya muncul untuk role yang benar-benar bisa membukanya.
+  const canOpenTransfer = canViewTransfers(role);
+  const linkedCustomer = c.linked_customer;
+  const linkedTransfer = c.linked_transfer;
+  const transferRef =
+    linkedTransfer?.partner_reference_no ??
+    c.transaction_partner_reference_no ??
+    c.transaction_reference;
+  const transferId = linkedTransfer?.transfer_id ?? c.transfer_id;
 
   return (
     <div className="space-y-5">
@@ -289,12 +301,14 @@ export default function ComplaintDetailPage() {
           <Field
             label="Transaksi / Transfer"
             value={
-              c.transfer_id ? (
-                <Link href={`/transfers/${c.transfer_id}`} className="font-mono text-kesh-700 hover:underline break-all">
-                  {c.transaction_reference ?? `#${c.transfer_id}`}
-                </Link>
-              ) : c.transaction_reference ? (
-                <span className="font-mono break-all">{c.transaction_reference}</span>
+              transferRef ? (
+                canOpenTransfer && transferId ? (
+                  <Link href={`/transfers/${transferId}`} className="font-mono text-kesh-700 hover:underline break-all">
+                    {transferRef}
+                  </Link>
+                ) : (
+                  <span className="font-mono break-all">{transferRef}</span>
+                )
               ) : undefined
             }
           />
@@ -307,6 +321,88 @@ export default function ComplaintDetailPage() {
           {c.closed_at && <Field label="Tanggal Ditutup" value={formatDateTime(c.closed_at)} />}
         </div>
         <Notes label="Penjelasan Pengaduan" value={c.complaint_notes} />
+      </Section>
+
+      {/* 1b. Pengguna jasa tertaut — ringkasan ikut di respons detail, jadi role
+              yang tidak boleh membuka /users tetap melihat datanya di sini. */}
+      <Section title="Data Pengguna Jasa">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Field label="Nama Pengguna Jasa" value={linkedCustomer?.customer_name ?? c.customer_name} />
+          <Field
+            label="CIF"
+            value={<span className="font-mono">{formatCif(linkedCustomer?.cif_no ?? c.customer_cif_no)}</span>}
+          />
+          <Field label="Tipe Pengguna Jasa" value={linkedCustomer?.customer_type ?? c.customer_type} />
+          <Field label="Status Pengguna Jasa" value={linkedCustomer?.customer_status} />
+          <Field label="Tingkat Risiko" value={linkedCustomer?.risk_level} />
+          <Field label="Kontak" value={linkedCustomer?.contact ?? c.customer_contact} />
+          {/* Identitas teknis sekunder — bukan ID numerik internal. */}
+          <Field
+            label="Public ID"
+            value={
+              linkedCustomer?.application_public_id ? (
+                <span className="font-mono text-xs break-all">{linkedCustomer.application_public_id}</span>
+              ) : undefined
+            }
+          />
+        </div>
+      </Section>
+
+      {/* 1c. Transaksi tertaut — sama, ringkasan datang dari detail pengaduan. */}
+      <Section title="Data Transaksi Terkait">
+        {transferRef ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Field
+              label="No. Referensi Transaksi"
+              value={
+                canOpenTransfer && transferId ? (
+                  <Link href={`/transfers/${transferId}`} className="font-mono text-kesh-700 hover:underline break-all">
+                    {transferRef}
+                  </Link>
+                ) : (
+                  <span className="font-mono break-all">{transferRef}</span>
+                )
+              }
+            />
+            <Field
+              label="Nominal"
+              value={
+                (linkedTransfer?.amount ?? c.transaction_amount) != null
+                  ? formatMonitoringAmount(linkedTransfer?.amount ?? c.transaction_amount)
+                  : undefined
+              }
+            />
+            <Field
+              label="Tanggal Transaksi"
+              value={
+                (linkedTransfer?.transaction_date ?? c.transaction_date)
+                  ? formatDateTime(linkedTransfer?.transaction_date ?? c.transaction_date)
+                  : undefined
+              }
+            />
+            <Field label="Status Transaksi" value={linkedTransfer?.status ?? c.transaction_status} />
+            <Field label="Nama Penerima" value={linkedTransfer?.beneficiary_account_name} />
+            <Field
+              label="Rekening Penerima"
+              value={
+                linkedTransfer?.beneficiary_account_number ? (
+                  <span className="font-mono break-all">{linkedTransfer.beneficiary_account_number}</span>
+                ) : undefined
+              }
+            />
+            <Field label="Bank Penerima" value={linkedTransfer?.beneficiary_bank_name} />
+            <Field
+              label="Public ID"
+              value={
+                linkedTransfer?.transfer_public_id ? (
+                  <span className="font-mono text-xs break-all">{linkedTransfer.transfer_public_id}</span>
+                ) : undefined
+              }
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Pengaduan ini tidak tertaut ke transaksi transfer.</p>
+        )}
       </Section>
 
       {/* 2. Verifikasi data */}

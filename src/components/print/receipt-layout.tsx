@@ -61,6 +61,28 @@ export function ReceiptRow({
   );
 }
 
+/**
+ * Two signature boxes side by side. Each column is half the grid, so the pair
+ * spans exactly RECEIPT_COLS and never widens the paper — the labels below must
+ * therefore fit HALF_COLS characters.
+ */
+const HALF_COLS = Math.floor(RECEIPT_COLS / 2);
+
+export function ReceiptSignatures({ left, right }: { left: string; right: string }) {
+  return (
+    <div className="mt-[1em] flex" data-receipt-signatures>
+      {[left, right].map((label) => (
+        <div key={label} className="min-w-0" style={{ width: `${HALF_COLS}ch` }}>
+          {/* Room to actually sign, then the line to sign on. */}
+          <div className="h-[3em]" />
+          <div>{'-'.repeat(HALF_COLS - 2)}</div>
+          <div className="break-words">{label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ReceiptSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>

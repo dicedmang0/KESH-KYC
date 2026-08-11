@@ -62,11 +62,13 @@ export default function Sidebar() {
     SystemAdmin:         ['/dashboard', '/users', '/kyc', '/data-reviews', '/transfers', '/complaints', '/statement-refunds', '/watchlist', '/monitoring', '/reports', '/settings'],
     Director:            ['/dashboard', '/users', '/kyc', '/data-reviews', '/transfers', '/complaints', '/statement-refunds', '/watchlist', '/monitoring', '/reports', '/settings'],
     ComplianceLead:      ['/dashboard', '/kyc', '/data-reviews', '/transfers', '/complaints', '/statement-refunds', '/watchlist', '/monitoring', '/reports'],
-    OperationSupervisor: ['/dashboard', '/kyc', '/transfers', '/complaints'],
-    ComplaintHandling:   ['/dashboard', '/complaints'],
+    // Report Center dibagi per divisi — role di bawah hanya melihat jenis
+    // report miliknya sendiri (lihat allowedReportTypes di lib/reports.ts).
+    OperationSupervisor: ['/dashboard', '/kyc', '/transfers', '/complaints', '/reports'],
+    ComplaintHandling:   ['/dashboard', '/complaints', '/reports'],
     FrontDesk:           ['/dashboard', '/users', '/kyc', '/data-reviews', '/transfers', '/watchlist'],
-    FinanceStaff:        ['/dashboard', '/users', '/transfers', '/complaints', '/statement-refunds'],
-    FinanceManager:      ['/dashboard', '/users', '/transfers', '/complaints', '/statement-refunds'],
+    FinanceStaff:        ['/dashboard', '/users', '/transfers', '/complaints', '/statement-refunds', '/reports'],
+    FinanceManager:      ['/dashboard', '/users', '/transfers', '/complaints', '/statement-refunds', '/reports'],
     Auditor:             ['/dashboard', '/kyc', '/data-reviews', '/complaints', '/statement-refunds', '/monitoring', '/reports'],
     ComplianceStaff:     ['/dashboard', '/kyc', '/complaints', '/watchlist', '/monitoring'],
   };

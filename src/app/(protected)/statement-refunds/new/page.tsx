@@ -216,11 +216,12 @@ export default function NewStatementRefundPage() {
               id="original-transfer-reference-no"
               value={transferRefNo}
               onChange={(e) => setTransferRefNo(e.target.value)}
-              placeholder="KESH-TRF-20260729-E7E4465A8616D73B"
+              placeholder="TRF-A8K3P9Q2"
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono outline-none focus:border-kesh-700"
             />
             <p className="mt-1 text-xs text-slate-400">
-              Gunakan nomor referensi yang tampil pada detail transfer, contoh: KESH-TRF-…
+              Gunakan nomor referensi yang tampil pada detail transfer, contoh: TRF-A8K3P9Q2.
+              Referensi lama yang panjang (KESH-TRF-…) tetap diterima.
               Boleh dikosongkan — refund dapat dicocokkan belakangan lewat aksi Match.
             </p>
           </div>
@@ -232,7 +233,7 @@ export default function NewStatementRefundPage() {
               id="complaint-no"
               value={complaintNo}
               onChange={(e) => setComplaintNo(e.target.value)}
-              placeholder="KESH-CMP-20260731-004841"
+              placeholder="CMP-M4X7B2D9"
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono outline-none focus:border-kesh-700"
             />
             <p className="mt-1 text-xs text-slate-400">

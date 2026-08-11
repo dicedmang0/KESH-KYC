@@ -28,14 +28,16 @@ export type StatementRefundListItem = {
   public_id?: string | null;
   refund_no: string;
   complaint_id: number | string | null;
-  // Nomor pengaduan (KESH-CMP-…) — identitas yang dipakai user; complaint_id
+  // Nomor pengaduan (CMP-XXXXXXXX; format lama KESH-CMP-… tetap ada) —
+  // identitas yang dipakai user; complaint_id
   // hanya penyimpanan internal dan tidak pernah jadi tampilan utama.
   complaint_no: string | null;
   complaint_status: string | null;
   complaint_customer_name: string | null;
   original_transfer_id: number | string | null;
   transfer_reference_no: string | null;
-  // Nomor referensi partner transaksi awal (KESH-TRF-…) — identitas yang
+  // Nomor referensi partner transaksi awal (TRF-XXXXXXXX; format lama
+  // KESH-TRF-… tetap ada) — identitas yang
   // dipakai user, sementara original_transfer_id hanya ID internal.
   original_transfer_reference_no: string | null;
   original_transfer_amount: string | number | null;

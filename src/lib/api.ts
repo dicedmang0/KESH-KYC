@@ -29,6 +29,18 @@ export type ApiFetchOptions = Omit<RequestInit, "body"> & {
   body?: BodyInit | Record<string, unknown> | unknown[] | null;
 };
 
+/**
+ * Error dari apiFetch. Tetap `Error` dengan pesan yang sama seperti dulu —
+ * `status` hanya tambahan, supaya caller bisa membedakan 403 (akses ditolak)
+ * dari kegagalan lain tanpa mencocokkan teks pesan.
+ */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 function isJsonObjectBody(body: unknown): boolean {
   if (!body) return false;
   if (typeof body === "string") return false;
@@ -84,7 +96,7 @@ export async function apiFetch<T>(
         if (t) msg = t;
       }
     } catch {}
-    throw new Error(msg);
+    throw new ApiError(msg, res.status);
   }
 
   // handle empty / non-json response

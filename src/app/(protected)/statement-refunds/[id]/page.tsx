@@ -524,11 +524,12 @@ export default function StatementRefundDetailPage() {
                 id="match-transfer-reference-no"
                 value={matchTransferRefNo}
                 onChange={(e) => setMatchTransferRefNo(e.target.value)}
-                placeholder="KESH-TRF-20260729-E7E4465A8616D73B"
+                placeholder="TRF-A8K3P9Q2"
                 className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono outline-none focus:border-kesh-700"
               />
               <p className="mt-1 text-xs text-slate-400">
-                Gunakan nomor referensi yang tampil pada detail transfer, contoh: KESH-TRF-…
+                Gunakan nomor referensi yang tampil pada detail transfer, contoh: TRF-A8K3P9Q2.
+                Referensi lama yang panjang (KESH-TRF-…) tetap diterima.
               </p>
             </div>
             <div>
@@ -539,7 +540,7 @@ export default function StatementRefundDetailPage() {
                 id="match-complaint-no"
                 value={matchComplaintNo}
                 onChange={(e) => setMatchComplaintNo(e.target.value)}
-                placeholder="KESH-CMP-20260731-004841"
+                placeholder="CMP-M4X7B2D9"
                 className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono outline-none focus:border-kesh-700"
               />
               <p className="mt-1 text-xs text-slate-400">
