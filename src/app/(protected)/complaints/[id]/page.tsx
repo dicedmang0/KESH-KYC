@@ -9,6 +9,7 @@ import { formatCif } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { formatDateTime, formatMonitoringAmount } from '@/lib/monitoring';
 import { canViewTransfers } from '@/lib/transfers';
+import ComplaintCustomerModal from '@/components/complaint-customer-modal';
 import {
   refundStatusLabel,
   refundStatusBadgeClass,
@@ -164,6 +165,7 @@ export default function ComplaintDetailPage() {
   const role = getRoleFromToken(token);
 
   const [complaint, setComplaint] = useState<Complaint | null>(null);
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
@@ -250,6 +252,10 @@ export default function ComplaintDetailPage() {
   const canOpenTransfer = canViewTransfers(role);
   const linkedCustomer = c.linked_customer;
   const linkedTransfer = c.linked_transfer;
+  // GET /applications/:id tidak dibatasi @Roles di backend, jadi semua role yang
+  // boleh membuka tiket ini juga boleh membaca data lengkap pengguna jasanya —
+  // termasuk ComplaintHandling yang tidak punya menu /users.
+  const customerApplicationId = linkedCustomer?.application_id ?? c.customer_application_id;
   const transferRef =
     linkedTransfer?.partner_reference_no ??
     c.transaction_partner_reference_no ??
@@ -327,7 +333,22 @@ export default function ComplaintDetailPage() {
               yang tidak boleh membuka /users tetap melihat datanya di sini. */}
       <Section title="Data Pengguna Jasa">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="Nama Pengguna Jasa" value={linkedCustomer?.customer_name ?? c.customer_name} />
+          <Field
+            label="Nama Pengguna Jasa"
+            value={
+              customerApplicationId ? (
+                <button
+                  type="button"
+                  onClick={() => setCustomerModalOpen(true)}
+                  className="text-left text-kesh-700 underline decoration-dotted underline-offset-2 hover:text-kesh-600"
+                >
+                  {linkedCustomer?.customer_name ?? c.customer_name ?? 'Lihat data pengguna jasa'}
+                </button>
+              ) : (
+                (linkedCustomer?.customer_name ?? c.customer_name)
+              )
+            }
+          />
           <Field
             label="CIF"
             value={<span className="font-mono">{formatCif(linkedCustomer?.cif_no ?? c.customer_cif_no)}</span>}
@@ -341,11 +362,26 @@ export default function ComplaintDetailPage() {
             label="Public ID"
             value={
               linkedCustomer?.application_public_id ? (
-                <span className="font-mono text-xs break-all">{linkedCustomer.application_public_id}</span>
+                customerApplicationId ? (
+                  <button
+                    type="button"
+                    onClick={() => setCustomerModalOpen(true)}
+                    className="text-left font-mono text-xs break-all text-kesh-700 underline decoration-dotted underline-offset-2 hover:text-kesh-600"
+                  >
+                    {linkedCustomer.application_public_id}
+                  </button>
+                ) : (
+                  <span className="font-mono text-xs break-all">{linkedCustomer.application_public_id}</span>
+                )
               ) : undefined
             }
           />
         </div>
+        {customerApplicationId && (
+          <p className="text-xs text-slate-400">
+            Klik nama atau Public ID untuk melihat data lengkap pengguna jasa.
+          </p>
+        )}
       </Section>
 
       {/* 1c. Transaksi tertaut — sama, ringkasan datang dari detail pengaduan. */}
@@ -656,6 +692,13 @@ export default function ComplaintDetailPage() {
             ? 'Pengaduan sudah ditutup — halaman ini hanya dapat dibaca.'
             : 'Anda memiliki akses baca saja pada pengaduan ini.'}
         </div>
+      )}
+
+      {customerModalOpen && customerApplicationId && (
+        <ComplaintCustomerModal
+          applicationId={customerApplicationId}
+          onClose={() => setCustomerModalOpen(false)}
+        />
       )}
     </div>
   );

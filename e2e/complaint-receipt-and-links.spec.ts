@@ -184,6 +184,36 @@ test.describe('Complaint receipt state & linked summaries', () => {
     expect(forbidden.status).toBe(403);
   });
 
+  test('ComplaintHandling opens full customer data from the complaint', async ({ page }) => {
+    test.skip(!openComplaint, 'no open complaint with a complaint_no exists locally');
+
+    await login(page, complaintHandling.email, complaintHandling.password);
+    await page.goto(`/complaints/${openComplaint!.id}`);
+
+    const customerCard = card(page, 'Data Pengguna Jasa');
+    // The detail call must be the one ComplaintHandling is actually allowed to
+    // make — /applications/:id carries no @Roles, unlike /transfers/:id.
+    const detailCall = page.waitForResponse(
+      (r) => /\/applications\/\d+$/.test(new URL(r.url()).pathname) && r.request().method() === 'GET',
+    );
+    await customerCard.getByRole('button').first().click();
+    const detailRes = await detailCall;
+    expect(detailRes.status(), await detailRes.text().catch(() => '')).toBe(200);
+
+    const modal = page.getByRole('dialog', { name: 'Data Pengguna Jasa' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByText('Memuat data pengguna jasa…')).toHaveCount(0);
+    await expect(modal).toContainText('Identitas Pengajuan');
+    await expect(modal).toContainText('Alamat');
+    // Real content, not an empty shell of em dashes.
+    const detail = await detailRes.json();
+    const name = detail.person?.full_name ?? detail.business?.legal_name;
+    if (name) await expect(modal).toContainText(String(name));
+
+    await modal.getByRole('button', { name: 'Tutup' }).click();
+    await expect(modal).toHaveCount(0);
+  });
+
   test('a role that may open transfers still gets the link', async ({ page }) => {
     test.skip(!openComplaint?.transfer_id, 'no open complaint linked to a transfer exists locally');
 
