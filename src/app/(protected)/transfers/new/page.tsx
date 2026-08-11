@@ -75,7 +75,6 @@ export default function NewTransferPage() {
     beneficiary_customer_type: '',
     transfer_method: 'BANK_TRANSFER',
     transfer_channel: 'MANUAL',
-    transaction_date: '',
     requested_execution_date: '',
     additional_info: '',
   });
@@ -241,7 +240,6 @@ export default function NewTransferPage() {
         beneficiary_customer_type: clean(meta.beneficiary_customer_type),
         transfer_method: clean(meta.transfer_method),
         transfer_channel: clean(meta.transfer_channel),
-        transaction_date: clean(meta.transaction_date),
         requested_execution_date: clean(meta.requested_execution_date),
         additional_info: additionalInfo,
       };
@@ -628,15 +626,6 @@ export default function NewTransferPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Tanggal Transaksi</label>
-                <input
-                  type="date"
-                  className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
-                  value={meta.transaction_date}
-                  onChange={(e) => setMeta((s) => ({ ...s, transaction_date: e.target.value }))}
-                />
-              </div>
-              <div>
                 <label className="text-xs text-muted-foreground">Tanggal Eksekusi Diminta</label>
                 <input
                   type="date"
@@ -661,13 +650,18 @@ export default function NewTransferPage() {
         )}
       </div>
 
-      <button
-        onClick={submit}
-        disabled={loading || !formValid}
-        className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-60 transition-colors"
-      >
-        {loading ? 'Menyimpan…' : 'Buat Draft'}
-      </button>
+      <div className="space-y-2">
+        <p className="text-xs text-muted-foreground">
+          Tanggal transaksi akan dibuat otomatis saat transaksi diajukan.
+        </p>
+        <button
+          onClick={submit}
+          disabled={loading || !formValid}
+          className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-60 transition-colors"
+        >
+          {loading ? 'Menyimpan…' : 'Buat Draft'}
+        </button>
+      </div>
     </div>
   );
 }

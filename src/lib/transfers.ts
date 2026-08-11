@@ -205,6 +205,8 @@ export type TransferListRow = {
   batch_no?: string | null;
   bulk_reference_no?: string | null;
   created_at: string;
+  /** Diisi backend (waktu server) saat transfer diajukan — NULL selama DRAFT. */
+  transaction_date?: string | null;
   submitted_at: string | null;
   approved_at: string | null;
   completed_at: string | null;
@@ -246,7 +248,6 @@ export type TransferDetail = TransferListRow & {
 
   transfer_method?: string | null;
   transfer_channel?: string | null;
-  transaction_date?: string | null;
   requested_execution_date?: string | null;
 
   created_by?: number | string | null;
@@ -334,7 +335,8 @@ export type CreateTransferBody = {
   beneficiary_customer_type?: string;
   transfer_method?: string;
   transfer_channel?: string;
-  transaction_date?: string;
+  // `transaction_date` sengaja tidak ada di sini: backend yang mengisinya dengan
+  // waktu server saat pengajuan. FE tidak pernah mengirim tanggal transaksi.
   requested_execution_date?: string;
   additional_info?: Record<string, unknown>;
 };

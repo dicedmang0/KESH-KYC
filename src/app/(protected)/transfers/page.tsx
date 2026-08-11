@@ -235,6 +235,10 @@ export default function TransfersPage() {
                   <div className="col-span-1 font-medium whitespace-nowrap text-right">{formatTransferAmount(r)}</div>
                   <div className="col-span-1 whitespace-nowrap">
                     <TransferStatusBadge status={r.status} />
+                    {/* Tanggal transaksi dibuat backend saat diajukan — DRAFT masih "—". */}
+                    <div className="mt-1 text-xs text-muted-foreground" data-testid="transfer-transaction-date">
+                      Tgl. {r.transaction_date ? new Date(r.transaction_date).toLocaleDateString('id-ID') : '—'}
+                    </div>
                     {r.status === 'PENDING_COMPLIANCE_REVIEW' && (
                       <div className="mt-1 inline-flex items-center rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-amber-200">
                         Compliance Review

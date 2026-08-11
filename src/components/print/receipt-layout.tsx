@@ -94,8 +94,11 @@ export default function ReceiptLayout({
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setPrintedAt(new Date().toLocaleString('id-ID')), []);
 
+  // Vertical padding only. `.receipt` is a border-box sized to exactly
+  // --receipt-cols characters, so horizontal padding here would come *out* of
+  // the character grid and every full-width rule would then overflow it.
   return (
-    <div className="receipt mx-auto p-2 print:p-0">
+    <div className="receipt mx-auto py-2 print:py-0">
       <div className="mb-4 flex gap-2 print:hidden">
         <button
           onClick={() => window.print()}

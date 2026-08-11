@@ -241,6 +241,16 @@ test.describe('Transfer list split + Bulk Excel import — FE-to-BE', () => {
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe('kesh-bulk-transfer-template.xlsx');
 
+    // Tanggal transaksi diisi backend saat pengajuan — template tidak boleh memintanya.
+    const templatePath = path.join(os.tmpdir(), `kesh-template-${ts}.xlsx`);
+    await download.saveAs(templatePath);
+    const templateHeaders = XLSX.utils.sheet_to_json<unknown[]>(
+      XLSX.readFile(templatePath).Sheets['Bulk Transfer'],
+      { header: 1, defval: '' },
+    )[7];
+    expect(templateHeaders?.join(',')).not.toContain('transaction_date');
+    fs.unlinkSync(templatePath);
+
     // ── 5. Import valid XLSX fills the bulk rows ────────────────────────────
     // No. Referensi Bulk is left empty on the FE — B4 in the fixture should prefill it.
     const fixturePath = buildImportFixtureFile(bulkReferenceNo, [

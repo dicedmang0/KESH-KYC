@@ -705,6 +705,11 @@ export default function TransferDetailPage() {
               <Field label="Metode Transfer" value={row.transfer_method} />
               <Field label="Kanal Transfer" value={row.transfer_channel} />
               <Field label="Dibuat Pada" value={formatDateTime(row.created_at)} />
+              {/* Diisi backend saat pengajuan — DRAFT tetap kosong ("-"). */}
+              <Field
+                label="Tanggal Transaksi"
+                value={row.transaction_date ? formatDateTime(row.transaction_date) : undefined}
+              />
               {row.batch_no && <Field label="Batch No" value={row.batch_no} />}
               {row.bulk_reference_no && <Field label="No. Referensi Bulk" value={row.bulk_reference_no} />}
             </div>

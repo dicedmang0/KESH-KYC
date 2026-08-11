@@ -163,8 +163,16 @@
   font-family: Consolas, ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", monospace;
   font-variant-ligatures: none;
   letter-spacing: 0;
+  /* The width below is the grid itself, so it must be the border box and must
+     stay free of horizontal padding — a padded grid pushes every full-width
+     rule past its own content box. Only vertical padding may be added. */
+  box-sizing: border-box;
   /* On screen: same grid, at a size a human can proofread. */
   width: calc(var(--receipt-cols) * 1ch);
+  /* Below --receipt-cols characters of viewport the grid cannot hold; wrapping
+     the rules onto a second line beats clipping them off the paper. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-size: 15px;
   line-height: 1.27;
   color: #000;
