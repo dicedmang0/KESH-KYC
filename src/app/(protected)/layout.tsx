@@ -1,5 +1,6 @@
 // src/app/(protected)/layout.tsx
 import Sidebar from '@/components/sidebar';
+import TopbarNotifications from '@/components/topbar-notifications';
 
 export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,6 +16,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
               <p className="text-xs text-slate-400 leading-tight">Portal Kepatuhan Internal</p>
             </div>
             <div className="flex items-center gap-3 ml-auto">
+              <TopbarNotifications />
               <div className="h-8 w-8 rounded-full bg-kesh-700 flex items-center justify-center text-xs font-bold text-white shadow-sm select-none">
                 K
               </div>
