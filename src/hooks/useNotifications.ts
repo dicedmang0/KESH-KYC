@@ -11,6 +11,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from '@/lib/notifications';
+import { playNotificationSound } from '@/lib/notification-sound';
 
 export function useNotifications() {
   const { token } = useAuth();
@@ -41,6 +42,7 @@ export function useNotifications() {
     socket.on('notification', (n: AppNotification) => {
       setItems((prev) => [n, ...prev].slice(0, 20));
       setUnreadCount((c) => c + 1);
+      playNotificationSound();
     });
     // Resync on every (re)connect — catches anything missed while offline
     // (network blip, laptop sleep) that the socket alone would silently drop.
