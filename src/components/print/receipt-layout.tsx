@@ -138,13 +138,13 @@ export default function ReceiptLayout({
 
       <header className="text-center">
         {/* eslint-disable-next-line @next/next/no-img-element -- print-only page, no next/image needed */}
-        <div className="d-flex">
+        <div style={{ display: 'flex'}}>
           <img
             src="https://res.cloudinary.com/doy2qixs5/image/upload/v1771388339/kesh/kesh-logo-transparent_ggvvrd.png"
             alt="KESH"
             className="mx-auto mb-[0.5em] h-[3em] w-auto max-w-full"
           />
-          <div className="d-flex flex-col items-center justify-flex-start text-center">
+          <div className="d-flex flex-col items-center justify-flex-start text-start">
             <div className="font-bold">KESH</div>
             <div>PT Radhana Solusi Indonesia</div>
           </div>
