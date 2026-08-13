@@ -137,6 +137,12 @@ export default function ReceiptLayout({
       </div>
 
       <header className="text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element -- print-only page, no next/image needed */}
+        <img
+          src="https://res.cloudinary.com/doy2qixs5/image/upload/v1771388339/kesh/kesh-logo-transparent_ggvvrd.png"
+          alt="KESH"
+          className="mx-auto mb-[0.5em] h-[3em] w-auto max-w-full"
+        />
         <div className="font-bold">KESH</div>
         <div>PT Radhana Solusi Indonesia</div>
         <Rule char="=" />
@@ -150,6 +156,11 @@ export default function ReceiptLayout({
 
       <Rule char="=" />
       <p className="break-words">{footerNote}</p>
+
+      <div className="mt-[0.5em] text-center">
+        <div>+62819-2886-2316</div>
+        <div>helpdesk@kesh.co.id</div>
+      </div>
 
       {/* Feeds a little paper clear of the cutter before the tear line. */}
       <div className="mt-[2em] text-center">{'- '.repeat(16).trim()}</div>
