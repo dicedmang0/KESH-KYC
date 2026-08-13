@@ -138,13 +138,17 @@ export default function ReceiptLayout({
 
       <header className="text-center">
         {/* eslint-disable-next-line @next/next/no-img-element -- print-only page, no next/image needed */}
-        <img
-          src="https://res.cloudinary.com/doy2qixs5/image/upload/v1771388339/kesh/kesh-logo-transparent_ggvvrd.png"
-          alt="KESH"
-          className="mx-auto mb-[0.5em] h-[3em] w-auto max-w-full"
-        />
-        <div className="font-bold">KESH</div>
-        <div>PT Radhana Solusi Indonesia</div>
+        <div className="d-flex">
+          <img
+            src="https://res.cloudinary.com/doy2qixs5/image/upload/v1771388339/kesh/kesh-logo-transparent_ggvvrd.png"
+            alt="KESH"
+            className="mx-auto mb-[0.5em] h-[3em] w-auto max-w-full"
+          />
+          <div className="d-flex flex-col items-center justify-flex-start text-center">
+            <div className="font-bold">KESH</div>
+            <div>PT Radhana Solusi Indonesia</div>
+          </div>
+        </div>
         <Rule char="=" />
         <h1 className="font-bold uppercase">{title}</h1>
         <div className="break-all">{documentNo || '-'}</div>
@@ -160,6 +164,7 @@ export default function ReceiptLayout({
       <div className="mt-[0.5em] text-center">
         <div>+62819-2886-2316</div>
         <div>helpdesk@kesh.co.id</div>
+        <div>www.kesh.co.id</div>
       </div>
 
       {/* Feeds a little paper clear of the cutter before the tear line. */}
