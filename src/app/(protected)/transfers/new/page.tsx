@@ -6,6 +6,7 @@ import {
   createTransfer,
   searchSenders,
   getTransferBanks,
+  getSourceOfFundsOptions,
   canCreateTransfer,
   BENEFICIARY_RELATIONSHIP_OPTIONS,
   FALLBACK_BANKS,
@@ -15,8 +16,10 @@ import {
   type CreateTransferBody,
   type SenderSearchItem,
   type TransferBank,
+  type RefItem,
 } from '@/lib/transfers';
-import { formatCif } from '@/lib/utils';
+import { formatCif, isLainnya } from '@/lib/utils';
+import LainnyaField from '@/components/lainnya-field';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/app/providers';
 import { useRouter } from 'next/navigation';
@@ -46,6 +49,10 @@ export default function NewTransferPage() {
   // ── Bank penerima dropdown ──────────────────────────────────────────────────
   const [banks, setBanks] = useState<TransferBank[]>(FALLBACK_BANKS);
   const [selectedBankCode, setSelectedBankCode] = useState('');
+
+  // ── Sumber dana dropdown (sama dengan KYC/KYB) ───────────────────────────────
+  const [sourceOfFundsOptions, setSourceOfFundsOptions] = useState<RefItem[]>([]);
+  const [sourceOfFundsOther, setSourceOfFundsOther] = useState('');
 
   const [form, setForm] = useState({
     amount: 10000,
@@ -83,6 +90,12 @@ export default function NewTransferPage() {
     getTransferBanks()
       .then((list) => { if (list && list.length) setBanks(list); })
       .catch(() => { /* keep FALLBACK_BANKS */ });
+  }, []);
+
+  useEffect(() => {
+    getSourceOfFundsOptions()
+      .then((list) => setSourceOfFundsOptions(list))
+      .catch(() => { /* dropdown just stays empty + free text fallback below */ });
   }, []);
 
   // Debounced sender search — only fires once a sender is not yet locked in.
@@ -193,6 +206,10 @@ export default function NewTransferPage() {
       setErr('Hubungan dengan Pengirim wajib dipilih.');
       return;
     }
+    if (isLainnya(form.source_of_funds) && !sourceOfFundsOther.trim()) {
+      setErr('Keterangan Sumber Dana Lainnya wajib diisi.');
+      return;
+    }
 
     // additional_info must be a valid JSON object if provided.
     let additionalInfo: Record<string, unknown> | undefined;
@@ -221,7 +238,7 @@ export default function NewTransferPage() {
         beneficiaryAccountNumber: form.beneficiaryAccountNumber.trim(),
         beneficiaryAccountName: form.beneficiaryAccountName.trim(),
         beneficiary_relationship_to_sender: form.beneficiary_relationship_to_sender.trim(),
-        source_of_funds: clean(form.source_of_funds),
+        source_of_funds: clean(isLainnya(form.source_of_funds) ? sourceOfFundsOther : form.source_of_funds),
         transaction_purpose: clean(form.transaction_purpose),
         description: clean(form.description),
         sender_application_id: Number(selectedSender.application_id),
@@ -465,12 +482,32 @@ export default function NewTransferPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground">Sumber Dana</label>
-            <input
-              className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+            <label className="text-xs text-muted-foreground" htmlFor="transfer-sof">Sumber Dana</label>
+            <select
+              id="transfer-sof"
+              className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white"
               value={form.source_of_funds}
-              onChange={(e) => setForm((s) => ({ ...s, source_of_funds: e.target.value }))}
-              placeholder="mis: gaji, hasil usaha"
+              onChange={(e) => {
+                const v = e.target.value;
+                setForm((s) => ({ ...s, source_of_funds: v }));
+                if (!isLainnya(v)) setSourceOfFundsOther('');
+              }}
+            >
+              <option value="">Pilih sumber dana…</option>
+              {sourceOfFundsOptions.map((o) => (
+                <option key={o.code} value={o.code}>{o.name}</option>
+              ))}
+              {form.source_of_funds && !sourceOfFundsOptions.find((o) => o.code === form.source_of_funds) && (
+                <option value={form.source_of_funds}>{form.source_of_funds}</option>
+              )}
+            </select>
+            <LainnyaField
+              when={form.source_of_funds}
+              value={sourceOfFundsOther}
+              onChange={setSourceOfFundsOther}
+              label="Keterangan Sumber Dana Lainnya"
+              labelClassName="text-xs text-muted-foreground"
+              inputClassName="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             />
           </div>
           <div>

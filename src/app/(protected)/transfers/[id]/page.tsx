@@ -38,12 +38,15 @@ import {
   canFinanceReviewTransfer,
   canApproveTransfer,
   canUpdateTransferResult,
+  getSourceOfFundsOptions,
   type TransferBank,
   type TransferDetail,
   type ComplianceReviewAction,
+  type RefItem,
 } from '@/lib/transfers';
 import { evaluateTransfer } from '@/lib/monitoring';
-import { formatCif } from '@/lib/utils';
+import { formatCif, isLainnya } from '@/lib/utils';
+import LainnyaField from '@/components/lainnya-field';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/app/providers';
 import { TransferStatusBadge, TransferResultBadge } from '@/components/transfer-badges';
@@ -170,6 +173,8 @@ export default function TransferDetailPage() {
 
   // FrontDesk edit form (DRAFT / returned transfers)
   const [banks, setBanks] = useState<TransferBank[]>(FALLBACK_BANKS);
+  const [sourceOfFundsOptions, setSourceOfFundsOptions] = useState<RefItem[]>([]);
+  const [sourceOfFundsOther, setSourceOfFundsOther] = useState('');
   const [editForm, setEditForm] = useState({
     amount: '',
     beneficiaryAccountName: '',
@@ -258,6 +263,12 @@ export default function TransferDetailPage() {
     getTransferBanks()
       .then((list) => { if (list && list.length) setBanks(list); })
       .catch(() => { /* keep FALLBACK_BANKS */ });
+  }, []);
+
+  useEffect(() => {
+    getSourceOfFundsOptions()
+      .then((list) => setSourceOfFundsOptions(list))
+      .catch(() => { /* dropdown just stays empty */ });
   }, []);
 
   function handleActionError(e: unknown) {
@@ -410,6 +421,7 @@ export default function TransferDetailPage() {
       transaction_purpose: row.transaction_purpose ?? '',
       description: row.description ?? '',
     });
+    setSourceOfFundsOther('');
     setActionErr('');
     setPanel(panel === 'edit' ? 'none' : 'edit');
   }
@@ -440,6 +452,10 @@ export default function TransferDetailPage() {
       setActionErr('Hubungan dengan pengirim wajib diisi.');
       return;
     }
+    if (isLainnya(f.source_of_funds) && !sourceOfFundsOther.trim()) {
+      setActionErr('Keterangan Sumber Dana Lainnya wajib diisi.');
+      return;
+    }
     const c = (v: string) => (v.trim() ? v.trim() : undefined);
     setActionLoading(true);
     setActionErr('');
@@ -453,7 +469,7 @@ export default function TransferDetailPage() {
         beneficiaryBankName: f.beneficiaryBankName.trim(),
         beneficiaryBankCode: c(f.beneficiaryBankCode),
         beneficiary_relationship_to_sender: f.beneficiary_relationship_to_sender.trim(),
-        source_of_funds: c(f.source_of_funds),
+        source_of_funds: c(isLainnya(f.source_of_funds) ? sourceOfFundsOther : f.source_of_funds),
         transaction_purpose: c(f.transaction_purpose),
         description: c(f.description),
       });
@@ -1290,11 +1306,32 @@ export default function TransferDetailPage() {
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground" htmlFor="edit-sof">Sumber Dana</label>
-                      <input
+                      <select
                         id="edit-sof"
                         className={inputCls}
                         value={editForm.source_of_funds}
-                        onChange={(e) => setEditForm((s) => ({ ...s, source_of_funds: e.target.value }))}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setEditForm((s) => ({ ...s, source_of_funds: v }));
+                          if (!isLainnya(v)) setSourceOfFundsOther('');
+                        }}
+                      >
+                        <option value="">— Pilih —</option>
+                        {sourceOfFundsOptions.map((o) => (
+                          <option key={o.code} value={o.code}>{o.name}</option>
+                        ))}
+                        {editForm.source_of_funds &&
+                          !sourceOfFundsOptions.find((o) => o.code === editForm.source_of_funds) && (
+                            <option value={editForm.source_of_funds}>{editForm.source_of_funds}</option>
+                          )}
+                      </select>
+                      <LainnyaField
+                        when={editForm.source_of_funds}
+                        value={sourceOfFundsOther}
+                        onChange={setSourceOfFundsOther}
+                        label="Keterangan Sumber Dana Lainnya"
+                        labelClassName="text-xs text-muted-foreground"
+                        inputClassName={inputCls}
                       />
                     </div>
                     <div>

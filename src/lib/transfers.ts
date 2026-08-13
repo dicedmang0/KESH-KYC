@@ -445,7 +445,27 @@ export async function getTransferBanks(): Promise<TransferBank[]> {
   return res.data ?? res.banks ?? [];
 }
 
-/** Fallback bank list used when GET /transfers/banks fails. */
+export type RefItem = { code: string; name: string };
+
+/**
+ * GET /references/rba/source-of-funds — same reference list the KYC/KYB
+ * "Sumber Dana" dropdown uses (src/app/(protected)/users/[id]/page.tsx).
+ * Transfers has no *_other companion column (source_of_funds is a single
+ * free-text field), so the "Lainnya" detail typed by the caller becomes the
+ * stored value directly instead of being kept alongside the dropdown code.
+ */
+export async function getSourceOfFundsOptions(): Promise<RefItem[]> {
+  const res = await apiFetch<RefItem[] | { data?: RefItem[] }>(`/references/rba/source-of-funds`);
+  if (Array.isArray(res)) return res;
+  return res.data ?? [];
+}
+
+/**
+ * Fallback bank list used only when GET /transfers/banks fails — kept short
+ * (major banks + a few digital ones) on purpose. The full catalog (BPD,
+ * bank asing, dst.) lives server-side in TransfersService.getBanks(); this
+ * is a degraded-mode subset, not a mirror to keep in sync.
+ */
 export const FALLBACK_BANKS: TransferBank[] = [
   { code: 'BCA', name: 'Bank Central Asia' },
   { code: 'MANDIRI', name: 'Bank Mandiri' },
@@ -457,9 +477,14 @@ export const FALLBACK_BANKS: TransferBank[] = [
   { code: 'BTN', name: 'Bank Tabungan Negara' },
   { code: 'BSI', name: 'Bank Syariah Indonesia' },
   { code: 'MAYBANK', name: 'Maybank Indonesia' },
-  { code: 'OCBC', name: 'OCBC Indonesia' },
+  { code: 'OCBC', name: 'OCBC NISP' },
   { code: 'PANIN', name: 'Panin Bank' },
   { code: 'NOBU', name: 'Bank Nobu' },
+  { code: 'JAGO', name: 'Bank Jago' },
+  { code: 'SEABANK', name: 'SeaBank Indonesia' },
+  { code: 'NEOBANK', name: 'Bank Neo Commerce (neobank)' },
+  { code: 'ALLO', name: 'Allo Bank Indonesia' },
+  { code: 'BLU_BCA', name: 'blu by BCA Digital' },
 ];
 
 function buildTransferQuery(params: Record<string, string | number | undefined | null>): string {
