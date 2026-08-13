@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/app/providers';
 import { getRoleFromToken } from '@/lib/api';
+import { useNotifications } from '@/hooks/useNotifications';
+import NotificationBell from '@/components/notification-bell';
 
 function cn(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(' ');
@@ -54,6 +56,7 @@ export default function Sidebar() {
   const [mounted, setMounted] = useState(false);
   const { token, logout } = useAuth();
   const role = getRoleFromToken(token);
+  const { items, unreadCount, markRead, markAllRead } = useNotifications();
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMounted(true); }, []);
@@ -87,13 +90,24 @@ export default function Sidebar() {
             </div>
             <span className="font-semibold text-white text-sm">KESH Admin</span>
           </div>
-          <button
-            aria-label="Toggle sidebar"
-            onClick={() => setOpen((v) => !v)}
-            className="p-2 rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-colors"
-          >
-            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+          <div className="flex items-center gap-1">
+            {token && (
+              <NotificationBell
+                items={items}
+                unreadCount={unreadCount}
+                onMarkRead={markRead}
+                onMarkAllRead={markAllRead}
+                dark
+              />
+            )}
+            <button
+              aria-label="Toggle sidebar"
+              onClick={() => setOpen((v) => !v)}
+              className="p-2 rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+            >
+              {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -116,14 +130,25 @@ export default function Sidebar() {
       >
         {/* Brand header */}
         <div className="px-4 py-5 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-kesh-700 flex items-center justify-center shrink-0 shadow-md ring-2 ring-white/10">
-              <span className="text-white font-bold text-sm select-none">K</span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-9 w-9 rounded-full bg-kesh-700 flex items-center justify-center shrink-0 shadow-md ring-2 ring-white/10">
+                <span className="text-white font-bold text-sm select-none">K</span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-white leading-tight">KESH Admin</p>
+                <p className="text-xs text-white/45 leading-tight">Portal KYC</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-bold text-white leading-tight">KESH Admin</p>
-              <p className="text-xs text-white/45 leading-tight">Portal KYC</p>
-            </div>
+            {token && (
+              <NotificationBell
+                items={items}
+                unreadCount={unreadCount}
+                onMarkRead={markRead}
+                onMarkAllRead={markAllRead}
+                dark
+              />
+            )}
           </div>
         </div>
 
