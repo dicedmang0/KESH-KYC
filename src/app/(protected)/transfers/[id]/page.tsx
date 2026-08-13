@@ -180,7 +180,6 @@ export default function TransferDetailPage() {
     source_of_funds: '',
     transaction_purpose: '',
     description: '',
-    requestedTransferAt: '',
   });
 
   // compliance review — FrontDesk submit modal
@@ -410,8 +409,6 @@ export default function TransferDetailPage() {
       source_of_funds: row.source_of_funds ?? '',
       transaction_purpose: row.transaction_purpose ?? '',
       description: row.description ?? '',
-      // date input needs YYYY-MM-DD
-      requestedTransferAt: (row.requested_transfer_at ?? '').slice(0, 10),
     });
     setActionErr('');
     setPanel(panel === 'edit' ? 'none' : 'edit');
@@ -459,7 +456,6 @@ export default function TransferDetailPage() {
         source_of_funds: c(f.source_of_funds),
         transaction_purpose: c(f.transaction_purpose),
         description: c(f.description),
-        requestedTransferAt: c(f.requestedTransferAt),
       });
       setPanel('none');
       toast.success('Perubahan transaksi tersimpan.');
@@ -1291,18 +1287,6 @@ export default function TransferDetailPage() {
                           <option key={o} value={o}>{o}</option>
                         ))}
                       </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground" htmlFor="edit-requested-at">
-                        Tanggal Transfer Diminta
-                      </label>
-                      <input
-                        id="edit-requested-at"
-                        type="date"
-                        className={inputCls}
-                        value={editForm.requestedTransferAt}
-                        onChange={(e) => setEditForm((s) => ({ ...s, requestedTransferAt: e.target.value }))}
-                      />
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground" htmlFor="edit-sof">Sumber Dana</label>

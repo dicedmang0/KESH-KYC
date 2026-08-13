@@ -58,7 +58,6 @@ export default function NewTransferPage() {
     source_of_funds: '',
     transaction_purpose: '',
     description: '',
-    requestedTransferAt: '',
   });
 
   const [acctError, setAcctError] = useState('');
@@ -225,7 +224,6 @@ export default function NewTransferPage() {
         source_of_funds: clean(form.source_of_funds),
         transaction_purpose: clean(form.transaction_purpose),
         description: clean(form.description),
-        requestedTransferAt: clean(form.requestedTransferAt),
         sender_application_id: Number(selectedSender.application_id),
 
         // SNAP / transfer metadata — only sent when filled
@@ -367,8 +365,8 @@ export default function NewTransferPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-1">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
             <label className="text-xs text-muted-foreground" htmlFor="transfer-amount">Nominal</label>
             <input
               id="transfer-amount"
@@ -387,7 +385,7 @@ export default function NewTransferPage() {
               </p>
             )}
           </div>
-          <div className="col-span-1">
+          <div>
             <label className="text-xs text-muted-foreground">Mata Uang</label>
             <input
               maxLength={3}
@@ -395,15 +393,6 @@ export default function NewTransferPage() {
               value={form.currency}
               onChange={(e) => setForm((s) => ({ ...s, currency: e.target.value.toUpperCase() }))}
               placeholder="IDR"
-            />
-          </div>
-          <div className="col-span-1">
-            <label className="text-xs text-muted-foreground">Tanggal Diminta (opsional)</label>
-            <input
-              type="date"
-              className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
-              value={form.requestedTransferAt}
-              onChange={(e) => setForm((s) => ({ ...s, requestedTransferAt: e.target.value }))}
             />
           </div>
         </div>

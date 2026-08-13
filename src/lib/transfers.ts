@@ -335,7 +335,6 @@ export type CreateTransferBody = {
   beneficiaryAccountNumber: string;
   beneficiaryAccountName: string;
   description?: string;
-  requestedTransferAt?: string;
   sender_application_id: number;
 
   // Transfer metadata (migration 0030)
