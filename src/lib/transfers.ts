@@ -1,7 +1,7 @@
 // src/lib/transfers.ts
 // Transfer Recording v2 (SNAP-ready) types + API helpers.
 
-import { apiFetch } from "./api";
+import { API, ApiError, apiFetch, getToken } from "./api";
 
 // ── Transfer permission helpers ───────────────────────────────────────────────
 // Workflow: FrontDesk creates/submits → OperationSupervisor reviews → FinanceStaff reviews →
@@ -542,11 +542,19 @@ export type BulkTransferItem = {
   transaction_purpose?: string;
   source_of_funds?: string;
   description?: string;
+  /**
+   * No. HP penerima — kolom "Ben Mobile Number" pada file BRI Qlola, wajib
+   * untuk BI-Fast. Baru pada bulk; transfer lama boleh kosong di DB.
+   */
+  beneficiary_mobile_number: string;
 };
 
 export type CreateBulkTransferBody = {
   sender_application_id: number;
-  bulk_reference_no: string;
+  /** Rekening debit BRI (10-30 karakter) — sama untuk seluruh batch. */
+  qlola_debit_account: string;
+  /** Nama pemilik rekening debit (maks 60) — kolom "Sender Name" Qlola. */
+  qlola_sender_name: string;
   items: BulkTransferItem[];
 };
 
@@ -558,8 +566,6 @@ export type BulkTransferResult = {
   total_amount: number;
   transfers: TransferDetail[];
 };
-
-export const BULK_REFERENCE_NO_MAX_LENGTH = 150;
 
 export const BULK_TRANSFER_MAX_ROWS = 20;
 
@@ -586,6 +592,8 @@ export type BulkBatchListRow = {
   created_at: string;
   updated_at?: string | null;
   status_summary?: BulkBatchStatusSummary | string | null;
+  qlola_debit_account?: string | null;
+  qlola_sender_name?: string | null;
 };
 
 export type BulkBatchListResponse = {
@@ -790,4 +798,114 @@ export function formatDateTime(v?: string | null): string {
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return v;
   return d.toLocaleString("id-ID");
+}
+
+// ── Export BRI Qlola (BI-Fast) ───────────────────────────────────────────────
+// Backend yang memiliki mapping field & aturan kelayakan; FE hanya mengunduh
+// dan menampilkan hasilnya. Jangan merakit XLSX di sisi klien.
+
+/**
+ * Dua tujuan export dengan populasi baris berbeda:
+ *   FINAL  - transfer COMPLETED + result SUCCESS, siap dieksekusi di Qlola
+ *   REVIEW - transfer PENDING_FINANCE_STAFF_REVIEW, dipakai Finance Staff untuk
+ *            mengecek data rekening/bank sebelum menyetujui
+ * Keduanya tidak pernah digabung dalam satu file.
+ */
+export type QlolaPurpose = "FINAL" | "REVIEW";
+
+/** Baris yang layak untuk export REVIEW. */
+export function isQlolaReviewRow(t: { status?: string | null }): boolean {
+  return t.status === "PENDING_FINANCE_STAFF_REVIEW";
+}
+
+/**
+ * Baris yang layak untuk export FINAL. `result` ikut dicek: status COMPLETED
+ * dengan result FAILED bukan transaksi yang boleh dieksekusi ulang di Qlola.
+ */
+export function isQlolaFinalRow(t: { status?: string | null; result?: string | null }): boolean {
+  return t.status === "COMPLETED" && t.result === "SUCCESS";
+}
+
+/** Satu transfer yang belum siap diekspor, beserta field yang belum lengkap. */
+export type QlolaRowError = {
+  reference: string;
+  /** Bank tujuan — penyebab tersering adalah BIC yang tidak tersedia. */
+  bank?: string | null;
+  missing: string[];
+};
+
+/** Bentuk error 400 dari endpoint export. */
+export type QlolaExportError = {
+  message: string;
+  purpose?: QlolaPurpose;
+  eligible_count: number;
+  total_count: number;
+  errors: QlolaRowError[];
+};
+
+/** Role yang boleh mengunduh file Qlola — cerminan @Roles di backend. */
+export const QLOLA_EXPORT_ROLES = [
+  "FinanceStaff",
+  "FinanceManager",
+  "SystemAdmin",
+  "Director",
+];
+
+export function canExportQlola(role?: string | null): boolean {
+  return !!role && QLOLA_EXPORT_ROLES.includes(role);
+}
+
+/**
+ * Unduh file BRI Qlola untuk satu batch.
+ *
+ * apiFetch tidak dipakai di sini karena dua hal: response-nya biner (bukan
+ * JSON) dan body error 400-nya terstruktur (daftar field kurang per transfer)
+ * — apiFetch memipihkan keduanya.
+ *
+ * Throw `QlolaExportError` untuk 400 dengan detail, `ApiError` untuk sisanya.
+ */
+export async function downloadQlolaExport(
+  batchId: number | string,
+  purpose: QlolaPurpose = "FINAL",
+): Promise<{ blob: Blob; fileName: string; eligibleCount: number; totalCount: number }> {
+  const token = getToken();
+  const res = await fetch(
+    `${API}/transfers/bulk-batches/${batchId}/exports/bri-qlola?purpose=${purpose}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: "no-store",
+    },
+  );
+
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const body = await res.json().catch(() => null);
+      if (body && Array.isArray(body.errors)) throw body as QlolaExportError;
+      throw new ApiError(body?.message || `${res.status} ${res.statusText}`, res.status);
+    }
+    throw new ApiError(`${res.status} ${res.statusText}`, res.status);
+  }
+
+  // Nama file otoritatif datang dari Content-Disposition backend.
+  const disposition = res.headers.get("content-disposition") || "";
+  const match = /filename="?([^"]+)"?/.exec(disposition);
+  return {
+    blob: await res.blob(),
+    fileName: match?.[1] || `BRI_QLOLA_${purpose === "REVIEW" ? "REVIEW" : "BIF"}_${batchId}.xlsx`,
+    eligibleCount: Number(res.headers.get("x-qlola-eligible-count") ?? 0),
+    totalCount: Number(res.headers.get("x-qlola-total-count") ?? 0),
+  };
+}
+
+/** Simpan blob sebagai unduhan browser. */
+export function saveBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

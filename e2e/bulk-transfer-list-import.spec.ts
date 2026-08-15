@@ -11,7 +11,7 @@ import * as path from 'node:path';
  * The tested WORKFLOW (open transfers list → default Single tab → switch to
  * Bulk tab → open bulk form → download template → import a generated XLSX →
  * submit → open the resulting batch in the list → open batch detail → open
- * child transfer detail → duplicate bulk_reference_no rejection) is driven
+ * child transfer detail) is driven
  * entirely through the real frontend (clicks/forms/file input). Direct
  * backend calls are used only for test-data setup (see "SETUP" below) —
  * never to create/approve KYC/KYB applications, which this spec must not touch.
@@ -32,9 +32,10 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// ── Excel fixture builder (mirrors the FE template layout) ─────────────────
-// Sheet "Bulk Transfer": No. Referensi Bulk in B4 (optional), header row 8,
-// data starts row 9 (1-indexed, matching what a user sees in Excel).
+// ── Excel fixture builder ──────────────────────────────────────────────────
+// Deliberately builds an OLD-style template that still carries a value in B4
+// ("No. Referensi Bulk"). The current KESH template no longer has that cell,
+// and the importer must ignore it — the backend owns the reference now.
 
 type ImportFixtureRow = {
   beneficiaryAccountName: string;
@@ -43,6 +44,7 @@ type ImportFixtureRow = {
   amount: number;
   transaction_purpose: string;
   beneficiary_relationship_to_sender: string;
+  beneficiary_mobile_number: string;
 };
 
 function buildImportFixtureFile(bulkReferenceNo: string, rows: ImportFixtureRow[]): string {
@@ -51,12 +53,14 @@ function buildImportFixtureFile(bulkReferenceNo: string, rows: ImportFixtureRow[
   aoa[3] = ['No. Referensi Bulk', bulkReferenceNo];
   aoa[7] = [
     'No', 'beneficiaryAccountName', 'beneficiaryBank', 'beneficiaryAccount',
-    'amount', 'transaction_purpose', 'beneficiary_relationship_to_sender', 'notes',
+    'amount', 'transaction_purpose', 'beneficiary_relationship_to_sender',
+    'No. Handphone Penerima', 'notes',
   ];
   rows.forEach((r, i) => {
     aoa[8 + i] = [
       i + 1, r.beneficiaryAccountName, r.beneficiaryBank, r.beneficiaryAccount,
-      r.amount, r.transaction_purpose, r.beneficiary_relationship_to_sender, '',
+      r.amount, r.transaction_purpose, r.beneficiary_relationship_to_sender,
+      r.beneficiary_mobile_number, '',
     ];
   });
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -158,18 +162,10 @@ function attachNetworkGuards(page: Page): NetworkGuards {
     if (!url.includes('/api/')) return;
     const status = res.status();
     if (status >= 400) {
-      let pathname = '';
-      try { pathname = new URL(url).pathname; } catch { /* ignore */ }
-      // The duplicate-bulk_reference_no scenario intentionally triggers a 409 —
-      // that's an assertion target, not a real failure, so don't log it as one.
-      const isExpectedDuplicateConflict =
-        status === 409 && res.request().method() === 'POST' && /\/transfers\/bulk$/.test(pathname);
       res.text()
         .then((body) => {
           guards.failedApiResponses.push({ url: `${res.request().method()} ${url}`, status, body });
-          if (!isExpectedDuplicateConflict) {
-            console.log(`[e2e] failed API response: ${res.request().method()} ${url} -> ${status}\n${body}`);
-          }
+          console.log(`[e2e] failed API response: ${res.request().method()} ${url} -> ${status}\n${body}`);
         })
         .catch(() => { /* body unreadable — irrelevant to this check */ });
     }
@@ -211,7 +207,7 @@ test.describe('Transfer list split + Bulk Excel import — FE-to-BE', () => {
     await page.close();
   });
 
-  test('Single/Bulk tabs, batch detail, template download, Excel import+submit, duplicate rejection', async ({ page }) => {
+  test('Single/Bulk tabs, batch detail, template download, Excel import+submit, generated batch reference', async ({ page }) => {
     const guards = attachNetworkGuards(page);
     const bulkReferenceNo = `BULK-E2E-IMPORT-${ts}`;
 
@@ -244,15 +240,20 @@ test.describe('Transfer list split + Bulk Excel import — FE-to-BE', () => {
     // Tanggal transaksi diisi backend saat pengajuan — template tidak boleh memintanya.
     const templatePath = path.join(os.tmpdir(), `kesh-template-${ts}.xlsx`);
     await download.saveAs(templatePath);
-    const templateHeaders = XLSX.utils.sheet_to_json<unknown[]>(
+    const templateAoa = XLSX.utils.sheet_to_json<unknown[]>(
       XLSX.readFile(templatePath).Sheets['Bulk Transfer'],
       { header: 1, defval: '' },
-    )[7];
+    );
+    const templateHeaders = templateAoa[7];
     expect(templateHeaders?.join(',')).not.toContain('transaction_date');
+    // No. Referensi Bulk dibuat backend — template tidak boleh memintanya lagi,
+    // termasuk sel metadata B4 tempatnya dulu berada.
+    expect(String(templateAoa[3]?.[0] ?? '')).not.toBe('No. Referensi Bulk');
+    expect(JSON.stringify(templateAoa)).not.toContain('Isi "No. Referensi Bulk"');
     fs.unlinkSync(templatePath);
 
     // ── 5. Import valid XLSX fills the bulk rows ────────────────────────────
-    // No. Referensi Bulk is left empty on the FE — B4 in the fixture should prefill it.
+    // B4 in the fixture still holds a legacy reference; importing must ignore it.
     const fixturePath = buildImportFixtureFile(bulkReferenceNo, [
       {
         beneficiaryAccountName: `E2E Import A ${ts}`,
@@ -261,6 +262,7 @@ test.describe('Transfer list split + Bulk Excel import — FE-to-BE', () => {
         amount: 150000,
         transaction_purpose: 'Pembayaran vendor import 1',
         beneficiary_relationship_to_sender: 'Lainnya',
+        beneficiary_mobile_number: '081200005551',
       },
       {
         beneficiaryAccountName: `E2E Import B ${ts}`,
@@ -269,15 +271,20 @@ test.describe('Transfer list split + Bulk Excel import — FE-to-BE', () => {
         amount: 175000,
         transaction_purpose: 'Pembayaran vendor import 2',
         beneficiary_relationship_to_sender: 'Lainnya',
+        beneficiary_mobile_number: '081200005552',
       },
     ]);
     await page.getByLabel('Import Excel').setInputFiles(fixturePath);
 
     await expect(page.getByText('2 baris berhasil diimpor.')).toBeVisible();
-    // B4 prefill: the FE bulk_reference_no field was empty, so it must now equal the fixture's B4 value.
-    await expect(page.locator('#bulk-reference-no')).toHaveValue(bulkReferenceNo);
+    // The manual reference input is gone, so B4 has nowhere to land.
+    await expect(page.locator('#bulk-reference-no')).toHaveCount(0);
     await expect(page.locator('#row-account-name-0')).toHaveValue(`E2E Import A ${ts}`);
     await expect(page.locator('#row-account-name-1')).toHaveValue(`E2E Import B ${ts}`);
+    // Rekening debit BRI & nama pengirim tidak ikut template import KESH —
+    // keduanya data level batch, diisi di form.
+    await page.locator('#qlola-debit-account').fill('020601000001301');
+    await page.locator('#qlola-sender-name').fill('PT KESH E2E');
 
     // ── 6. Submit imported rows successfully ────────────────────────────────
     const bulkPostResponse = page.waitForResponse(
@@ -287,8 +294,9 @@ test.describe('Transfer list split + Bulk Excel import — FE-to-BE', () => {
     const bulkRes = await bulkPostResponse;
     expect(bulkRes.ok(), await bulkRes.text().catch(() => '')).toBeTruthy();
 
-    const reqBody = bulkRes.request().postDataJSON() as { bulk_reference_no: string; items: unknown[] };
-    expect(reqBody.bulk_reference_no).toBe(bulkReferenceNo);
+    const reqBody = bulkRes.request().postDataJSON() as { items: unknown[] };
+    // The legacy B4 value must NOT be sent, let alone become authoritative.
+    expect(Object.keys(reqBody), JSON.stringify(reqBody)).not.toContain('bulk_reference_no');
     expect(reqBody.items).toHaveLength(2);
 
     const respBody = (await bulkRes.json()) as { batch_no: string; bulk_reference_no: string; total_count: number };
@@ -311,7 +319,7 @@ test.describe('Transfer list split + Bulk Excel import — FE-to-BE', () => {
     await page.locator('select').first().selectOption('100');
 
     const tableContainer = page.locator('div.rounded-2xl.border.overflow-x-auto');
-    const batchRow = tableContainer.locator('div.border-t').filter({ hasText: bulkReferenceNo });
+    const batchRow = tableContainer.locator('div.border-t').filter({ hasText: respBody.bulk_reference_no });
     // One row for the whole batch, not one row per item (2 items, still 1 row).
     await expect(batchRow).toHaveCount(1);
     await expect(batchRow.getByText(respBody.batch_no)).toBeVisible();
@@ -324,36 +332,19 @@ test.describe('Transfer list split + Bulk Excel import — FE-to-BE', () => {
     await page.waitForURL(/\/transfers\/bulk-batches\/[^/]+$/);
     // batch_no also appears in the <h1> ("Bulk Batch <batch_no>") — scope to
     // the summary Field's value div specifically to avoid a strict-mode clash.
-    const fieldValue = page.locator('div.text-sm.font-medium.break-words');
+    const fieldValue = page.getByTestId('batch-field-value');
     await expect(fieldValue.filter({ hasText: respBody.batch_no })).toBeVisible();
-    await expect(fieldValue.filter({ hasText: bulkReferenceNo })).toBeVisible();
+    await expect(fieldValue.filter({ hasText: respBody.bulk_reference_no })).toBeVisible();
     await expect(page.getByText(`E2E Import A ${ts}`)).toBeVisible();
     await expect(page.getByText(`E2E Import B ${ts}`)).toBeVisible();
     await expect(page.getByRole('link', { name: 'Detail' })).toHaveCount(2);
 
-    // ── 7. Duplicate bulk_reference_no still shows friendly error ──────────
-    await page.goto('/transfers/bulk');
-    await page.getByPlaceholder('Cari nama atau CIF pengirim…').fill(sender.displayName);
-    await page.getByRole('button', { name: new RegExp(escapeRegExp(sender.displayName)) }).click();
-    await page.locator('#bulk-reference-no').fill(bulkReferenceNo);
-    await page.locator('#row-account-name-0').fill(`E2E Import Dup ${ts}`);
-    await page.locator('#row-bank-code-0').selectOption({ index: 1 });
-    await page.locator('#row-account-number-0').fill('1234567899');
-    await page.locator('#row-amount-0').fill('150000');
-    await page.locator('#row-purpose-0').fill('Pembayaran vendor duplikat');
-    await page.locator('#row-relationship-0').selectOption('Lainnya');
-
-    const dupResponsePromise = page.waitForResponse(
-      (res) => res.url().includes('/transfers/bulk') && res.request().method() === 'POST',
-    );
-    await page.getByRole('button', { name: /^Buat 1 Transfer$/ }).click();
-    const dupRes = await dupResponsePromise;
-    expect(dupRes.status(), await dupRes.text().catch(() => '')).toBe(409);
-    await expect(
-      page.getByRole('main').getByText('No. Referensi Bulk sudah pernah digunakan untuk pengguna jasa ini.'),
-    ).toBeVisible();
+    // ── 7. Nomor referensi batch dibuat backend, bukan dari B4 template ───
+    // Nilai warisan di B4 template lama tidak boleh menjadi referensi batch.
+    expect(respBody.bulk_reference_no).toMatch(/^BLK-[A-HJ-NP-Z2-9]{8}$/);
+    expect(respBody.bulk_reference_no).not.toBe(bulkReferenceNo);
 
     fs.unlinkSync(fixturePath);
-    await assertNoNetworkViolations(page, guards, [409]);
+    await assertNoNetworkViolations(page, guards);
   });
 });

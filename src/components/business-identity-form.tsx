@@ -28,7 +28,6 @@ export type BusinessIdentity = {
   deed_number?: string | null;
   deed_establishment_number?: string | null;
   deed_latest_amendment_number?: string | null;
-  incorporation_place?: string | null;
   incorporation_date?: string | null;
   business_license_number?: string | null;
   nib?: string | null;
@@ -47,7 +46,6 @@ export type BusinessIdentity = {
   postal_code?: string | null;
   business_activity?: string | null;
   business_activity_other?: string | null;
-  industry_code?: string | null;
   phone?: string | null;
   company_email?: string | null;
   pic_name?: string | null;
@@ -71,7 +69,6 @@ const FALLBACK_LEGAL_FORMS = [
 const REQUIRED_FIELDS: Array<[key: string, label: string]> = [
   ["legal_name", "Nama Badan Usaha"],
   ["legal_form", "Bentuk Badan Usaha"],
-  ["incorporation_place", "Tempat Pendirian"],
   ["incorporation_date", "Tanggal Pendirian"],
   ["npwp", "NPWP Badan Usaha"],
   ["address_line", "Alamat Kedudukan"],
@@ -113,7 +110,6 @@ function initialState(b: BusinessIdentity): FormState {
     // Data lama hanya punya deed_number — pakai sebagai No. Akta Pendirian.
     deed_establishment_number: s(b.deed_establishment_number || b.deed_number),
     deed_latest_amendment_number: s(b.deed_latest_amendment_number),
-    incorporation_place: s(b.incorporation_place),
     incorporation_date: toDateInput(b.incorporation_date),
     business_license_number: s(b.business_license_number || b.nib),
     npwp: s(b.npwp),
@@ -129,7 +125,6 @@ function initialState(b: BusinessIdentity): FormState {
     postal_code: s(b.postal_code),
     business_activity: s(b.business_activity),
     business_activity_other: s(b.business_activity_other),
-    industry_code: s(b.industry_code),
     phone: s(b.phone),
     company_email: s(b.company_email),
     pic_name: s(b.pic_name),
@@ -398,8 +393,7 @@ export default function BusinessIdentityForm({
         <Text label="Tanggal Pendirian" field="incorporation_date" value={form.incorporation_date} onChange={set} type="date" required />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Text label="Tempat Pendirian" field="incorporation_place" value={form.incorporation_place} onChange={set} required />
+      <div className="grid gap-4 md:grid-cols-2">
         <Text label="Nomor Izin Usaha (NIB/OSS/SIUP/dll)" field="business_license_number" value={form.business_license_number} onChange={set} />
         <Text
           label="NPWP Badan Usaha"
@@ -411,9 +405,8 @@ export default function BusinessIdentityForm({
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Text label="KBLI (opsional)" field="industry_code" value={form.industry_code} onChange={set} />
-        <div className="grid gap-1 min-w-0 md:col-span-2">
+      <div className="grid gap-4">
+        <div className="grid gap-1 min-w-0">
           <span className="text-sm font-medium">Bidang Usaha <span className="text-red-500">*</span></span>
           <select
             id="biz-business_activity"

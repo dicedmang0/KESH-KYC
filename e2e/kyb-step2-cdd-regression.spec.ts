@@ -89,7 +89,6 @@ test.describe('KYB Business wizard — Step 2 no longer calls Individual CDD end
     // (Akta Perubahan Terakhir is a separate, optional field — left empty here.)
     await page.getByLabel('No. Akta Pendirian').fill(`AKTA-${ts}`);
     await page.getByLabel('Tanggal Pendirian').fill('2020-01-15');
-    // Tempat Pendirian left at its "Indonesia" default.
     await page.getByLabel('Nomor Izin Usaha').fill(`NIB-${ts}`);
     await page.getByLabel('NPWP Badan Usaha').fill(ts.padEnd(15, '0').slice(0, 15));
 

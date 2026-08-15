@@ -256,7 +256,6 @@ export default function BusinessWizard() {
   // Akta dipecah dua (migrasi 0061): pendirian wajib untuk PT, perubahan terakhir opsional.
   const [deed_establishment_number, setDeedEstablishmentNumber] = useState("");
   const [deed_latest_amendment_number, setDeedLatestAmendmentNumber] = useState("");
-  const [incorporation_place, setIncorpPlace] = useState("Indonesia");
   const [incorporation_date, setIncorpDate] = useState("");
   // Nomor Izin Usaha (NIB/OSS/SIUP/dll) — primary payload business_license_number.
   const [izin_usaha, setIzinUsaha] = useState("");
@@ -275,7 +274,6 @@ export default function BusinessWizard() {
   const [postal_code, setPostal] = useState("");
   const [business_activity, setBizAct] = useState("");
   const [business_activity_other, setBizActOther] = useState("");
-  const [industry_code, setKbli] = useState("");
   const [phone, setPhone] = useState("");
   const [company_email, setCompanyEmail] = useState("");
   // PIC (Pengurus Utama)
@@ -448,7 +446,6 @@ export default function BusinessWizard() {
         legal_form_other: isLainnya(legal_form) ? legal_form_other || null : null,
         deed_establishment_number: deed_establishment_number.trim() || null,
         deed_latest_amendment_number: deed_latest_amendment_number.trim() || null,
-        incorporation_place,
         incorporation_date,
         // Satu input "Nomor Izin Usaha" → business_license_number (nib tidak diduplikasi).
         business_license_number: izin_usaha || null,
@@ -469,7 +466,6 @@ export default function BusinessWizard() {
         postal_code,
         business_activity,
         business_activity_other: isLainnya(business_activity) ? business_activity_other || null : null,
-        industry_code: industry_code || null,
         phone,
         company_email: company_email || null,
         pic_name: pic_name || null,
@@ -971,15 +967,7 @@ export default function BusinessWizard() {
               </label>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <label className="grid gap-1 min-w-0">
-                <span className="text-sm font-medium">Tempat Pendirian *</span>
-                <input
-                  className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
-                  value={incorporation_place}
-                  onChange={(e) => setIncorpPlace(e.target.value)}
-                />
-              </label>
+            <div className="grid gap-4 md:grid-cols-2">
               <label className="grid gap-1 min-w-0">
                 <span className="text-sm font-medium">Nomor Izin Usaha (NIB/OSS/SIUP/dll) *</span>
                 <input
@@ -1005,16 +993,8 @@ export default function BusinessWizard() {
               </label>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <label className="grid gap-1 min-w-0">
-                <span className="text-sm font-medium">KBLI (opsional)</span>
-                <input
-                  className="w-full min-w-0 rounded-md border px-3 py-2 text-sm"
-                  value={industry_code}
-                  onChange={(e) => setKbli(e.target.value)}
-                />
-              </label>
-              <div className="grid gap-1 min-w-0 md:col-span-2">
+            <div className="grid gap-4">
+              <div className="grid gap-1 min-w-0">
                 <label className="grid gap-1 min-w-0">
                   <span className="text-sm font-medium">Bidang Usaha *</span>
                   <select

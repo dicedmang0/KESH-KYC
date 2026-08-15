@@ -16,7 +16,6 @@ export type BusinessIdentityPayload = Partial<{
   // backend dan di-mirror dari deed_establishment_number.
   deed_establishment_number: string | null;
   deed_latest_amendment_number: string | null;
-  incorporation_place: string;
   incorporation_date: string;
   business_license_number: string | null;
   npwp: string;
@@ -34,7 +33,6 @@ export type BusinessIdentityPayload = Partial<{
   postal_code: string;
   business_activity: string;
   business_activity_other: string | null;
-  industry_code: string | null;
   phone: string;
   company_email: string | null;
   pic_name: string | null;

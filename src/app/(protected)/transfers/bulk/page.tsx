@@ -15,7 +15,6 @@ import {
   canCreateTransfer,
   BENEFICIARY_RELATIONSHIP_OPTIONS,
   BULK_TRANSFER_MAX_ROWS,
-  BULK_REFERENCE_NO_MAX_LENGTH,
   FALLBACK_BANKS,
   TRANSFER_MIN_AMOUNT,
   TRANSFER_MAX_AMOUNT,
@@ -33,6 +32,8 @@ type Row = {
   amount: number;
   transaction_purpose: string;
   beneficiary_relationship_to_sender: string;
+  /** Kolom "Ben Mobile Number" pada file BRI Qlola — wajib untuk BI-Fast. */
+  beneficiary_mobile_number: string;
 };
 
 function emptyRow(): Row {
@@ -44,12 +45,26 @@ function emptyRow(): Row {
     amount: TRANSFER_MIN_AMOUNT,
     transaction_purpose: '',
     beneficiary_relationship_to_sender: '',
+    beneficiary_mobile_number: '',
   };
 }
 
 // ── Excel template / import ──────────────────────────────────────────────────
-// Sheet "Bulk Transfer": No. Referensi Bulk in B4 (optional), header row 8,
-// data starts row 9 (both 1-indexed, matching what a user sees in Excel).
+// Sheet "Bulk Transfer": header row 8, data starts row 9 (both 1-indexed,
+// matching what a user sees in Excel).
+//
+// "No. Referensi Bulk" used to live in B4. It is gone: the backend generates
+// the batch reference (BLK-XXXXXXXX). An older template that still has a value
+// there stays importable - B4 is simply ignored.
+
+// No. HP penerima dikirim apa adanya (hanya trim) — workbook BRI hanya menuntut
+// alfanumerik, dan KESH belum punya aturan normalisasi nomor telepon. Jangan
+// mengarang normalisasi baru di sini.
+const MOBILE_PATTERN = /^[0-9+][0-9]*$/;
+// Batas dari sheet "Deskripsi File" workbook BRI Qlola.
+const QLOLA_DEBIT_ACCOUNT_MIN = 10;
+const QLOLA_DEBIT_ACCOUNT_MAX = 30;
+const QLOLA_SENDER_NAME_MAX = 60;
 
 const TEMPLATE_SHEET_NAME = 'Bulk Transfer';
 const TEMPLATE_HEADERS = [
@@ -60,18 +75,16 @@ const TEMPLATE_HEADERS = [
   'amount',
   'transaction_purpose',
   'beneficiary_relationship_to_sender',
+  'No. Handphone Penerima',
   'notes',
 ] as const;
-const TEMPLATE_REF_ROW_INDEX = 3; // row 4 (0-indexed)
-const TEMPLATE_REF_COL_INDEX = 1; // column B (0-indexed)
 const TEMPLATE_HEADER_ROW_INDEX = 7; // row 8 (0-indexed)
 const TEMPLATE_DATA_START_INDEX = 8; // row 9 (0-indexed)
 
 function buildTemplateWorkbook(): XLSX.WorkBook {
   const aoa: (string | number)[][] = [];
   aoa[0] = ['KESH - Template Bulk Transfer'];
-  aoa[2] = [`Isi "No. Referensi Bulk" (opsional) di sel B4. Data dimulai baris 9, maksimal ${BULK_TRANSFER_MAX_ROWS} baris.`];
-  aoa[TEMPLATE_REF_ROW_INDEX] = ['No. Referensi Bulk', ''];
+  aoa[2] = [`Data dimulai baris 9, maksimal ${BULK_TRANSFER_MAX_ROWS} baris. No. Referensi Bulk dibuat otomatis oleh sistem.`];
   aoa[TEMPLATE_HEADER_ROW_INDEX] = [...TEMPLATE_HEADERS];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();
@@ -93,7 +106,7 @@ function resolveImportedBank(raw: string, banks: TransferBank[]): { code: string
   return { code: '', name: v };
 }
 
-type ImportResult = { rows: Row[]; refFromTemplate: string } | { errors: string[] };
+type ImportResult = { rows: Row[] } | { errors: string[] };
 
 /** Parses+validates a Bulk Transfer template workbook. Pure function — no state, easy to reason about/test. */
 function parseBulkTransferWorkbook(wb: XLSX.WorkBook, banks: TransferBank[]): ImportResult {
@@ -109,9 +122,6 @@ function parseBulkTransferWorkbook(wb: XLSX.WorkBook, banks: TransferBank[]): Im
   if (!headerOk) {
     return { errors: ['Template tidak sesuai. Gunakan template resmi KESH.'] };
   }
-
-  const refCell = aoa[TEMPLATE_REF_ROW_INDEX]?.[TEMPLATE_REF_COL_INDEX];
-  const refFromTemplate = String(refCell ?? '').trim();
 
   const dataRows = aoa
     .slice(TEMPLATE_DATA_START_INDEX)
@@ -129,13 +139,14 @@ function parseBulkTransferWorkbook(wb: XLSX.WorkBook, banks: TransferBank[]): Im
 
   dataRows.forEach((r, idx) => {
     const excelRowNo = TEMPLATE_DATA_START_INDEX + 1 + idx; // 1-indexed row number, for error messages
-    const [, name, bank, account, amountRaw, purpose, relationship] = r as unknown[];
+    const [, name, bank, account, amountRaw, purpose, relationship, mobile] = r as unknown[];
 
     const nameStr = String(name ?? '').trim();
     const bankStr = String(bank ?? '').trim();
     const accountStr = String(account ?? '').trim();
     const purposeStr = String(purpose ?? '').trim();
     const relationshipStr = String(relationship ?? '').trim();
+    const mobileStr = String(mobile ?? '').trim();
     const amountNum = Number(amountRaw);
 
     if (!nameStr) errors.push(`Baris ${excelRowNo}: beneficiaryAccountName wajib diisi.`);
@@ -146,8 +157,12 @@ function parseBulkTransferWorkbook(wb: XLSX.WorkBook, banks: TransferBank[]): Im
     }
     if (!purposeStr) errors.push(`Baris ${excelRowNo}: transaction_purpose wajib diisi.`);
     if (!relationshipStr) errors.push(`Baris ${excelRowNo}: beneficiary_relationship_to_sender wajib diisi.`);
+    if (!mobileStr) errors.push(`Baris ${excelRowNo}: No. Handphone Penerima wajib diisi.`);
+    else if (!MOBILE_PATTERN.test(mobileStr)) {
+      errors.push(`Baris ${excelRowNo}: No. Handphone Penerima hanya boleh berisi angka.`);
+    }
 
-    if (!nameStr || !bankStr || !accountStr || !purposeStr || !relationshipStr || amountRaw === '' || !Number.isFinite(amountNum) || amountNum <= 0) {
+    if (!nameStr || !bankStr || !accountStr || !purposeStr || !relationshipStr || !mobileStr || amountRaw === '' || !Number.isFinite(amountNum) || amountNum <= 0) {
       return;
     }
 
@@ -160,11 +175,12 @@ function parseBulkTransferWorkbook(wb: XLSX.WorkBook, banks: TransferBank[]): Im
       amount: amountNum,
       transaction_purpose: purposeStr,
       beneficiary_relationship_to_sender: relationshipStr,
+      beneficiary_mobile_number: mobileStr,
     });
   });
 
   if (errors.length > 0) return { errors };
-  return { rows, refFromTemplate };
+  return { rows };
 }
 
 export default function BulkTransferPage() {
@@ -175,7 +191,6 @@ export default function BulkTransferPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [result, setResult] = useState<{ batch_no: string; bulk_reference_no: string; total_count: number } | null>(null);
-  const [bulkReferenceNo, setBulkReferenceNo] = useState('');
 
   // Sender picker (mirrors single transfer form)
   const [senderQuery, setSenderQuery] = useState('');
@@ -188,6 +203,11 @@ export default function BulkTransferPage() {
   const [rows, setRows] = useState<Row[]>([emptyRow()]);
   // Track which rows the user has attempted to submit, to show row errors.
   const [showErrors, setShowErrors] = useState(false);
+
+  // Data level batch untuk export BRI Qlola — sama untuk semua baris, jadi
+  // diisi sekali di sini, bukan diulang per penerima.
+  const [qlolaDebitAccount, setQlolaDebitAccount] = useState('');
+  const [qlolaSenderName, setQlolaSenderName] = useState('');
 
   // Excel import
   const [importErrors, setImportErrors] = useState<string[]>([]);
@@ -261,9 +281,6 @@ export default function BulkTransferPage() {
       return;
     }
 
-    if (result.refFromTemplate && !bulkReferenceNo.trim()) {
-      setBulkReferenceNo(result.refFromTemplate);
-    }
     setRows(result.rows);
     setShowErrors(false);
     setImportSuccessInfo(`${result.rows.length} baris berhasil diimpor. Periksa/edit baris di bawah sebelum submit.`);
@@ -283,27 +300,40 @@ export default function BulkTransferPage() {
     }
     if (!r.transaction_purpose.trim()) return 'Tujuan transaksi wajib diisi.';
     if (!r.beneficiary_relationship_to_sender.trim()) return 'Hubungan dengan Pengirim wajib dipilih.';
+    if (!r.beneficiary_mobile_number.trim()) return 'No. Handphone Penerima wajib diisi.';
+    if (!MOBILE_PATTERN.test(r.beneficiary_mobile_number.trim())) return 'No. Handphone Penerima hanya boleh berisi angka.';
     return '';
   }
 
   const rowErrors = rows.map(rowError);
   const allRowsValid = rowErrors.every((e) => e === '');
 
-  // Returns an error message for the bulk reference no, or '' if valid.
-  function bulkReferenceNoError(): string {
-    const v = bulkReferenceNo.trim();
-    if (!v) return 'No. Referensi Bulk wajib diisi.';
-    if (v.length > BULK_REFERENCE_NO_MAX_LENGTH) return `No. Referensi Bulk maksimal ${BULK_REFERENCE_NO_MAX_LENGTH} karakter.`;
+
+  function qlolaDebitAccountError(): string {
+    const v = qlolaDebitAccount.trim();
+    if (!v) return 'Rekening Debit BRI wajib diisi.';
+    if (v.length < QLOLA_DEBIT_ACCOUNT_MIN || v.length > QLOLA_DEBIT_ACCOUNT_MAX) {
+      return `Rekening Debit BRI harus ${QLOLA_DEBIT_ACCOUNT_MIN}-${QLOLA_DEBIT_ACCOUNT_MAX} karakter.`;
+    }
     return '';
   }
 
-  const bulkReferenceNoErr = bulkReferenceNoError();
+  function qlolaSenderNameError(): string {
+    const v = qlolaSenderName.trim();
+    if (!v) return 'Nama Pengirim wajib diisi.';
+    if (v.length > QLOLA_SENDER_NAME_MAX) return `Nama Pengirim maksimal ${QLOLA_SENDER_NAME_MAX} karakter.`;
+    return '';
+  }
+
+  const qlolaDebitAccountErr = qlolaDebitAccountError();
+  const qlolaSenderNameErr = qlolaSenderNameError();
 
   async function submit() {
     setErr('');
     setShowErrors(true);
     if (!selectedSender) { setErr('Silakan pilih pengirim dari hasil pencarian.'); return; }
-    if (bulkReferenceNoErr) { setErr(bulkReferenceNoErr); return; }
+    if (qlolaDebitAccountErr) { setErr(qlolaDebitAccountErr); return; }
+    if (qlolaSenderNameErr) { setErr(qlolaSenderNameErr); return; }
     if (!allRowsValid) { setErr('Perbaiki baris yang belum valid sebelum menyimpan.'); return; }
 
     const items: BulkTransferItem[] = rows.map((r) => ({
@@ -314,25 +344,26 @@ export default function BulkTransferPage() {
       beneficiaryAccountNumber: r.beneficiaryAccountNumber.trim(),
       beneficiaryAccountName: r.beneficiaryAccountName.trim(),
       transaction_purpose: r.transaction_purpose.trim() || undefined,
+      beneficiary_mobile_number: r.beneficiary_mobile_number.trim(),
     }));
 
     setLoading(true);
     try {
       const res = await createBulkTransfers({
         sender_application_id: Number(selectedSender.application_id),
-        bulk_reference_no: bulkReferenceNo.trim(),
+        qlola_debit_account: qlolaDebitAccount.trim(),
+        qlola_sender_name: qlolaSenderName.trim(),
         items,
       });
       setResult({ batch_no: res.batch_no, bulk_reference_no: res.bulk_reference_no, total_count: res.total_count });
       toast.success(`Bulk transfer berhasil dibuat. ${res.total_count} transaksi dibuat.`);
     } catch (e: unknown) {
-      const rawMsg = e instanceof Error ? e.message : 'Gagal membuat bulk transfer';
-      const msg = rawMsg.toLowerCase().includes('bulk_reference_no')
-        ? 'No. Referensi Bulk sudah pernah digunakan untuk pengguna jasa ini.'
-        : rawMsg;
+      // Tidak ada lagi penerjemahan error "referensi duplikat": nomornya dibuat
+      // backend, jadi user tidak bisa menyebabkan bentrok.
+      const msg = e instanceof Error ? e.message : 'Gagal membuat bulk transfer';
       setErr(msg);
       toast.error(msg);
-      console.error('Bulk transfer gagal:', rawMsg);
+      console.error('Bulk transfer gagal:', msg);
     } finally {
       setLoading(false);
     }
@@ -369,7 +400,7 @@ export default function BulkTransferPage() {
             Ke Daftar Transfer
           </button>
           <button
-            onClick={() => { setResult(null); setRows([emptyRow()]); setSelectedSender(null); setShowErrors(false); setBulkReferenceNo(''); setImportErrors([]); setImportSuccessInfo(''); }}
+            onClick={() => { setResult(null); setRows([emptyRow()]); setSelectedSender(null); setShowErrors(false); setImportErrors([]); setImportSuccessInfo(''); }}
             className="rounded-lg border px-4 py-2 text-sm hover:bg-slate-50"
           >
             Buat Bulk Lagi
@@ -452,22 +483,48 @@ export default function BulkTransferPage() {
         )}
       </div>
 
-      {/* Bulk reference no */}
-      <div className="rounded-2xl border p-4 space-y-2">
-        <label htmlFor="bulk-reference-no" className="text-xs text-muted-foreground">
-          No. Referensi Bulk <span className="text-red-600">*</span>
-        </label>
-        <input
-          id="bulk-reference-no"
-          className="w-full border rounded-lg px-3 py-2 text-sm"
-          value={bulkReferenceNo}
-          onChange={(e) => setBulkReferenceNo(e.target.value)}
-          maxLength={BULK_REFERENCE_NO_MAX_LENGTH}
-          placeholder="mis: BULK-REF-20260730-001"
-        />
-        {showErrors && bulkReferenceNoErr && (
-          <p className="text-xs text-red-600">{bulkReferenceNoErr}</p>
-        )}
+      {/* Data rekening debit untuk BRI Qlola — satu kali per batch */}
+      <div className="rounded-2xl border p-4 space-y-3">
+        <div>
+          <div className="text-sm font-medium">Rekening Debit BRI</div>
+          <p className="text-xs text-muted-foreground">
+            Dipakai untuk seluruh transaksi di batch ini saat file BRI Qlola diunduh.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <label htmlFor="qlola-debit-account" className="text-xs text-muted-foreground">
+              Rekening Debit BRI <span className="text-red-600">*</span>
+            </label>
+            <input
+              id="qlola-debit-account"
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              value={qlolaDebitAccount}
+              onChange={(e) => setQlolaDebitAccount(e.target.value)}
+              maxLength={QLOLA_DEBIT_ACCOUNT_MAX}
+              placeholder={`${QLOLA_DEBIT_ACCOUNT_MIN}-${QLOLA_DEBIT_ACCOUNT_MAX} karakter`}
+            />
+            {showErrors && qlolaDebitAccountErr && (
+              <p className="text-xs text-red-600">{qlolaDebitAccountErr}</p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="qlola-sender-name" className="text-xs text-muted-foreground">
+              Nama Pengirim <span className="text-red-600">*</span>
+            </label>
+            <input
+              id="qlola-sender-name"
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              value={qlolaSenderName}
+              onChange={(e) => setQlolaSenderName(e.target.value)}
+              maxLength={QLOLA_SENDER_NAME_MAX}
+              placeholder="Nama pemilik rekening debit"
+            />
+            {showErrors && qlolaSenderNameErr && (
+              <p className="text-xs text-red-600">{qlolaSenderNameErr}</p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Excel import */}
@@ -602,6 +659,17 @@ export default function BulkTransferPage() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label htmlFor={`row-mobile-${i}`} className="text-xs text-muted-foreground">No. Handphone Penerima</label>
+                  <input
+                    id={`row-mobile-${i}`}
+                    inputMode="tel"
+                    className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
+                    value={r.beneficiary_mobile_number}
+                    onChange={(e) => updateRow(i, { beneficiary_mobile_number: e.target.value })}
+                    placeholder="mis: 081234567890"
+                  />
+                </div>
               </div>
 
               {rowErr && <p className="text-xs text-red-600">{rowErr}</p>}
@@ -624,7 +692,7 @@ export default function BulkTransferPage() {
 
       <button
         onClick={submit}
-        disabled={loading || !selectedSender || !!bulkReferenceNoErr}
+        disabled={loading || !selectedSender}
         className="rounded-lg bg-kesh-700 text-white px-4 py-2 text-sm hover:bg-kesh-600 disabled:opacity-60 transition-colors"
       >
         {loading ? 'Menyimpan…' : `Buat ${rows.length} Transfer`}

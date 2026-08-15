@@ -97,7 +97,6 @@ type WatchlistStatus = 'CLEAR' | 'NEAR_MATCH' | 'MATCH' | string;
 type Business = {
   legal_name?: string | null;
   legal_form?: string | null;
-  incorporation_place?: string | null;
   incorporation_date?: string | null;
   // Akta dipecah dua (migrasi 0061); deed_number tetap ada untuk data lama.
   deed_number?: string | null;
@@ -120,7 +119,6 @@ type Business = {
   business_village_name?: string | null;
   postal_code?: string | null;
   phone?: string | null;
-  industry_code?: string | null;
   business_activity?: string | null;
   cif_no?: string | null;
   // Pengurus Utama / PIC (entity-level)
@@ -2444,10 +2442,8 @@ export default function UserDetailPage() {
           />
           <Row label="No. Akta Perubahan Terakhir" value={business?.deed_latest_amendment_number} />
           <Row label="Tanggal Pendirian" value={business?.incorporation_date} />
-          <Row label="Tempat Pendirian" value={business?.incorporation_place} />
           <Row label="Nomor Izin Usaha (NIB/OSS/SIUP)" value={business?.business_license_number || business?.nib} />
           <Row label="NPWP Badan Usaha" value={business?.npwp} />
-          <Row label="KBLI" value={business?.industry_code} />
           <Row label="Bidang Usaha" value={business?.business_activity} />
           {/* Baris lama tanpa kolom wilayah jatuh ke "—" lewat Row. */}
           <Row label="Alamat" value={business?.address_line} />
