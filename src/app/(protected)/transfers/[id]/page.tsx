@@ -421,7 +421,9 @@ export default function TransferDetailPage() {
       transaction_purpose: row.transaction_purpose ?? '',
       description: row.description ?? '',
     });
-    setSourceOfFundsOther('');
+    // Pulihkan keterangan "Lainnya" yang tersimpan supaya edit/revisi tidak
+    // memaksa user mengetik ulang apa yang sudah pernah diisi.
+    setSourceOfFundsOther(row.source_of_funds_other ?? '');
     setActionErr('');
     setPanel(panel === 'edit' ? 'none' : 'edit');
   }
@@ -453,7 +455,7 @@ export default function TransferDetailPage() {
       return;
     }
     if (isLainnya(f.source_of_funds) && !sourceOfFundsOther.trim()) {
-      setActionErr('Keterangan Sumber Dana Lainnya wajib diisi.');
+      setActionErr('Sumber dana lainnya wajib diisi.');
       return;
     }
     const c = (v: string) => (v.trim() ? v.trim() : undefined);
@@ -469,7 +471,13 @@ export default function TransferDetailPage() {
         beneficiaryBankName: f.beneficiaryBankName.trim(),
         beneficiaryBankCode: c(f.beneficiaryBankCode),
         beneficiary_relationship_to_sender: f.beneficiary_relationship_to_sender.trim(),
-        source_of_funds: c(isLainnya(f.source_of_funds) ? sourceOfFundsOther : f.source_of_funds),
+        // Nilai dropdown dipertahankan; keterangan "Lainnya" dikirim terpisah.
+        // Saat pindah ke pilihan biasa, kirim '' supaya backend benar-benar
+        // menghapus keterangan lama (bukan sekadar mengabaikannya).
+        source_of_funds: c(f.source_of_funds),
+        source_of_funds_other: isLainnya(f.source_of_funds)
+          ? sourceOfFundsOther.trim()
+          : '',
         transaction_purpose: c(f.transaction_purpose),
         description: c(f.description),
       });
@@ -864,6 +872,11 @@ export default function TransferDetailPage() {
               <Field label="CIF Pengirim" value={row.sender_cif_no ? formatCif(row.sender_cif_no) : undefined} />
               <Field label="Tipe Pengirim" value={row.sender_type} />
               <Field label="Sumber Dana" value={row.source_of_funds} />
+              {/* Keterangan hanya relevan saat sumber dana = "Lainnya". Tiket
+                  lama yang belum punya keterangan tetap tidak menampilkannya. */}
+              {isLainnya(row.source_of_funds) && row.source_of_funds_other && (
+                <Field label="Sumber Dana Lainnya" value={row.source_of_funds_other} />
+              )}
               <Field label="Tujuan Transaksi" value={row.transaction_purpose} />
               <Field label="Nomor Rekening Sumber" value={row.source_account_no} />
               <Field label="Nama Rekening Sumber" value={row.source_account_name} />
@@ -1329,7 +1342,8 @@ export default function TransferDetailPage() {
                         when={editForm.source_of_funds}
                         value={sourceOfFundsOther}
                         onChange={setSourceOfFundsOther}
-                        label="Keterangan Sumber Dana Lainnya"
+                        label="Sumber Dana Lainnya"
+                        placeholder="Masukkan sumber dana"
                         labelClassName="text-xs text-muted-foreground"
                         inputClassName={inputCls}
                       />

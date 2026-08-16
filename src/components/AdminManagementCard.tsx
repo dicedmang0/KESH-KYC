@@ -20,6 +20,7 @@ const INTERNAL_ROLES = [
   'Director',
   'ComplianceLead',
   'OperationSupervisor',
+  'COO',
   'ComplaintHandling',
   'FrontDesk',
   'FinanceStaff',

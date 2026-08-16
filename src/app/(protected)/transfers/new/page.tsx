@@ -207,7 +207,7 @@ export default function NewTransferPage() {
       return;
     }
     if (isLainnya(form.source_of_funds) && !sourceOfFundsOther.trim()) {
-      setErr('Keterangan Sumber Dana Lainnya wajib diisi.');
+      setErr('Sumber dana lainnya wajib diisi.');
       return;
     }
 
@@ -238,7 +238,12 @@ export default function NewTransferPage() {
         beneficiaryAccountNumber: form.beneficiaryAccountNumber.trim(),
         beneficiaryAccountName: form.beneficiaryAccountName.trim(),
         beneficiary_relationship_to_sender: form.beneficiary_relationship_to_sender.trim(),
-        source_of_funds: clean(isLainnya(form.source_of_funds) ? sourceOfFundsOther : form.source_of_funds),
+        // Nilai dropdown tidak pernah diganti teks bebas — keterangan "Lainnya"
+        // dikirim terpisah lalu disimpan di source_of_funds_other (migration 0071).
+        source_of_funds: clean(form.source_of_funds),
+        source_of_funds_other: isLainnya(form.source_of_funds)
+          ? clean(sourceOfFundsOther)
+          : undefined,
         transaction_purpose: clean(form.transaction_purpose),
         description: clean(form.description),
         sender_application_id: Number(selectedSender.application_id),
@@ -505,7 +510,8 @@ export default function NewTransferPage() {
               when={form.source_of_funds}
               value={sourceOfFundsOther}
               onChange={setSourceOfFundsOther}
-              label="Keterangan Sumber Dana Lainnya"
+              label="Sumber Dana Lainnya"
+              placeholder="Masukkan sumber dana"
               labelClassName="text-xs text-muted-foreground"
               inputClassName="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             />

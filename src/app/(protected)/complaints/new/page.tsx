@@ -457,10 +457,11 @@ export default function NewComplaintPage() {
         {/* C2. Kategori risiko — hanya Level 3 */}
         {level === 'LEVEL_3' && (
           <div>
-            <label className="text-xs text-slate-500">
+            <label htmlFor="complaint-risk-category" className="text-xs text-slate-500">
               Kategori Risiko Level 3 <span className="text-red-500">*</span>
             </label>
             <select
+              id="complaint-risk-category"
               className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-kesh-700"
               value={riskCategory}
               onChange={(e) => setRiskCategory(e.target.value as Level3RiskCategory | '')}

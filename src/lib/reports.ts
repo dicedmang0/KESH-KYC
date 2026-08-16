@@ -76,22 +76,30 @@ export const REPORT_TYPES: ReportType[] = ['ALL', 'KYC_KYB', 'LTKT', 'LTKM', 'TR
 /** Boleh semua jenis report. */
 const FULL_ACCESS_ROLES = ['SystemAdmin', 'Director', 'ComplianceLead'];
 
-/** Read-only: boleh melihat & mengunduh semua, tidak boleh generate. */
-const READ_ONLY_ROLES = ['Auditor'];
+/** Read-only: boleh melihat & mengunduh jatahnya, tidak boleh generate. */
+const READ_ONLY_ROLES = ['Auditor', 'COO'];
 
 /** Divisi non-compliance hanya melihat jenis report miliknya sendiri. */
 const ROLE_REPORT_TYPES: Record<string, ReportType[]> = {
   ComplaintHandling: ['COMPLAINTS'],
   OperationSupervisor: ['COMPLAINTS'],
+  // COO ikut alur pengaduan → hanya COMPLAINTS, dan read-only.
+  COO: ['COMPLAINTS'],
   FinanceStaff: ['TRANSFERS'],
   FinanceManager: ['TRANSFERS'],
 };
 
-/** Jenis report yang boleh dilihat role ini. Kosong = tidak punya akses sama sekali. */
+/**
+ * Jenis report yang boleh dilihat role ini. Kosong = tidak punya akses sama
+ * sekali. Jatah per divisi menang atas akses luas, supaya role read-only tetap
+ * bisa dibatasi ke jenis tertentu.
+ */
 export function allowedReportTypes(role?: string | null): ReportType[] {
   if (!role) return [];
+  const own = ROLE_REPORT_TYPES[role];
+  if (own) return own;
   if (FULL_ACCESS_ROLES.includes(role) || READ_ONLY_ROLES.includes(role)) return REPORT_TYPES;
-  return ROLE_REPORT_TYPES[role] ?? [];
+  return [];
 }
 
 export function canReadReports(role?: string | null): boolean {

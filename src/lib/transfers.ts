@@ -245,6 +245,8 @@ export type TransferDetail = TransferListRow & {
 
   // Transfer metadata (migration 0030)
   source_of_funds?: string | null;
+  /** Keterangan manual saat source_of_funds = "Lainnya" (migration 0071). */
+  source_of_funds_other?: string | null;
   transaction_purpose?: string | null;
 
   requested_transfer_at?: string | null;
@@ -339,6 +341,8 @@ export type CreateTransferBody = {
 
   // Transfer metadata (migration 0030)
   source_of_funds?: string;
+  /** Keterangan manual saat source_of_funds = "Lainnya" (migration 0071). */
+  source_of_funds_other?: string;
   transaction_purpose?: string;
 
   // SNAP / transfer metadata (optional, snake_case → maps 1:1 to DB)
@@ -450,9 +454,9 @@ export type RefItem = { code: string; name: string };
 /**
  * GET /references/rba/source-of-funds — same reference list the KYC/KYB
  * "Sumber Dana" dropdown uses (src/app/(protected)/users/[id]/page.tsx).
- * Transfers has no *_other companion column (source_of_funds is a single
- * free-text field), so the "Lainnya" detail typed by the caller becomes the
- * stored value directly instead of being kept alongside the dropdown code.
+ * Since migration 0071 transfers follow the same rule as KYC/KYB: the dropdown
+ * value stays in `source_of_funds` and the "Lainnya" detail is stored beside it
+ * in `source_of_funds_other` — it never replaces the dropdown value.
  */
 export async function getSourceOfFundsOptions(): Promise<RefItem[]> {
   const res = await apiFetch<RefItem[] | { data?: RefItem[] }>(`/references/rba/source-of-funds`);

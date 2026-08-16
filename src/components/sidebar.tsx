@@ -66,6 +66,8 @@ export default function Sidebar() {
     // report miliknya sendiri (lihat allowedReportTypes di lib/reports.ts).
     OperationSupervisor: ['/dashboard', '/kyc', '/transfers', '/complaints', '/reports'],
     ComplaintHandling:   ['/dashboard', '/complaints', '/reports'],
+    // COO adalah layer review di alur pengaduan — bukan akses direksi penuh.
+    COO:                 ['/dashboard', '/complaints', '/reports'],
     FrontDesk:           ['/dashboard', '/users', '/kyc', '/data-reviews', '/transfers', '/watchlist'],
     FinanceStaff:        ['/dashboard', '/users', '/transfers', '/complaints', '/statement-refunds', '/reports'],
     FinanceManager:      ['/dashboard', '/users', '/transfers', '/complaints', '/statement-refunds', '/reports'],

@@ -19,8 +19,10 @@ import {
   getComplaint,
   verifyComplaintData,
   operationInvestigation,
+  cooReviewComplaint,
   amlReviewComplaint,
   financeReviewComplaint,
+  financeManagerReviewComplaint,
   resolveComplaint,
   closeComplaint,
   formatComplaintStatus,
@@ -34,25 +36,35 @@ import {
   formatOperationResult,
   formatAmlDecision,
   formatFinanceDecision,
+  formatCooDecision,
+  formatFinanceManagerDecision,
   complaintStatusBadgeClass,
   complaintLevelBadgeClass,
+  complaintTimeline,
+  isLevelFlowComplaint,
+  financeDecisionOptions,
+  complianceDecisionOptions,
   canViewComplaints,
   canVerifyComplaintData,
   canOperationInvestigate,
+  canCooReview,
   canAmlReview,
   canFinanceReview,
+  canFinanceManagerReview,
   canResolveComplaint,
   canCloseComplaint,
   isComplaintReadOnly,
   DATA_VERIFICATION_LABELS,
   OPERATION_RESULT_LABELS,
-  AML_DECISION_LABELS,
-  FINANCE_DECISION_LABELS,
+  COO_DECISION_LABELS,
+  FINANCE_MANAGER_DECISION_LABELS,
   type Complaint,
   type DataVerificationStatus,
   type OperationInvestigationResult,
   type AmlDecision,
+  type CooDecision,
   type FinanceDecision,
+  type FinanceManagerDecision,
 } from '@/lib/complaints';
 
 // ── Small UI helpers ──────────────────────────────────────────────────────────
@@ -87,8 +99,45 @@ function Notes({ label, value }: { label: string; value?: string | null }) {
 }
 
 /**
+ * Timeline tahap. Hanya tahap yang relevan dengan complaint_level yang tampil
+ * (LEVEL_1 tanpa Finance/Compliance, LEVEL_3 tanpa Finance) — daftarnya datang
+ * dari complaintTimeline() supaya FE tidak punya versi aturan sendiri.
+ */
+function WorkflowTimeline({ complaint }: { complaint: Complaint }) {
+  const steps = complaintTimeline(complaint);
+  if (steps.length === 0) return null;
+
+  const mark = { done: '✓', current: '●', todo: '○' } as const;
+  const tone = {
+    done: 'text-emerald-600',
+    current: 'text-kesh-700',
+    todo: 'text-slate-300',
+  } as const;
+
+  return (
+    <Section title="Alur Penanganan">
+      <ol className="space-y-2" data-testid="complaint-timeline">
+        {steps.map((s) => (
+          <li key={s.status} className="flex items-start gap-3" data-stage={s.status}>
+            <span className={`mt-0.5 text-sm leading-none ${tone[s.state]}`} aria-hidden>
+              {mark[s.state]}
+            </span>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-slate-800">{s.actor}</div>
+              <div className={`text-xs ${s.state === 'todo' ? 'text-slate-400' : 'text-slate-600'}`}>
+                {s.detail}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </Section>
+  );
+}
+
+/**
  * Form aksi workflow: satu pilihan + catatan. Dipakai oleh verify-data,
- * operation investigation, AML review, dan finance review.
+ * operation investigation, COO review, compliance review, dan finance review.
  */
 function WorkflowForm({
   options,
@@ -261,6 +310,14 @@ export default function ComplaintDetailPage() {
     c.transaction_partner_reference_no ??
     c.transaction_reference;
   const transferId = linkedTransfer?.transfer_id ?? c.transfer_id;
+  // Tiket alur COO menyembunyikan tahap yang tidak relevan dengan levelnya.
+  // Tiket legacy tetap menampilkan semuanya seperti sebelumnya.
+  const levelFlow = isLevelFlowComplaint(c);
+  const showCoo = levelFlow || c.status === 'COO_REVIEW';
+  const showFinance =
+    !levelFlow || c.complaint_level === 'LEVEL_2' || c.finance_decision != null;
+  const showCompliance =
+    !levelFlow || c.complaint_level === 'LEVEL_3' || c.aml_decision != null;
 
   return (
     <div className="space-y-5">
@@ -291,6 +348,9 @@ export default function ComplaintDetailPage() {
           </span>
         </div>
       </div>
+
+      {/* 0. Alur penanganan — hanya tahap yang relevan dengan level tiket */}
+      <WorkflowTimeline complaint={c} />
 
       {/* 1. Ringkasan */}
       <Section title="Ringkasan Pengaduan">
@@ -494,54 +554,123 @@ export default function ComplaintDetailPage() {
         )}
       </Section>
 
-      {/* 4. AML / Compliance */}
-      <Section title="AML / Compliance Review">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="Keputusan" value={c.aml_decision ? formatAmlDecision(c.aml_decision) : undefined} />
-          <Field label="Tanggal Review" value={c.aml_reviewed_at ? formatDateTime(c.aml_reviewed_at) : undefined} />
-          <Field label="AML Review Oleh" value={c.aml_reviewed_by_name} />
-        </div>
-        <Notes label="Catatan AML" value={c.aml_notes} />
-        {canAmlReview(role, c) && (
-          <WorkflowForm
-            options={AML_DECISION_LABELS}
-            requiresNotes={() => true}
-            submitLabel="Simpan Keputusan AML"
-            onSubmit={(choice, notes) =>
-              run(
-                () => amlReviewComplaint(id, { decision: choice as AmlDecision, notes }),
-                'Keputusan AML tersimpan.'
-              )
-            }
-          />
-        )}
-      </Section>
+      {/* 3b. Review COO — tujuan setelah Setujui ditentukan complaint_level */}
+      {showCoo && (
+        <Section title="Review COO">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Field label="Keputusan" value={c.coo_decision ? formatCooDecision(c.coo_decision) : undefined} />
+            <Field label="Tanggal Review" value={c.coo_reviewed_at ? formatDateTime(c.coo_reviewed_at) : undefined} />
+            <Field label="Review Oleh" value={c.coo_reviewed_by_name} />
+          </div>
+          <Notes label="Catatan COO" value={c.coo_notes} />
+          {canCooReview(role, c) && (
+            <WorkflowForm
+              options={COO_DECISION_LABELS}
+              requiresNotes={() => true}
+              submitLabel="Simpan Keputusan COO"
+              onSubmit={(choice, notes) =>
+                run(
+                  () => cooReviewComplaint(id, { decision: choice as CooDecision, notes }),
+                  'Keputusan COO tersimpan.'
+                )
+              }
+            />
+          )}
+          {canCooReview(role, c) && (
+            <p className="text-xs text-slate-400">
+              Tahap berikutnya mengikuti Complaint Level tiket ini —
+              tidak dipilih manual.
+            </p>
+          )}
+        </Section>
+      )}
 
-      {/* 5. Finance review */}
-      <Section title="Finance Review">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="Keputusan" value={c.finance_decision ? formatFinanceDecision(c.finance_decision) : undefined} />
-          <Field label="Tanggal Review" value={c.finance_reviewed_at ? formatDateTime(c.finance_reviewed_at) : undefined} />
-          <Field label="Finance Review Oleh" value={c.finance_reviewed_by_name} />
-        </div>
-        <Notes label="Catatan Finance" value={c.finance_review_notes} />
-        {canFinanceReview(role, c) && (
-          <WorkflowForm
-            options={FINANCE_DECISION_LABELS}
-            requiresNotes={() => true}
-            submitLabel="Simpan Keputusan Finance"
-            onSubmit={(choice, notes) =>
-              run(
-                () => financeReviewComplaint(id, { decision: choice as FinanceDecision, notes }),
-                'Keputusan finance tersimpan.'
-              )
-            }
-          />
-        )}
-        <p className="text-xs text-slate-400">
-          Persetujuan refund dilakukan oleh Finance Manager melalui menu Pencatatan Refund.
-        </p>
-      </Section>
+      {/* 4. AML / Compliance */}
+      {showCompliance && (
+        <Section title="AML / Compliance Review">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Field label="Keputusan" value={c.aml_decision ? formatAmlDecision(c.aml_decision) : undefined} />
+            <Field label="Tanggal Review" value={c.aml_reviewed_at ? formatDateTime(c.aml_reviewed_at) : undefined} />
+            <Field label="Compliance Review Oleh" value={c.compliance_reviewed_by_name ?? c.aml_reviewed_by_name} />
+          </div>
+          <Notes label="Catatan Compliance" value={c.aml_notes} />
+          {canAmlReview(role, c) && (
+            <WorkflowForm
+              options={complianceDecisionOptions(c)}
+              requiresNotes={() => true}
+              submitLabel="Simpan Keputusan Compliance"
+              onSubmit={(choice, notes) =>
+                run(
+                  () => amlReviewComplaint(id, { decision: choice as AmlDecision, notes }),
+                  'Keputusan compliance tersimpan.'
+                )
+              }
+            />
+          )}
+        </Section>
+      )}
+
+      {/* 5. Finance Staff review */}
+      {showFinance && (
+        <Section title="Finance Staff Review">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Field label="Keputusan" value={c.finance_decision ? formatFinanceDecision(c.finance_decision) : undefined} />
+            <Field label="Tanggal Review" value={c.finance_reviewed_at ? formatDateTime(c.finance_reviewed_at) : undefined} />
+            <Field label="Finance Review Oleh" value={c.finance_reviewed_by_name} />
+          </div>
+          <Notes label="Catatan Finance" value={c.finance_review_notes} />
+          {canFinanceReview(role, c) && (
+            <WorkflowForm
+              options={financeDecisionOptions(c)}
+              requiresNotes={() => true}
+              submitLabel="Simpan Keputusan Finance"
+              onSubmit={(choice, notes) =>
+                run(
+                  () => financeReviewComplaint(id, { decision: choice as FinanceDecision, notes }),
+                  'Keputusan finance tersimpan.'
+                )
+              }
+            />
+          )}
+          <p className="text-xs text-slate-400">
+            Pencatatan refund tetap dilakukan melalui menu Pencatatan Refund.
+          </p>
+        </Section>
+      )}
+
+      {/* 5b. Finance Manager review — layer kedua LEVEL_2 */}
+      {showFinance && (
+        <Section title="Finance Manager Review">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Field
+              label="Keputusan"
+              value={c.finance_manager_decision ? formatFinanceManagerDecision(c.finance_manager_decision) : undefined}
+            />
+            <Field
+              label="Tanggal Review"
+              value={c.finance_manager_reviewed_at ? formatDateTime(c.finance_manager_reviewed_at) : undefined}
+            />
+            <Field label="Review Oleh" value={c.finance_manager_reviewed_by_name} />
+          </div>
+          <Notes label="Catatan Finance Manager" value={c.finance_manager_notes} />
+          {canFinanceManagerReview(role, c) && (
+            <WorkflowForm
+              options={FINANCE_MANAGER_DECISION_LABELS}
+              requiresNotes={() => true}
+              submitLabel="Simpan Keputusan Finance Manager"
+              onSubmit={(choice, notes) =>
+                run(
+                  () => financeManagerReviewComplaint(id, {
+                    decision: choice as FinanceManagerDecision,
+                    notes,
+                  }),
+                  'Keputusan Finance Manager tersimpan.'
+                )
+              }
+            />
+          )}
+        </Section>
+      )}
 
       {/* 6. Refund terkait — read-only. Refund tidak menutup pengaduan. */}
       {(c.statement_refunds?.length ?? 0) > 0 && (

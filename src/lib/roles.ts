@@ -6,6 +6,7 @@ export const ROLE_LABELS: Record<string, string> = {
   Director:            'Direktur',
   ComplianceLead:      'Lead Compliance',
   OperationSupervisor: 'Operation Supervisor',
+  COO:                 'COO',
   ComplaintHandling:   'Complaint Handling',
   FrontDesk:           'Frontline',
   FinanceStaff:        'Finance Staff',

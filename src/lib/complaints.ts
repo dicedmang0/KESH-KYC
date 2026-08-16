@@ -7,6 +7,14 @@ export type ComplaintStatus =
   | 'WAITING_CUSTOMER_DATA'
   | 'OPERATION_INVESTIGATION'
   | 'WAITING_BANK_CONFIRMATION'
+  // Alur berbasis complaint_level (backend migration 0070)
+  | 'COO_REVIEW'
+  | 'FINANCE_STAFF_REVIEW'
+  | 'FINANCE_MANAGER_REVIEW'
+  | 'COMPLIANCE_REVIEW'
+  | 'COMPLIANCE_HOLD'
+  | 'COMPLAINT_HANDLING_FINALIZATION'
+  // Legacy — tiket lama masih memakai status ini
   | 'AML_REVIEW'
   | 'AML_HOLD'
   | 'FINANCE_REVIEW'
@@ -32,8 +40,12 @@ export type ComplaintPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 export type DataVerificationStatus = 'COMPLETE' | 'INCOMPLETE';
 export type OperationInvestigationResult =
   | 'SUCCESS' | 'PENDING' | 'FAILED' | 'RETURNED' | 'NEED_AML_REVIEW' | 'NEED_FINANCE_REVIEW';
-export type AmlDecision     = 'APPROVE' | 'REJECT' | 'HOLD';
-export type FinanceDecision = 'NO_REFUND' | 'REFUND_REQUIRED';
+/** RETURN hanya di COMPLIANCE_REVIEW, RESUME hanya di COMPLIANCE_HOLD. */
+export type AmlDecision     = 'APPROVE' | 'REJECT' | 'HOLD' | 'RETURN' | 'RESUME';
+/** NO_REFUND/REFUND_REQUIRED = tahap legacy; APPROVE/RETURN = FINANCE_STAFF_REVIEW. */
+export type FinanceDecision = 'NO_REFUND' | 'REFUND_REQUIRED' | 'APPROVE' | 'RETURN';
+export type CooDecision            = 'APPROVE' | 'RETURN_TO_SUPERVISOR';
+export type FinanceManagerDecision = 'APPROVE' | 'RETURN';
 
 // ── Entity types ──────────────────────────────────────────────────────────────
 
@@ -74,6 +86,16 @@ export type Complaint = {
   finance_decision?: FinanceDecision | null;
   finance_review_notes?: string | null;
   finance_reviewed_at?: string | null;
+  coo_decision?: CooDecision | null;
+  coo_notes?: string | null;
+  coo_reviewed_at?: string | null;
+  finance_manager_decision?: FinanceManagerDecision | null;
+  finance_manager_notes?: string | null;
+  finance_manager_reviewed_at?: string | null;
+  /** Alias backend untuk aml_* saat tiket berada di tahap COMPLIANCE_REVIEW. */
+  compliance_decision?: AmlDecision | null;
+  compliance_notes?: string | null;
+  compliance_reviewed_at?: string | null;
 
   resolution_notes?: string | null;
   customer_communication_notes?: string | null;
@@ -85,7 +107,10 @@ export type Complaint = {
   data_verified_by_name?: string | null;
   operation_investigated_by_name?: string | null;
   aml_reviewed_by_name?: string | null;
+  compliance_reviewed_by_name?: string | null;
   finance_reviewed_by_name?: string | null;
+  coo_reviewed_by_name?: string | null;
+  finance_manager_reviewed_by_name?: string | null;
   resolved_by_name?: string | null;
   closed_by_name?: string | null;
   created_at?: string | null;
@@ -226,6 +251,12 @@ export const COMPLAINT_STATUS_LABELS: Record<string, string> = {
   WAITING_CUSTOMER_DATA:     'Waiting Customer Data',
   OPERATION_INVESTIGATION:   'Operation Investigation',
   WAITING_BANK_CONFIRMATION: 'Waiting Bank Confirmation',
+  COO_REVIEW:                     'Menunggu Review COO',
+  FINANCE_STAFF_REVIEW:           'Menunggu Review Finance Staff',
+  FINANCE_MANAGER_REVIEW:         'Menunggu Review Finance Manager',
+  COMPLIANCE_REVIEW:              'Menunggu Review Compliance',
+  COMPLIANCE_HOLD:                'Ditahan Compliance',
+  COMPLAINT_HANDLING_FINALIZATION:'Menunggu Finalisasi Pengaduan',
   AML_REVIEW:                'AML Review',
   AML_HOLD:                  'AML Hold',
   FINANCE_REVIEW:            'Finance Review',
@@ -265,15 +296,45 @@ export const OPERATION_RESULT_LABELS: Record<string, string> = {
   NEED_FINANCE_REVIEW: 'Need Finance Review',
 };
 
+/** Pilihan legacy (tahap AML_REVIEW/AML_HOLD) — tanpa RETURN. */
 export const AML_DECISION_LABELS: Record<string, string> = {
   APPROVE: 'Approve',
   REJECT:  'Reject',
   HOLD:    'Hold',
 };
 
+/** Pilihan compliance pada tahap COMPLIANCE_REVIEW — RETURN tersedia di sini. */
+export const COMPLIANCE_DECISION_LABELS: Record<string, string> = {
+  ...AML_DECISION_LABELS,
+  HOLD:   'Tahan (Compliance Hold)',
+  RETURN: 'Kembalikan ke COO',
+};
+
+/** Satu-satunya pilihan saat tiket ditahan: lanjutkan kembali ke review. */
+export const COMPLIANCE_HOLD_DECISION_LABELS: Record<string, string> = {
+  RESUME: 'Lanjutkan Review Compliance',
+};
+
+/** Pilihan legacy (tahap FINANCE_REVIEW/REFUND_PROCESS). */
 export const FINANCE_DECISION_LABELS: Record<string, string> = {
   NO_REFUND:       'Tidak Perlu Refund',
   REFUND_REQUIRED: 'Perlu Refund',
+};
+
+/** Pilihan Finance Staff pada tahap FINANCE_STAFF_REVIEW (alur level). */
+export const FINANCE_STAFF_DECISION_LABELS: Record<string, string> = {
+  APPROVE: 'Setujui — teruskan ke Finance Manager',
+  RETURN:  'Kembalikan ke COO',
+};
+
+export const FINANCE_MANAGER_DECISION_LABELS: Record<string, string> = {
+  APPROVE: 'Setujui — teruskan ke Complaint Handling',
+  RETURN:  'Kembalikan ke Finance Staff',
+};
+
+export const COO_DECISION_LABELS: Record<string, string> = {
+  APPROVE:              'Setujui',
+  RETURN_TO_SUPERVISOR: 'Kembalikan ke Operation Supervisor',
 };
 
 /** Tahap kerja berjalan — diturunkan dari status (backend tidak menyimpan assignee). */
@@ -282,6 +343,12 @@ export const COMPLAINT_STAGE_LABELS: Record<string, string> = {
   WAITING_CUSTOMER_DATA:     'Complaint Handling',
   OPERATION_INVESTIGATION:   'Operation Supervisor',
   WAITING_BANK_CONFIRMATION: 'Operation Supervisor',
+  COO_REVIEW:                     'COO',
+  FINANCE_STAFF_REVIEW:           'Finance Staff',
+  FINANCE_MANAGER_REVIEW:         'Finance Manager',
+  COMPLIANCE_REVIEW:              'Compliance Lead',
+  COMPLIANCE_HOLD:                'Compliance Lead',
+  COMPLAINT_HANDLING_FINALIZATION:'Complaint Handling',
   AML_REVIEW:                'Compliance Lead',
   AML_HOLD:                  'Compliance Lead',
   FINANCE_REVIEW:            'Finance Staff',
@@ -305,9 +372,19 @@ export const formatComplaintLevel    = label(COMPLAINT_LEVEL_LABELS);
 export const formatLevel3Risk        = label(LEVEL_3_RISK_CATEGORY_LABELS);
 export const formatDataVerification  = label(DATA_VERIFICATION_LABELS);
 export const formatOperationResult   = label(OPERATION_RESULT_LABELS);
-export const formatAmlDecision       = label(AML_DECISION_LABELS);
-export const formatFinanceDecision   = label(FINANCE_DECISION_LABELS);
+export const formatAmlDecision       = label({
+  ...COMPLIANCE_DECISION_LABELS,
+  ...COMPLIANCE_HOLD_DECISION_LABELS,
+});
 export const formatComplaintStage    = label(COMPLAINT_STAGE_LABELS);
+export const formatCooDecision       = label(COO_DECISION_LABELS);
+export const formatFinanceManagerDecision = label(FINANCE_MANAGER_DECISION_LABELS);
+
+/** Finance memakai dua kosakata keputusan — satu formatter untuk keduanya. */
+export const formatFinanceDecision = label({
+  ...FINANCE_DECISION_LABELS,
+  ...FINANCE_STAFF_DECISION_LABELS,
+});
 
 export function complaintStatusBadgeClass(status?: string | null): string {
   switch (status) {
@@ -315,6 +392,12 @@ export function complaintStatusBadgeClass(status?: string | null): string {
     case 'WAITING_CUSTOMER_DATA':     return 'bg-amber-100 text-amber-700';
     case 'OPERATION_INVESTIGATION':   return 'bg-indigo-100 text-indigo-700';
     case 'WAITING_BANK_CONFIRMATION': return 'bg-amber-100 text-amber-700';
+    case 'COO_REVIEW':                return 'bg-violet-100 text-violet-700';
+    case 'FINANCE_STAFF_REVIEW':      return 'bg-cyan-100 text-cyan-700';
+    case 'FINANCE_MANAGER_REVIEW':    return 'bg-sky-100 text-sky-700';
+    case 'COMPLIANCE_REVIEW':         return 'bg-purple-100 text-purple-700';
+    case 'COMPLIANCE_HOLD':           return 'bg-orange-100 text-orange-700';
+    case 'COMPLAINT_HANDLING_FINALIZATION': return 'bg-blue-100 text-blue-700';
     case 'AML_REVIEW':                return 'bg-purple-100 text-purple-700';
     case 'AML_HOLD':                  return 'bg-orange-100 text-orange-700';
     case 'FINANCE_REVIEW':            return 'bg-cyan-100 text-cyan-700';
@@ -412,15 +495,27 @@ export const operationInvestigation = action<{
   notes: string;
 }>('operation-investigation');
 
+export const cooReviewComplaint = action<{
+  decision: CooDecision;
+  notes: string;
+}>('coo-review');
+
+// Backend melayani `compliance-review` dan alias lama `aml-review` di handler
+// yang sama; FE memakai nama barunya.
 export const amlReviewComplaint = action<{
   decision: AmlDecision;
   notes: string;
-}>('aml-review');
+}>('compliance-review');
 
 export const financeReviewComplaint = action<{
   decision: FinanceDecision;
   notes: string;
 }>('finance-review');
+
+export const financeManagerReviewComplaint = action<{
+  decision: FinanceManagerDecision;
+  notes: string;
+}>('finance-manager-review');
 
 export const resolveComplaint = action<{
   resolution_notes: string;
@@ -443,6 +538,7 @@ function isRole(role: string | null | undefined, ...allowed: string[]): boolean 
 export const COMPLAINT_VIEW_ROLES = [
   'ComplaintHandling',
   'OperationSupervisor',
+  'COO',
   'ComplianceLead',
   'FinanceStaff',
   'FinanceManager',
@@ -480,36 +576,192 @@ export function canOperationInvestigate(role?: string | null, c?: Complaint | nu
   return (
     isRole(role, 'OperationSupervisor') &&
     !isFinal(c?.status) &&
-    c?.status === 'OPERATION_INVESTIGATION'
+    (c?.status === 'OPERATION_INVESTIGATION' || c?.status === 'WAITING_BANK_CONFIRMATION')
   );
 }
 
-// Backend hanya menerima AML review saat status AML_REVIEW / AML_HOLD.
-export function canAmlReview(role?: string | null, c?: Complaint | null): boolean {
-  return isRole(role, 'ComplianceLead') && (c?.status === 'AML_REVIEW' || c?.status === 'AML_HOLD');
+/** Satu-satunya aksi COO, dan hanya pada tahapnya sendiri. */
+export function canCooReview(role?: string | null, c?: Complaint | null): boolean {
+  return isRole(role, 'COO') && c?.status === 'COO_REVIEW';
 }
 
-// Backend hanya menerima finance review saat status FINANCE_REVIEW / REFUND_PROCESS.
-export function canFinanceReview(role?: string | null, c?: Complaint | null): boolean {
-  return isRole(role, 'FinanceStaff') && (c?.status === 'FINANCE_REVIEW' || c?.status === 'REFUND_PROCESS');
+/** Tahap yang menerima aksi compliance, beserta pilihan keputusannya. */
+const COMPLIANCE_STAGE_OPTIONS: Record<string, Record<string, string>> = {
+  COMPLIANCE_REVIEW: COMPLIANCE_DECISION_LABELS,
+  COMPLIANCE_HOLD:   COMPLIANCE_HOLD_DECISION_LABELS,
+  AML_REVIEW:        AML_DECISION_LABELS, // legacy
+  AML_HOLD:          AML_DECISION_LABELS, // legacy
+};
+
+export function canAmlReview(role?: string | null, c?: Complaint | null): boolean {
+  return isRole(role, 'ComplianceLead') && !!COMPLIANCE_STAGE_OPTIONS[c?.status ?? ''];
 }
+
+// Backend menerima finance review saat FINANCE_STAFF_REVIEW (alur level) atau
+// FINANCE_REVIEW / REFUND_PROCESS (legacy).
+export function canFinanceReview(role?: string | null, c?: Complaint | null): boolean {
+  return (
+    isRole(role, 'FinanceStaff') &&
+    (c?.status === 'FINANCE_STAFF_REVIEW' ||
+      c?.status === 'FINANCE_REVIEW' ||
+      c?.status === 'REFUND_PROCESS')
+  );
+}
+
+export function canFinanceManagerReview(role?: string | null, c?: Complaint | null): boolean {
+  return isRole(role, 'FinanceManager') && c?.status === 'FINANCE_MANAGER_REVIEW';
+}
+
+/** Pilihan keputusan Finance Staff berbeda per tahap — sesuai kosakata backend. */
+export function financeDecisionOptions(c?: Complaint | null): Record<string, string> {
+  return c?.status === 'FINANCE_STAFF_REVIEW'
+    ? FINANCE_STAFF_DECISION_LABELS
+    : FINANCE_DECISION_LABELS;
+}
+
+/** Kosakata keputusan compliance sesuai tahap tiket — cerminan routing backend. */
+export function complianceDecisionOptions(c?: Complaint | null): Record<string, string> {
+  return COMPLIANCE_STAGE_OPTIONS[c?.status ?? ''] ?? AML_DECISION_LABELS;
+}
+
+/** Tahap milik role lain — ComplaintHandling belum boleh menyelesaikan tiket. */
+const OTHER_ROLE_STAGES = [
+  'COO_REVIEW',
+  'FINANCE_STAFF_REVIEW',
+  'FINANCE_MANAGER_REVIEW',
+  'COMPLIANCE_REVIEW',
+  'COMPLIANCE_HOLD',
+];
 
 export function canResolveComplaint(role?: string | null, c?: Complaint | null): boolean {
-  return isRole(role, 'ComplaintHandling') && !isFinal(c?.status) && c?.status !== 'RESOLVED';
+  return (
+    isRole(role, 'ComplaintHandling') &&
+    !isFinal(c?.status) &&
+    c?.status !== 'RESOLVED' &&
+    !OTHER_ROLE_STAGES.includes(c?.status ?? '')
+  );
 }
 
 export function canCloseComplaint(role?: string | null, c?: Complaint | null): boolean {
   return isRole(role, 'ComplaintHandling') && (c?.status === 'RESOLVED' || c?.status === 'REJECTED');
 }
 
-/** True kalau role ini tidak punya satu pun aksi pada tiket (Auditor, FinanceManager, tiket CLOSED). */
+/** True kalau role ini tidak punya satu pun aksi pada tiket (Auditor, tiket CLOSED, tahap milik role lain). */
 export function isComplaintReadOnly(role?: string | null, c?: Complaint | null): boolean {
   return !(
     canVerifyComplaintData(role, c) ||
     canOperationInvestigate(role, c) ||
+    canCooReview(role, c) ||
     canAmlReview(role, c) ||
     canFinanceReview(role, c) ||
+    canFinanceManagerReview(role, c) ||
     canResolveComplaint(role, c) ||
     canCloseComplaint(role, c)
   );
+}
+
+// ── Timeline ──────────────────────────────────────────────────────────────────
+
+export type ComplaintTimelineState = 'done' | 'current' | 'todo';
+
+export type ComplaintTimelineStep = {
+  /** Status yang mewakili tahap ini. */
+  status: ComplaintStatus;
+  /** Role pemegang tahap. */
+  actor: string;
+  /** Ringkasan hasil tahap ("Investigasi selesai", "Menunggu review", …). */
+  detail: string;
+  state: ComplaintTimelineState;
+};
+
+/**
+ * Urutan tahap alur berbasis level. Hanya tahap yang relevan dengan level tiket
+ * yang ikut: LEVEL_1 tanpa Finance/Compliance, LEVEL_3 tanpa Finance.
+ */
+function levelStages(level?: ComplaintLevel | null): ComplaintStatus[] {
+  const finance: ComplaintStatus[] = ['FINANCE_STAFF_REVIEW', 'FINANCE_MANAGER_REVIEW'];
+  const middle: ComplaintStatus[] =
+    level === 'LEVEL_2' ? finance : level === 'LEVEL_3' ? ['COMPLIANCE_REVIEW'] : [];
+  return [
+    'OPEN',
+    'OPERATION_INVESTIGATION',
+    'COO_REVIEW',
+    ...middle,
+    'COMPLAINT_HANDLING_FINALIZATION',
+  ];
+}
+
+/** Kapan tiap tahap dianggap selesai — diturunkan dari timestamp keputusannya. */
+const STAGE_COMPLETED_AT: Record<string, (c: Complaint) => string | null | undefined> = {
+  OPEN:                            (c) => c.data_verified_at,
+  OPERATION_INVESTIGATION:         (c) => c.operation_investigated_at,
+  COO_REVIEW:                      (c) => c.coo_reviewed_at,
+  FINANCE_STAFF_REVIEW:            (c) => c.finance_reviewed_at,
+  FINANCE_MANAGER_REVIEW:          (c) => c.finance_manager_reviewed_at,
+  COMPLIANCE_REVIEW:               (c) => c.compliance_reviewed_at ?? c.aml_reviewed_at,
+  COMPLAINT_HANDLING_FINALIZATION: (c) => c.closed_at ?? c.resolved_at,
+};
+
+const STAGE_DONE_DETAIL: Record<string, string> = {
+  OPEN:                            'Data diterima',
+  OPERATION_INVESTIGATION:         'Investigasi selesai',
+  COO_REVIEW:                      'Disetujui',
+  FINANCE_STAFF_REVIEW:            'Review selesai',
+  FINANCE_MANAGER_REVIEW:          'Review selesai',
+  COMPLIANCE_REVIEW:               'Review selesai',
+  COMPLAINT_HANDLING_FINALIZATION: 'Selesai',
+};
+
+/** Tiket berada di alur COO kalau statusnya tahap baru atau COO sudah memutus. */
+export function isLevelFlowComplaint(c?: Complaint | null): boolean {
+  if (!c) return false;
+  return (
+    c.coo_reviewed_at != null ||
+    OTHER_ROLE_STAGES.includes(c.status ?? '') ||
+    c.status === 'COMPLAINT_HANDLING_FINALIZATION'
+  );
+}
+
+/**
+ * Timeline tahap untuk detail pengaduan. Hanya tahap yang relevan dengan level
+ * tiket yang muncul — LEVEL_1 tidak menampilkan Finance/Compliance sama sekali.
+ * Tahap dianggap selesai kalau timestamp keputusannya sudah terisi; tahap
+ * berjalan diambil dari status saat ini.
+ */
+export function complaintTimeline(c?: Complaint | null): ComplaintTimelineStep[] {
+  if (!c) return [];
+  const stages = levelStages(c.complaint_level);
+  const finished = c.status === 'RESOLVED' || c.status === 'CLOSED';
+  // Status yang bukan tahap tersendiri di timeline tapi menandai tahap mana
+  // yang sedang berjalan (tiket ditahan masih milik Compliance).
+  const currentStage = c.status === 'COMPLIANCE_HOLD' ? 'COMPLIANCE_REVIEW' : c.status;
+
+  return stages.map((status) => {
+    const completedAt = STAGE_COMPLETED_AT[status]?.(c);
+    // Tahap bisa dikunjungi ulang setelah RETURN — status saat ini menang atas
+    // timestamp keputusan lama supaya tahap berjalan tetap benar.
+    const isCurrent = !finished && currentStage === status;
+    const state: ComplaintTimelineState = isCurrent
+      ? 'current'
+      : completedAt || finished
+        ? 'done'
+        : 'todo';
+    const pending =
+      status === 'COMPLIANCE_REVIEW' && c.status === 'COMPLIANCE_HOLD'
+        ? 'Ditahan Compliance'
+        : status === 'COMPLAINT_HANDLING_FINALIZATION'
+          ? 'Finalisasi'
+          : 'Menunggu review';
+    return {
+      status,
+      actor: COMPLAINT_STAGE_LABELS[status] ?? status,
+      detail:
+        state === 'done'
+          ? STAGE_DONE_DETAIL[status] ?? 'Selesai'
+          : state === 'current'
+            ? pending
+            : 'Belum dimulai',
+      state,
+    };
+  });
 }

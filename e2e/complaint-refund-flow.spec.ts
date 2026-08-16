@@ -26,7 +26,13 @@ const SYSADMIN_PASSWORD = process.env.E2E_SYSADMIN_PASSWORD || 'SystemAdmin@123'
 // Password used for every role account this test provisions.
 const ROLE_PASSWORD = 'Test@12345';
 
-type RoleName = 'ComplaintHandling' | 'OperationSupervisor' | 'FinanceStaff' | 'FinanceManager' | 'FrontDesk';
+type RoleName =
+  | 'ComplaintHandling'
+  | 'OperationSupervisor'
+  | 'COO'
+  | 'FinanceStaff'
+  | 'FinanceManager'
+  | 'FrontDesk';
 type Credential = { email: string; password: string };
 
 function escapeRegExp(s: string): string {
@@ -290,6 +296,7 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
     users = {
       ComplaintHandling: { email: `e2e.ch.${ts}@test.local`, password: ROLE_PASSWORD },
       OperationSupervisor: { email: `e2e.os.${ts}@test.local`, password: ROLE_PASSWORD },
+      COO: { email: `e2e.coo.${ts}@test.local`, password: ROLE_PASSWORD },
       FinanceStaff: { email: `e2e.fs.${ts}@test.local`, password: ROLE_PASSWORD },
       FinanceManager: { email: `e2e.fm.${ts}@test.local`, password: ROLE_PASSWORD },
       FrontDesk: { email: `e2e.fd.${ts}@test.local`, password: ROLE_PASSWORD },
@@ -400,8 +407,9 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
     const investigationRes = await investigationResponse;
     expect(investigationRes.status(), await investigationRes.text().catch(() => '')).toBe(201);
 
-    // 13. Assert status becomes FINANCE_REVIEW.
-    await expect(page.getByText('Finance Review', { exact: true }).first()).toBeVisible();
+    // 13. Sejak alur berbasis level, investigasi yang selesai selalu naik ke COO
+    // — bukan langsung ke Finance.
+    await expect(page.getByText('Menunggu Review COO', { exact: true }).first()).toBeVisible();
 
     // 13a. The ticket left OPERATION_INVESTIGATION, so OperationSupervisor keeps
     // the read-only investigation result but loses the editable form entirely.
@@ -414,15 +422,33 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
       page.getByText('Anda memiliki akses baca saja pada pengaduan ini.'),
     ).toBeVisible();
 
-    // 13b. Same lock after the ticket moves further, to REFUND_PROCESS — checked
-    // at the end of the happy path via a revisit (see step 40a).
+    // 13b. Same lock after the ticket moves further — checked at the end of the
+    // happy path via a revisit (see step 40a).
+
+    // 13c. COO approves; LEVEL_2 routes to Finance Staff automatically.
+    await switchRole(page, users.COO.email, users.COO.password);
+    await page.goto(`/complaints/${complaintId}`);
+    await page.getByRole('combobox').selectOption('APPROVE');
+    await page
+      .getByPlaceholder('Tuliskan catatan hasil pemeriksaan…')
+      .fill('Disetujui, diteruskan sesuai level pengaduan.');
+    const cooResponse = page.waitForResponse(
+      (res) => res.url().includes(`/complaints/${complaintId}/coo-review`) && res.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Simpan Keputusan COO' }).click();
+    const cooRes = await cooResponse;
+    expect(cooRes.status(), await cooRes.text().catch(() => '')).toBe(201);
+    await expect(
+      page.getByText('Menunggu Review Finance Staff', { exact: true }).first(),
+    ).toBeVisible();
 
     // 14–15. Switch to FinanceStaff, open the same complaint.
     await switchRole(page, users.FinanceStaff.email, users.FinanceStaff.password);
     await page.goto(`/complaints/${complaintId}`);
 
-    // 16. Fill Finance Review: REFUND_REQUIRED.
-    await page.getByRole('combobox').selectOption('REFUND_REQUIRED');
+    // 16. Fill Finance Staff Review: APPROVE (refund dicatat terpisah di modul
+    // Pencatatan Refund, bukan lewat keputusan tahap ini).
+    await page.getByRole('combobox').selectOption('APPROVE');
     await page
       .getByPlaceholder('Tuliskan catatan hasil pemeriksaan…')
       .fill('Refund perlu diproses berdasarkan hasil investigasi.');
@@ -435,12 +461,14 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
     const financeReviewRes = await financeReviewResponse;
     expect(financeReviewRes.status(), await financeReviewRes.text().catch(() => '')).toBe(201);
 
-    // 18. Assert complaint status becomes REFUND_PROCESS.
-    await expect(page.getByText('Refund Process', { exact: true }).first()).toBeVisible();
-
-    // 19. Assert helper text.
+    // 18. Assert complaint status becomes FINANCE_MANAGER_REVIEW.
     await expect(
-      page.getByText('Proses refund dilakukan melalui menu Pencatatan Refund.'),
+      page.getByText('Menunggu Review Finance Manager', { exact: true }).first(),
+    ).toBeVisible();
+
+    // 19. Assert helper text pointing to the refund module.
+    await expect(
+      page.getByText('Pencatatan refund tetap dilakukan melalui menu Pencatatan Refund.'),
     ).toBeVisible();
 
     // 20. Open /statement-refunds/new (still FinanceStaff — the maker role).
@@ -580,22 +608,44 @@ test.describe('Complaint Handling + Statement Refund — FE-to-BE', () => {
       ),
     ).toBeVisible();
 
-    // 38. Open linked complaint detail.
+    // 38. Open linked complaint detail (still FinanceManager).
     await page.goto(`/complaints/${complaintId}`);
 
-    // 39. Assert complaint is not CLOSED automatically — still Refund Process.
-    await expect(page.getByText('Refund Process', { exact: true }).first()).toBeVisible();
+    // 39. Assert complaint is not CLOSED automatically — still awaiting the
+    // Finance Manager decision on the complaint itself.
+    await expect(
+      page.getByText('Menunggu Review Finance Manager', { exact: true }).first(),
+    ).toBeVisible();
     await expect(page.getByText('Closed', { exact: true })).toHaveCount(0);
 
     // 40. Assert Refund Terkait section contains the statement refund.
     await expect(page.getByRole('heading', { name: 'Refund Terkait' })).toBeVisible();
     await expect(page.getByText(refund.refund_no)).toBeVisible();
 
-    // 40a. Promised in 13b: at REFUND_PROCESS the OperationSupervisor still sees
-    // the investigation result read-only, with no way to overwrite it.
+    // 40a. FinanceManager approves the complaint stage → finalisasi ComplaintHandling.
+    await page.getByRole('combobox').selectOption('APPROVE');
+    await page
+      .getByPlaceholder('Tuliskan catatan hasil pemeriksaan…')
+      .fill('Refund sudah disetujui, pengaduan diteruskan ke Complaint Handling.');
+    const finMgrResponse = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/complaints/${complaintId}/finance-manager-review`) &&
+        res.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Simpan Keputusan Finance Manager' }).click();
+    const finMgrRes = await finMgrResponse;
+    expect(finMgrRes.status(), await finMgrRes.text().catch(() => '')).toBe(201);
+    await expect(
+      page.getByText('Menunggu Finalisasi Pengaduan', { exact: true }).first(),
+    ).toBeVisible();
+
+    // 40b. Promised in 13b: at the finalization stage OperationSupervisor still
+    // sees the investigation result read-only, with no way to overwrite it.
     await switchRole(page, users.OperationSupervisor.email, users.OperationSupervisor.password);
     await page.goto(`/complaints/${complaintId}`);
-    await expect(page.getByText('Refund Process', { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText('Menunggu Finalisasi Pengaduan', { exact: true }).first(),
+    ).toBeVisible();
     await expect(actorField(page, 'Hasil Investigasi')).toHaveText('Returned');
     await expect(page.getByRole('button', { name: 'Simpan Hasil Investigasi' })).toHaveCount(0);
     await expect(page.getByPlaceholder('Tuliskan catatan hasil pemeriksaan…')).toHaveCount(0);
