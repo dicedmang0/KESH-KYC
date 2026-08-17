@@ -810,15 +810,19 @@ export function formatDateTime(v?: string | null): string {
 
 /**
  * Dua tujuan export dengan populasi baris berbeda:
- *   FINAL  - transfer COMPLETED + result SUCCESS, siap dieksekusi di Qlola
- *   REVIEW - transfer PENDING_FINANCE_STAFF_REVIEW, dipakai Finance Staff untuk
- *            mengecek data rekening/bank sebelum menyetujui
- * Keduanya tidak pernah digabung dalam satu file.
+ *   FINAL - transfer COMPLETED + result SUCCESS, siap dieksekusi di Qlola.
+ *           Diunduh FinanceStaff/FinanceManager.
+ *   MAKER - transfer PENDING_FINANCE_STAFF_REVIEW. Peran BRI Qlola: FrontDesk
+ *           = Maker (mengunduh & mengunggah file ini), FinanceStaff = Checker
+ *           (mengecek lewat POST /transfers/:id/finance-review, bukan lewat
+ *           file ini), FinanceManager = Approver.
+ * Keduanya tidak pernah digabung dalam satu file. Backend juga menerima
+ * `purpose=REVIEW` sebagai alias lama untuk MAKER — FE selalu mengirim MAKER.
  */
-export type QlolaPurpose = "FINAL" | "REVIEW";
+export type QlolaPurpose = "FINAL" | "MAKER";
 
-/** Baris yang layak untuk export REVIEW. */
-export function isQlolaReviewRow(t: { status?: string | null }): boolean {
+/** Baris yang layak untuk export MAKER. */
+export function isQlolaMakerRow(t: { status?: string | null }): boolean {
   return t.status === "PENDING_FINANCE_STAFF_REVIEW";
 }
 
@@ -847,16 +851,22 @@ export type QlolaExportError = {
   errors: QlolaRowError[];
 };
 
-/** Role yang boleh mengunduh file Qlola — cerminan @Roles di backend. */
-export const QLOLA_EXPORT_ROLES = [
-  "FinanceStaff",
-  "FinanceManager",
-  "SystemAdmin",
-  "Director",
-];
+/**
+ * Role yang boleh mengunduh tiap purpose — cerminan RBAC per-purpose di
+ * TransfersService.exportBriQlola (bukan satu daftar gabungan: Maker dan
+ * FINAL punya pemilik berbeda di BRI Qlola).
+ */
+export const QLOLA_MAKER_EXPORT_ROLES = ["FrontDesk", "SystemAdmin", "Director"];
+export const QLOLA_FINAL_EXPORT_ROLES = ["FinanceStaff", "FinanceManager", "SystemAdmin", "Director"];
 
-export function canExportQlola(role?: string | null): boolean {
-  return !!role && QLOLA_EXPORT_ROLES.includes(role);
+/** FrontDesk selaku Maker BRI Qlola — FinanceStaff/FinanceManager TIDAK termasuk. */
+export function canExportQlolaMaker(role?: string | null): boolean {
+  return !!role && QLOLA_MAKER_EXPORT_ROLES.includes(role);
+}
+
+/** FinanceStaff/FinanceManager — tidak berubah oleh koreksi Maker/Checker/Approver. */
+export function canExportQlolaFinal(role?: string | null): boolean {
+  return !!role && QLOLA_FINAL_EXPORT_ROLES.includes(role);
 }
 
 /**
@@ -896,7 +906,7 @@ export async function downloadQlolaExport(
   const match = /filename="?([^"]+)"?/.exec(disposition);
   return {
     blob: await res.blob(),
-    fileName: match?.[1] || `BRI_QLOLA_${purpose === "REVIEW" ? "REVIEW" : "BIF"}_${batchId}.xlsx`,
+    fileName: match?.[1] || `BRI_QLOLA_${purpose === "MAKER" ? "MAKER" : "BIF"}_${batchId}.xlsx`,
     eligibleCount: Number(res.headers.get("x-qlola-eligible-count") ?? 0),
     totalCount: Number(res.headers.get("x-qlola-total-count") ?? 0),
   };

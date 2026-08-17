@@ -4,9 +4,17 @@ import * as XLSX from 'xlsx';
 /**
  * FE-to-BE E2E: unduh file BRI Qlola dari detail bulk batch.
  *
+ * Peran BRI Qlola: FrontDesk = Maker (mengunduh & mengunggah file MAKER),
+ * FinanceStaff = Checker (mengecek lewat POST /transfers/:id/finance-review,
+ * TIDAK lewat file ini), FinanceManager = Approver (approval final, juga
+ * tidak lewat file ini). FinanceStaff/FinanceManager tetap mengunduh file
+ * FINAL/arsip seperti sebelumnya — itu tidak berubah oleh koreksi ini.
+ *
  * Alur yang diuji lewat UI sungguhan: buka detail batch → tombol
- * "Download BRI Qlola" → unduhan .xlsx, plus pesan "Belum siap diekspor" saat
- * data belum lengkap, dan tombol yang tidak muncul untuk role tanpa hak.
+ * "Download BRI Qlola" (Maker, FrontDesk) atau "Download Arsip Qlola"
+ * (FINAL, FinanceStaff/FinanceManager) → unduhan .xlsx, plus pesan "Belum
+ * siap diekspor" saat data belum lengkap, dan tombol yang tidak muncul untuk
+ * role tanpa hak pada purpose tersebut.
  *
  * Panggilan backend langsung HANYA untuk setup (membuat batch & menjalankan
  * rantai approval) — bukan alur yang diuji.
@@ -36,14 +44,18 @@ const QLOLA_HEADERS = [
 
 // ── Setup-only backend calls ────────────────────────────────────────────────
 
-async function apiToken(): Promise<string> {
+async function apiLogin(email: string, password: string): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: SYSADMIN_EMAIL, password: SYSADMIN_PASSWORD }),
+    body: JSON.stringify({ email, password }),
   });
   if (!res.ok) throw new Error(`setup: login failed: ${res.status}`);
   return (await res.json()).access_token;
+}
+
+async function apiToken(): Promise<string> {
+  return apiLogin(SYSADMIN_EMAIL, SYSADMIN_PASSWORD);
 }
 
 async function api(token: string, path: string, init: RequestInit = {}) {
@@ -179,6 +191,30 @@ async function ensureFinanceStaff(sysAdminToken: string) {
   return { email, password: FINANCE_STAFF_PASSWORD };
 }
 
+const FINANCE_MANAGER_PASSWORD = 'Test@12345';
+
+/** FinanceManager (Approver Qlola) — dipakai untuk memastikan mereka tidak melihat tombol Maker. */
+async function ensureFinanceManager(sysAdminToken: string) {
+  const email = 'e2e-qlola-financemanager@test.local';
+  const res = await fetch(`${API_BASE_URL}/users/admins`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sysAdminToken}` },
+    body: JSON.stringify({
+      email,
+      fullName: 'E2E Qlola Finance Manager',
+      role: 'FinanceManager',
+      password: FINANCE_MANAGER_PASSWORD,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    if (!/already exists/i.test(text)) {
+      throw new Error(`setup: create FinanceManager → ${res.status} ${text}`);
+    }
+  }
+  return { email, password: FINANCE_MANAGER_PASSWORD };
+}
+
 // ── FE helpers ──────────────────────────────────────────────────────────────
 
 async function login(page: Page, email = SYSADMIN_EMAIL, password = SYSADMIN_PASSWORD) {
@@ -249,7 +285,7 @@ test.describe('Export BRI Qlola dari bulk batch', () => {
     await page.goto(`/transfers/bulk-batches/${draftOnly.batchId}`);
     await expect(page.getByTestId('batch-child-row')).toHaveCount(1);
     await expect(page.getByTestId('download-qlola-final')).toHaveCount(0);
-    await expect(page.getByTestId('download-qlola-review')).toHaveCount(0);
+    await expect(page.getByTestId('download-qlola-maker')).toHaveCount(0);
     await expect(page.getByTestId('qlola-blockers')).toHaveCount(0);
   });
 
@@ -277,9 +313,52 @@ test.describe('Export BRI Qlola dari bulk batch', () => {
     await expect(blockers).toContainText('BenBankIdentifier tidak tersedia');
   });
 
-  test('FinanceStaff: tombol review, ?purpose=REVIEW, dan aksi Review per baris', async ({ page }) => {
+  test('FrontDesk (Maker): tombol Download BRI Qlola, ?purpose=MAKER, dan aksi Review per baris', async ({ page }) => {
+    // GET bulk-batches/:id membatasi FrontDesk hanya ke batch yang dia buat
+    // sendiri (lihat TransfersService.getBulkBatchById) — jadi batch di test
+    // ini harus dibuat pakai token FrontDesk itu sendiri, bukan token sysadmin.
+    const frontDesk = await ensureFrontDesk(token);
+    const frontDeskToken = await apiLogin(frontDesk.email, frontDesk.password);
+
+    const { batchId, children } = await createBatch(frontDeskToken, senderId, [
+      item({ beneficiaryAccountName: 'E2E Qlola Maker' }),
+    ]);
+    // Lanjutkan rantai approval pakai token sysadmin (full-access bypass) —
+    // submit/supervisor-review tidak dibatasi kepemilikan seperti detail batch.
+    await toFinanceStaffReview(token, children[0].id);
+
+    await login(page, frontDesk.email, frontDesk.password);
+    await page.goto(`/transfers/bulk-batches/${batchId}`);
+
+    // Hitungan + helper text jalur Maker — bukan lagi "untuk review Finance Staff".
+    await expect(page.getByText('1 transaksi siap dibuat di Qlola')).toBeVisible();
+    await expect(
+      page.getByText('File digunakan Frontline sebagai Maker untuk upload transaksi ke BRI Qlola.'),
+    ).toBeVisible();
+    // Tidak ada baris final, jadi tombol arsip tidak muncul untuk FrontDesk.
+    await expect(page.getByTestId('download-qlola-final')).toHaveCount(0);
+
+    // Unduhan memakai ?purpose=MAKER dan menghasilkan file bertanda MAKER.
+    const [request, download] = await Promise.all([
+      page.waitForRequest((r) => r.url().includes('/exports/bri-qlola')),
+      page.waitForEvent('download'),
+      page.getByTestId('download-qlola-maker').click(),
+    ]);
+    expect(request.url()).toContain('purpose=MAKER');
+    expect(download.suggestedFilename()).toMatch(/^BRI_QLOLA_MAKER_.+_\d{12}\.xlsx$/);
+
+    // FrontDesk melihat baris anak, tapi bukan aksi approval Finance Staff.
+    const actionCell = page.getByTestId('child-action-cell').first();
+    await expect(actionCell.getByRole('link', { name: 'Review' })).toBeVisible();
+    await actionCell.getByRole('link', { name: 'Review' }).click();
+    await page.waitForURL(/\/transfers\/\d+$/);
+    await expect(page.getByRole('button', { name: 'Review Finance Staff' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Kembalikan Transaksi' })).toHaveCount(0);
+  });
+
+  test('FinanceStaff: tidak melihat tombol Maker, tetap punya Review Finance Staff / Kembalikan Transaksi', async ({ page }) => {
     const { batchId, children } = await createBatch(token, senderId, [
-      item({ beneficiaryAccountName: 'E2E Qlola Review' }),
+      item({ beneficiaryAccountName: 'E2E Qlola Checker' }),
     ]);
     await toFinanceStaffReview(token, children[0].id);
     const financeStaff = await ensureFinanceStaff(token);
@@ -287,40 +366,32 @@ test.describe('Export BRI Qlola dari bulk batch', () => {
     await login(page, financeStaff.email, financeStaff.password);
     await page.goto(`/transfers/bulk-batches/${batchId}`);
 
-    // Hitungan + helper text jalur review.
-    await expect(page.getByText('1 transaksi siap direview')).toBeVisible();
-    await expect(
-      page.getByText(
-        'File ini digunakan Finance Staff untuk pengecekan rekening/data transaksi sebelum approval.',
-      ),
-    ).toBeVisible();
-    // Tidak ada baris final, jadi tombol final tidak muncul.
-    await expect(page.getByTestId('download-qlola-final')).toHaveCount(0);
+    // FinanceStaff adalah Checker, bukan Maker — tombol Maker tidak boleh tampil.
+    await expect(page.getByTestId('download-qlola-maker')).toHaveCount(0);
+    await expect(page.getByText('File digunakan Frontline sebagai Maker')).toHaveCount(0);
 
-    // Unduhan memakai ?purpose=REVIEW dan menghasilkan file bertanda REVIEW.
-    const [request, download] = await Promise.all([
-      page.waitForRequest((r) => r.url().includes('/exports/bri-qlola')),
-      page.waitForEvent('download'),
-      page.getByTestId('download-qlola-review').click(),
-    ]);
-    expect(request.url()).toContain('purpose=REVIEW');
-    expect(download.suggestedFilename()).toMatch(/^BRI_QLOLA_REVIEW_.+_\d{12}\.xlsx$/);
-
-    // Baris yang menunggu Finance Staff diberi aksi "Review" menuju detail anak.
     const actionCell = page.getByTestId('child-action-cell').first();
-    await expect(actionCell.getByRole('link', { name: 'Review' })).toBeVisible();
     await actionCell.getByRole('link', { name: 'Review' }).click();
     await page.waitForURL(/\/transfers\/\d+$/);
-    // Di detail anak, Finance Staff punya kedua aksi per transaksi — menyetujui
-    // dan mengembalikan. Keduanya sudah ada sebelumnya; tidak ada alur
-    // pengembalian baru yang dibuat untuk fitur review ini.
     await expect(page.getByRole('button', { name: 'Review Finance Staff' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Kembalikan Transaksi' })).toBeVisible();
   });
 
-  test('batch campuran menampilkan dua tombol terpisah', async ({ page }) => {
+  test('FinanceManager: tidak melihat tombol Maker', async ({ page }) => {
     const { batchId, children } = await createBatch(token, senderId, [
-      item({ beneficiaryAccountName: 'E2E Mixed Review' }),
+      item({ beneficiaryAccountName: 'E2E Qlola Approver' }),
+    ]);
+    await toFinanceStaffReview(token, children[0].id);
+    const financeManager = await ensureFinanceManager(token);
+
+    await login(page, financeManager.email, financeManager.password);
+    await page.goto(`/transfers/bulk-batches/${batchId}`);
+    await expect(page.getByTestId('download-qlola-maker')).toHaveCount(0);
+  });
+
+  test('batch campuran (SystemAdmin, akses penuh) menampilkan dua tombol terpisah', async ({ page }) => {
+    const { batchId, children } = await createBatch(token, senderId, [
+      item({ beneficiaryAccountName: 'E2E Mixed Maker' }),
       item({ beneficiaryAccountName: 'E2E Mixed Final' }),
     ]);
     await toFinanceStaffReview(token, children[0].id);
@@ -329,10 +400,10 @@ test.describe('Export BRI Qlola dari bulk batch', () => {
     await login(page);
     await page.goto(`/transfers/bulk-batches/${batchId}`);
 
-    await expect(page.getByTestId('download-qlola-review')).toBeVisible();
+    await expect(page.getByTestId('download-qlola-maker')).toBeVisible();
     await expect(page.getByTestId('download-qlola-final')).toBeVisible();
-    await expect(page.getByText('1 transaksi siap direview')).toBeVisible();
-    await expect(page.getByText('1 transaksi siap diekspor')).toBeVisible();
+    await expect(page.getByText('1 transaksi siap dibuat di Qlola')).toBeVisible();
+    await expect(page.getByText('1 transaksi sudah final')).toBeVisible();
   });
 
   test('Ringkasan Batch: label Indonesia, tanpa enum mentah dan tanpa hitungan nol', async ({ page }) => {
@@ -397,17 +468,21 @@ test.describe('Export BRI Qlola dari bulk batch', () => {
     }
   });
 
-  test('role tanpa hak tidak melihat aksi unduh', async ({ page }) => {
-    const { batchId, children } = await createBatch(token, senderId, [item()]);
-    await approveChild(token, children[0].id);
-
-    // FrontDesk membuat batch, tapi tidak boleh menarik instruksi bayar ke bank.
+  test('FrontDesk tidak melihat tombol arsip (FINAL) pada batch berisi transaksi final', async ({ page }) => {
+    // Batch dibuat pakai token FrontDesk sendiri — lihat catatan kepemilikan
+    // di test "FrontDesk (Maker)" di atas.
     const frontDesk = await ensureFrontDesk(token);
+    const frontDeskToken = await apiLogin(frontDesk.email, frontDesk.password);
+
+    const { batchId, children } = await createBatch(frontDeskToken, senderId, [item()]);
+    await approveChild(token, children[0].id);
 
     await login(page, frontDesk.email, frontDesk.password);
     await page.goto(`/transfers/bulk-batches/${batchId}`);
     await expect(page.getByText('Bulk Batch')).toBeVisible();
     await expect(page.getByTestId('download-qlola-final')).toHaveCount(0);
-    await expect(page.getByTestId('download-qlola-review')).toHaveCount(0);
+    // Tidak ada baris PENDING_FINANCE_STAFF_REVIEW pada batch ini, jadi tombol
+    // Maker juga tidak tampil — bukan karena FrontDesk kekurangan hak.
+    await expect(page.getByTestId('download-qlola-maker')).toHaveCount(0);
   });
 });

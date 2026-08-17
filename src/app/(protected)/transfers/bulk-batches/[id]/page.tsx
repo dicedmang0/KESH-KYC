@@ -8,10 +8,11 @@ import {
   formatTransferAmount,
   transferReference,
   formatDateTime,
-  canExportQlola,
+  canExportQlolaMaker,
+  canExportQlolaFinal,
   downloadQlolaExport,
   isQlolaFinalRow,
-  isQlolaReviewRow,
+  isQlolaMakerRow,
   saveBlob,
   type BulkBatchDetail,
   type QlolaPurpose,
@@ -51,7 +52,8 @@ export default function BulkBatchDetailPage() {
 
   const { token } = useAuth();
   const role = getRoleFromToken(token);
-  const showQlolaExport = canExportQlola(role);
+  const showQlolaMakerExport = canExportQlolaMaker(role);
+  const showQlolaFinalExport = canExportQlolaFinal(role);
 
   const [data, setData] = useState<BulkBatchDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -71,7 +73,7 @@ export default function BulkBatchDetailPage() {
     try {
       const { blob, fileName, eligibleCount, totalCount } = await downloadQlolaExport(id!, purpose);
       saveBlob(blob, fileName);
-      const what = purpose === 'REVIEW' ? 'diunduh untuk review' : 'diekspor ke BRI Qlola';
+      const what = purpose === 'MAKER' ? 'diunduh sebagai Maker BRI Qlola' : 'diekspor ke BRI Qlola';
       toast.success(
         eligibleCount === totalCount
           ? `${eligibleCount} transaksi ${what}.`
@@ -115,7 +117,7 @@ export default function BulkBatchDetailPage() {
 
   // Dua populasi export dihitung dari baris anak yang sudah dimuat — bukan dari
   // status_summary, yang tidak membedakan COMPLETED/SUCCESS dari COMPLETED/FAILED.
-  const reviewCount = transfers.filter(isQlolaReviewRow).length;
+  const makerCount = transfers.filter(isQlolaMakerRow).length;
   const finalCount = transfers.filter(isQlolaFinalRow).length;
 
   // Ringkasan status: hanya yang jumlahnya > 0, dengan label bahasa Indonesia
@@ -191,35 +193,34 @@ export default function BulkBatchDetailPage() {
               )}
             </div>
 
-            {showQlolaExport && (reviewCount > 0 || finalCount > 0) && (
+            {((showQlolaMakerExport && makerCount > 0) || (showQlolaFinalExport && finalCount > 0)) && (
               <div className="border-t pt-3 space-y-3">
-                {reviewCount > 0 && (
+                {showQlolaMakerExport && makerCount > 0 && (
                   <div className="flex items-start justify-between flex-wrap gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">{reviewCount} transaksi siap direview</p>
+                      <p className="text-sm font-medium">{makerCount} transaksi siap dibuat di Qlola</p>
                       <p className="text-xs text-neutral-500">
-                        File ini digunakan Finance Staff untuk pengecekan rekening/data transaksi
-                        sebelum approval.
+                        File digunakan Frontline sebagai Maker untuk upload transaksi ke BRI Qlola.
                       </p>
                     </div>
                     <button
                       type="button"
-                      data-testid="download-qlola-review"
-                      onClick={() => onDownloadQlola('REVIEW')}
+                      data-testid="download-qlola-maker"
+                      onClick={() => onDownloadQlola('MAKER')}
                       disabled={qlolaBusy !== null}
                       className="rounded-lg border px-4 py-2 text-sm whitespace-nowrap hover:bg-slate-50 disabled:opacity-50"
                     >
-                      {qlolaBusy === 'REVIEW' ? 'Menyiapkan…' : 'Download Qlola untuk Review'}
+                      {qlolaBusy === 'MAKER' ? 'Menyiapkan…' : 'Download BRI Qlola'}
                     </button>
                   </div>
                 )}
 
-                {finalCount > 0 && (
+                {showQlolaFinalExport && finalCount > 0 && (
                   <div className="flex items-start justify-between flex-wrap gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">{finalCount} transaksi siap diekspor</p>
+                      <p className="text-sm font-medium">{finalCount} transaksi sudah final</p>
                       <p className="text-xs text-neutral-500">
-                        Hanya transaksi yang sudah disetujui final yang ikut diekspor.
+                        Untuk arsip. Jangan di-upload ulang ke Qlola apabila transaksi sudah dibuat oleh Maker.
                       </p>
                     </div>
                     <button
@@ -229,7 +230,7 @@ export default function BulkBatchDetailPage() {
                       disabled={qlolaBusy !== null}
                       className="rounded-lg border px-4 py-2 text-sm whitespace-nowrap hover:bg-slate-50 disabled:opacity-50"
                     >
-                      {qlolaBusy === 'FINAL' ? 'Menyiapkan…' : 'Download Qlola Final'}
+                      {qlolaBusy === 'FINAL' ? 'Menyiapkan…' : 'Download Arsip Qlola'}
                     </button>
                   </div>
                 )}
@@ -318,7 +319,7 @@ export default function BulkBatchDetailPage() {
                         className="text-sm text-kesh-700 hover:underline font-medium"
                         href={`/transfers/${t.id}`}
                       >
-                        {isQlolaReviewRow(t) ? 'Review' : 'Detail'}
+                        {isQlolaMakerRow(t) ? 'Review' : 'Detail'}
                       </Link>
                     </div>
                   </div>
