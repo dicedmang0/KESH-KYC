@@ -23,6 +23,7 @@ type FormState = Record<string, string>;
 
 export type BusinessIdentity = {
   legal_name?: string | null;
+  trade_name?: string | null;
   legal_form?: string | null;
   legal_form_other?: string | null;
   deed_number?: string | null;
@@ -31,6 +32,7 @@ export type BusinessIdentity = {
   incorporation_date?: string | null;
   business_license_number?: string | null;
   nib?: string | null;
+  country?: string | null;
   npwp?: string | null;
   address_line?: string | null;
   city?: string | null;
@@ -59,7 +61,25 @@ export type BusinessIdentity = {
   distribution_channel?: string | null;
   director_share_percentage?: number | string | null;
   commissioner_share_percentage?: number | string | null;
+  representative_signature_name?: string | null;
+  verification_officer?: string | null;
+  supervisor?: string | null;
 };
+
+const DATA_REVIEW_BUSINESS_FIELDS = new Set([
+  "legal_name", "trade_name", "nib", "npwp", "legal_form", "legal_form_other",
+  "business_license_number", "business_activity", "business_activity_other",
+  "incorporation_date", "country", "phone", "company_email", "pic_name",
+  "pic_position", "pic_identity_number", "pic_identity_type",
+  "representative_signature_name", "verification_officer", "supervisor",
+  "source_of_funds", "source_of_funds_other", "business_relationship_purpose",
+  "business_relationship_purpose_other", "distribution_channel",
+  "business_province_code", "business_province_name", "business_city_code",
+  "business_city_name", "business_district_code", "business_district_name",
+  "business_village_code", "business_village_name", "director_share_percentage",
+  "commissioner_share_percentage", "deed_establishment_number",
+  "deed_latest_amendment_number", "address_line",
+]);
 
 const FALLBACK_LEGAL_FORMS = [
   "PT", "CV", "FIRMA", "KOPERASI", "YAYASAN", "PERKUMPULAN", "PERORANGAN", "BUMN_BUMD", "LAINNYA",
@@ -105,6 +125,7 @@ function toRefList(r: unknown): RefItem[] {
 function initialState(b: BusinessIdentity): FormState {
   return {
     legal_name: s(b.legal_name),
+    trade_name: s(b.trade_name),
     legal_form: s(b.legal_form),
     legal_form_other: s(b.legal_form_other),
     // Data lama hanya punya deed_number — pakai sebagai No. Akta Pendirian.
@@ -112,12 +133,16 @@ function initialState(b: BusinessIdentity): FormState {
     deed_latest_amendment_number: s(b.deed_latest_amendment_number),
     incorporation_date: toDateInput(b.incorporation_date),
     business_license_number: s(b.business_license_number || b.nib),
+    nib: s(b.nib),
+    country: s(b.country),
     npwp: s(b.npwp),
     address_line: s(b.address_line),
     city: s(b.city),
     province: s(b.province),
     business_province_code: s(b.business_province_code),
+    business_province_name: s(b.business_province_name || b.province),
     business_city_code: s(b.business_city_code),
+    business_city_name: s(b.business_city_name || b.city),
     business_district_code: s(b.business_district_code),
     business_district_name: s(b.business_district_name),
     business_village_code: s(b.business_village_code),
@@ -138,6 +163,9 @@ function initialState(b: BusinessIdentity): FormState {
     distribution_channel: s(b.distribution_channel),
     director_share_percentage: s(b.director_share_percentage),
     commissioner_share_percentage: s(b.commissioner_share_percentage),
+    representative_signature_name: s(b.representative_signature_name),
+    verification_officer: s(b.verification_officer),
+    supervisor: s(b.supervisor),
   };
 }
 
@@ -191,11 +219,23 @@ export default function BusinessIdentityForm({
   business,
   onSaved,
   onCancel,
+  saveAdapter,
+  submitLabel,
+  disabled = false,
 }: {
   appId: number | string;
   business: BusinessIdentity;
   onSaved: () => void | Promise<void>;
   onCancel: () => void;
+  /**
+   * Penyimpanan yang disuntikkan. Tanpa prop ini perilaku lama tidak berubah:
+   * tetap PATCH /applications/:id/business (data live). Konteks Pengkinian Data
+   * mengoper adapter change-set, sehingga FORM YANG SAMA dipakai untuk menyusun
+   * usulan perubahan tanpa menyentuh data live.
+   */
+  saveAdapter?: (patch: BusinessIdentityPayload) => Promise<unknown>;
+  submitLabel?: string;
+  disabled?: boolean;
 }) {
   const initial = useMemo(() => initialState(business), [business]);
   const [form, setForm] = useState<FormState>(initial);
@@ -277,9 +317,14 @@ export default function BusinessIdentityForm({
   /** Client-side mirror of the backend's rules — the API stays the authority. */
   function validate(): string {
     for (const [key, label] of REQUIRED_FIELDS) {
-      if (!form[key].trim()) return `${label} wajib diisi.`;
+      if (!saveAdapter && !form[key].trim()) return `${label} wajib diisi.`;
+      if (saveAdapter && form[key] !== initial[key] && !form[key].trim()) {
+        return `${label} tidak boleh dikosongkan.`;
+      }
     }
-    if (!/^\d{15}$/.test(form.npwp.trim())) return "NPWP Badan Usaha wajib 15 digit angka.";
+    if ((!saveAdapter || form.npwp !== initial.npwp) && !/^\d{15}$/.test(form.npwp.trim())) {
+      return "NPWP Badan Usaha wajib 15 digit angka.";
+    }
     if (isPT && !form.deed_establishment_number.trim()) {
       return "Nomor Akta Pendirian wajib diisi untuk badan usaha PT.";
     }
@@ -313,6 +358,7 @@ export default function BusinessIdentityForm({
   function buildPayload(): BusinessIdentityPayload {
     const payload: Record<string, unknown> = {};
     for (const key of Object.keys(form)) {
+      if (saveAdapter && !DATA_REVIEW_BUSINESS_FIELDS.has(key)) continue;
       const value = form[key].trim();
       if (value === initial[key].trim()) continue;
       if (NUMERIC_FIELDS.has(key)) payload[key] = value === "" ? null : Number(value);
@@ -336,8 +382,13 @@ export default function BusinessIdentityForm({
     setErr("");
     setSaving(true);
     try {
-      await updateBusinessApplication(appId, payload);
-      toast.success("Identitas badan usaha tersimpan.");
+      if (saveAdapter) await saveAdapter(payload);
+      else await updateBusinessApplication(appId, payload);
+      toast.success(
+        saveAdapter
+          ? "Usulan perubahan tersimpan di draft pengkinian."
+          : "Identitas badan usaha tersimpan.",
+      );
       await onSaved();
     } catch (e: unknown) {
       // Surface the backend's own validation message verbatim.
@@ -355,8 +406,10 @@ export default function BusinessIdentityForm({
     <div className="space-y-4">
       {err && <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{err}</div>}
 
+      <fieldset disabled={disabled} className="space-y-4 disabled:opacity-75">
       <div className="grid gap-4 md:grid-cols-2">
         <Text label="Nama Badan Usaha" field="legal_name" value={form.legal_name} onChange={set} required />
+        <Text label="Nama Dagang" field="trade_name" value={form.trade_name} onChange={set} />
         <div className="grid gap-1 min-w-0">
           <span className="text-sm font-medium">Bentuk Badan Usaha <span className="text-red-500">*</span></span>
           <select
@@ -395,6 +448,7 @@ export default function BusinessIdentityForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <Text label="Nomor Izin Usaha (NIB/OSS/SIUP/dll)" field="business_license_number" value={form.business_license_number} onChange={set} />
+        <Text label="NIB" field="nib" value={form.nib} onChange={set} />
         <Text
           label="NPWP Badan Usaha"
           field="npwp" value={form.npwp} onChange={set}
@@ -403,6 +457,10 @@ export default function BusinessIdentityForm({
           inputMode="numeric"
           placeholder="15 digit angka"
         />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Text label="Negara Pendirian" field="country" value={form.country} onChange={set} placeholder="Indonesia" />
       </div>
 
       <div className="grid gap-4">
@@ -456,8 +514,10 @@ export default function BusinessIdentityForm({
               setForm((f) => ({
                 ...f,
                 business_province_code: code,
+                business_province_name: provinces.find((p) => p.code === code)?.name || "",
                 province: provinces.find((p) => p.code === code)?.name || "",
                 business_city_code: "",
+                business_city_name: "",
                 city: "",
                 business_district_code: "",
                 business_district_name: "",
@@ -487,6 +547,7 @@ export default function BusinessIdentityForm({
               setForm((f) => ({
                 ...f,
                 business_city_code: code,
+                business_city_name: regencies.find((r) => r.code === code)?.name || "",
                 city: regencies.find((r) => r.code === code)?.name || "",
                 business_district_code: "",
                 business_district_name: "",
@@ -556,7 +617,7 @@ export default function BusinessIdentityForm({
             <span className="text-xs text-slate-500">Tersimpan: {form.business_village_name}</span>
           )}
         </label>
-        <Text label="Kode Pos" field="postal_code" value={form.postal_code} onChange={set} required />
+        {!saveAdapter && <Text label="Kode Pos" field="postal_code" value={form.postal_code} onChange={set} required />}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -674,7 +735,14 @@ export default function BusinessIdentityForm({
         />
       </div>
 
-      <div className="flex justify-end gap-2 border-t pt-4">
+      <div className="grid gap-4 md:grid-cols-3 border-t pt-4">
+        <Text label="Nama Penanda Tangan Perwakilan" field="representative_signature_name" value={form.representative_signature_name} onChange={set} />
+        <Text label="Petugas Verifikasi" field="verification_officer" value={form.verification_officer} onChange={set} />
+        <Text label="Supervisor" field="supervisor" value={form.supervisor} onChange={set} />
+      </div>
+      </fieldset>
+
+      {!disabled && <div className="flex justify-end gap-2 border-t pt-4">
         <button
           type="button"
           onClick={onCancel}
@@ -688,9 +756,9 @@ export default function BusinessIdentityForm({
           disabled={saving}
           className="rounded-lg bg-kesh-700 px-4 py-2 text-sm font-medium text-white hover:bg-kesh-600 disabled:opacity-50"
         >
-          {saving ? "Menyimpan…" : "Simpan Identitas"}
+          {saving ? "Menyimpan…" : (submitLabel ?? "Simpan Identitas")}
         </button>
-      </div>
+      </div>}
     </div>
   );
 }

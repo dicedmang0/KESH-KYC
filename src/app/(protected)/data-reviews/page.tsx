@@ -10,7 +10,6 @@ import { formatCif } from '@/lib/utils';
 import {
   listDataReviews,
   initiateDataReview,
-  submitDataReview,
   decideDataReview,
   dueStatusLabel,
   reviewStatusLabel,
@@ -157,6 +156,19 @@ export default function DataReviewsPage() {
       toast.success(okMsg);
       setDecisionFor(null);
       setReason('');
+      setReload((n) => n + 1);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Aksi gagal. Silakan coba lagi.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function initiate(id: number) {
+    setBusyId(id);
+    try {
+      const res = await initiateDataReview(id);
+      toast.success(res.created ? 'Pengkinian data berhasil dimulai.' : 'Pengkinian data sedang berjalan.');
       setReload((n) => n + 1);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Aksi gagal. Silakan coba lagi.');
@@ -334,45 +346,22 @@ export default function DataReviewsPage() {
                         {canStart && (
                           <button
                             disabled={busy}
-                            onClick={() => run(r.application_id, () => initiateDataReview(r.application_id), 'Permintaan pengkinian data dikirim ke Frontline.')}
+                            onClick={() => initiate(r.application_id)}
                             className="rounded-md bg-kesh-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-kesh-600 disabled:opacity-60 whitespace-nowrap"
                           >
-                            Minta Pengkinian Data
+                            Mulai Pengkinian Data
                           </button>
                         )}
                         {canSend && (
-                          <button
-                            disabled={busy}
-                            onClick={() => run(r.application_id, () => submitDataReview(r.application_id), 'Hasil pengkinian data diajukan untuk review Compliance.')}
-                            className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60 whitespace-nowrap"
+                          <Link
+                            href={`/data-reviews/${active?.id}/edit`}
+                            className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700 whitespace-nowrap"
                           >
-                            {active?.status === 'RETURNED_FOR_REVISION' ? 'Ajukan Ulang Hasil Pengkinian' : 'Ajukan Hasil Pengkinian'}
-                          </button>
+                            {active?.status === 'RETURNED_FOR_REVISION' ? 'Perbaiki & Ajukan Ulang' : 'Perbarui Data'}
+                          </Link>
                         )}
                         {canJudge && (
-                          <>
-                            <button
-                              disabled={busy}
-                              onClick={() => run(r.application_id, () => decideDataReview(r.application_id, { decision: 'APPROVED' }), 'Pengkinian data disetujui.')}
-                              className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60 whitespace-nowrap"
-                            >
-                              Setujui
-                            </button>
-                            <button
-                              disabled={busy}
-                              onClick={() => { setDecisionFor({ row: r, decision: 'RETURN_FOR_REVISION' }); setReason(''); }}
-                              className="rounded-md bg-orange-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-60 whitespace-nowrap"
-                            >
-                              Kembalikan untuk Revisi
-                            </button>
-                            <button
-                              disabled={busy}
-                              onClick={() => { setDecisionFor({ row: r, decision: 'REJECTED' }); setReason(''); }}
-                              className="rounded-md bg-red-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-60 whitespace-nowrap"
-                            >
-                              Tolak
-                            </button>
-                          </>
+                          <Link href={`/data-reviews/${active?.id}/edit`} className="rounded-md bg-kesh-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-kesh-600 whitespace-nowrap">Tinjau Perubahan</Link>
                         )}
                       </div>
                     </td>

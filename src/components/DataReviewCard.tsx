@@ -68,6 +68,9 @@ export default function DataReviewCard({ appId, role }: { appId: string; role: s
   const showInitiate = canInitiateDataReview(role) && !data?.active_review;
   const showSubmit = canSubmitDataReview(role) && !!activeStatus && SUBMITTABLE.includes(activeStatus);
   const showDecide = canDecideDataReview(role) && !!activeStatus && DECIDABLE.includes(activeStatus);
+  // Draft submission and Compliance decisions belong on the staged diff page,
+  // so the detail card only links there and never bypasses review context.
+  const showWorkflowShortcuts = false;
 
   async function run(fn: () => Promise<unknown>, okMsg: string) {
     setBusy(true);
@@ -76,6 +79,19 @@ export default function DataReviewCard({ appId, role }: { appId: string; role: s
       toast.success(okMsg);
       setDecision(null);
       setReason('');
+      await load();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Aksi gagal. Silakan coba lagi.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function initiate() {
+    setBusy(true);
+    try {
+      const res = await initiateDataReview(appId);
+      toast.success(res.created ? 'Pengkinian data berhasil dimulai.' : 'Pengkinian data sedang berjalan.');
       await load();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Aksi gagal. Silakan coba lagi.');
@@ -134,18 +150,51 @@ export default function DataReviewCard({ appId, role }: { appId: string; role: s
           </div>
 
           {data.last_review && (
-            <div className="rounded-lg bg-slate-50 p-3 space-y-1 text-xs text-slate-600">
-              <p className="font-semibold text-slate-700">Review Terakhir</p>
+            <div className={`rounded-lg p-3 space-y-2 text-xs ${data.active_review ? 'bg-kesh-50 border border-kesh-100 text-kesh-900' : 'bg-slate-50 text-slate-600'}`}>
+              <p className={`font-semibold ${data.active_review ? 'text-kesh-800' : 'text-slate-700'}`}>
+                {data.active_review ? 'Pengkinian Sedang Berjalan' : 'Review Terakhir'}
+              </p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <Info label="No. Review" value={<span className="font-mono">{data.last_review.review_no}</span>} />
                 <Info label="Status" value={dataReviewStatusLabel(data.last_review.status)} />
                 <Info label="Jenis" value={data.last_review.review_type} />
-                <Info label="Dimulai" value={fmt(data.last_review.initiated_at)} />
+                {data.active_review && (
+                  <Info label="Diinisiasi oleh" value={data.active_review.initiated_by_name} />
+                )}
+                <Info label="Tanggal Dimulai" value={fmt(data.last_review.initiated_at)} />
                 <Info label="Diajukan" value={fmt(data.last_review.submitted_at)} />
                 <Info label="Direview" value={fmt(data.last_review.reviewed_at)} />
               </div>
               {data.last_review.decision_notes && (
                 <p className="pt-1">Catatan: <span className="text-slate-700">{data.last_review.decision_notes}</span></p>
+              )}
+              {data.active_review && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {showSubmit && (
+                    // Konteks draft, BUKAN form onboarding: perubahan di sana
+                    // masuk change-set dan baru berlaku setelah Compliance setuju.
+                    <Link
+                      href={`/data-reviews/${data.active_review.id}/edit`}
+                      className="rounded-lg border border-kesh-700 px-3 py-1.5 text-xs font-medium text-kesh-700 hover:bg-kesh-100"
+                    >
+                      Perbarui Data
+                    </Link>
+                  )}
+                  {canDecideDataReview(role) && (
+                    <Link
+                      href={`/data-reviews/${data.active_review.id}/edit`}
+                      className="rounded-lg border px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                    >
+                      Lihat Perubahan Diusulkan
+                    </Link>
+                  )}
+                  <Link
+                    href="/data-reviews"
+                    className="rounded-lg border px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                  >
+                    Lihat Detail Pengkinian
+                  </Link>
+                </div>
               )}
             </div>
           )}
@@ -157,19 +206,19 @@ export default function DataReviewCard({ appId, role }: { appId: string; role: s
           )}
 
           {/* Actions — kept separate from KYC/KYB approval buttons. */}
-          {(showInitiate || showSubmit || showDecide) && (
+          {(showInitiate || ((showSubmit || showDecide) && showWorkflowShortcuts)) && (
             <div className="space-y-3 border-t pt-3">
               <div className="flex flex-wrap gap-2">
                 {showInitiate && (
                   <button
-                    onClick={() => run(() => initiateDataReview(appId), 'Permintaan pengkinian data dikirim ke Frontline.')}
+                    onClick={initiate}
                     disabled={busy}
                     className="rounded-lg bg-kesh-700 px-4 py-2 text-sm font-medium text-white hover:bg-kesh-600 disabled:opacity-60 transition-colors"
                   >
-                    Minta Pengkinian Data
+                    Mulai Pengkinian Data
                   </button>
                 )}
-                {showSubmit && (
+                {showSubmit && showWorkflowShortcuts && (
                   <button
                     onClick={() => run(() => submitDataReview(appId), 'Hasil pengkinian data diajukan untuk review Compliance.')}
                     disabled={busy}
@@ -178,7 +227,7 @@ export default function DataReviewCard({ appId, role }: { appId: string; role: s
                     {activeStatus === 'RETURNED_FOR_REVISION' ? 'Ajukan Ulang Hasil Pengkinian' : 'Ajukan Hasil Pengkinian'}
                   </button>
                 )}
-                {showDecide && (
+                {showDecide && showWorkflowShortcuts && (
                   <>
                     <button
                       onClick={() => { setDecision('APPROVED'); setReason(''); }}
@@ -205,7 +254,7 @@ export default function DataReviewCard({ appId, role }: { appId: string; role: s
                 )}
               </div>
 
-              {showDecide && decision && decision !== 'APPROVED' && (
+              {showDecide && showWorkflowShortcuts && decision && decision !== 'APPROVED' && (
                 <div className="space-y-2">
                   <label className="text-xs text-slate-500">Alasan <span className="text-red-600">*</span></label>
                   <textarea
@@ -218,7 +267,7 @@ export default function DataReviewCard({ appId, role }: { appId: string; role: s
                 </div>
               )}
 
-              {showDecide && decision && (
+              {showDecide && showWorkflowShortcuts && decision && (
                 <button
                   onClick={submitDecision}
                   disabled={busy}

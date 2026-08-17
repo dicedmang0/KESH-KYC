@@ -6,7 +6,11 @@ import { apiFetch } from './api';
 
 export type DataReviewDecision = 'APPROVED' | 'RETURN_FOR_REVISION' | 'REJECTED';
 
-export type DataReviewDecisionPayload = { decision: DataReviewDecision; reason?: string };
+export type DataReviewDecisionPayload = {
+  decision: DataReviewDecision;
+  reason?: string;
+  expected_version?: number;
+};
 
 export type DataReviewDueStatus =
   | 'NOT_DUE' | 'DUE_SOON' | 'DUE' | 'OVERDUE' | 'NEED_RISK_SCORE' | 'NO_SUBMITTED_DATE';
@@ -60,7 +64,13 @@ export type DataReviewStatusResponse = {
   due_at: string | null;
   is_due: boolean;
   status: string;
-  active_review: { id: number | string; review_no: string; status: string } | null;
+  active_review: {
+    id: number | string;
+    review_no: string;
+    status: string;
+    initiated_by_name: string | null;
+    initiated_at: string | null;
+  } | null;
   last_review: {
     id: number | string;
     review_no: string;
@@ -79,10 +89,12 @@ export const DATA_REVIEW_VIEW_ROLES = ['FrontDesk', 'ComplianceLead', 'Auditor',
 export function canViewDataReview(role?: string | null): boolean {
   return !!role && DATA_REVIEW_VIEW_ROLES.includes(role);
 }
-// Initiate is ComplianceLead-only (FrontDesk gets 403); submit is FrontDesk-only
-// (ComplianceLead gets 403). SystemAdmin/Director bypass both.
+// Initiate is FrontDesk or ComplianceLead (both Frontline-equivalent for this
+// action — see backend @Roles("ComplianceLead", "FrontDesk") on POST initiate);
+// submit is FrontDesk-only; decision is ComplianceLead-only. SystemAdmin/Director
+// bypass all three. Not gated on due_status — early initiation is allowed.
 export function canInitiateDataReview(role?: string | null): boolean {
-  return role === 'ComplianceLead' || role === 'SystemAdmin' || role === 'Director';
+  return role === 'FrontDesk' || role === 'ComplianceLead' || role === 'SystemAdmin' || role === 'Director';
 }
 export function canSubmitDataReview(role?: string | null): boolean {
   return role === 'FrontDesk' || role === 'SystemAdmin' || role === 'Director';
@@ -149,8 +161,22 @@ export function getDataReviewStatus(appId: number | string) {
   return apiFetch<DataReviewStatusResponse>(`/applications/${appId}/data-review/status`);
 }
 
+// created=true → a new review just started; created=false → an active review
+// already existed and this call was a no-op idempotent read of it.
+export type InitiateDataReviewResponse = {
+  id: number | string;
+  review_no: string;
+  status: string;
+  initiated_by_name: string | null;
+  initiated_at: string | null;
+  created: boolean;
+};
+
 export function initiateDataReview(appId: number | string, payload: Record<string, unknown> = {}) {
-  return apiFetch(`/applications/${appId}/data-review/initiate`, { method: 'POST', body: payload });
+  return apiFetch<InitiateDataReviewResponse>(`/applications/${appId}/data-review/initiate`, {
+    method: 'POST',
+    body: payload,
+  });
 }
 
 export function submitDataReview(appId: number | string) {
@@ -158,9 +184,13 @@ export function submitDataReview(appId: number | string) {
 }
 
 export function decideDataReview(appId: number | string, payload: DataReviewDecisionPayload) {
-  const { decision, reason } = payload;
+  const { decision, reason, expected_version } = payload;
   return apiFetch(`/applications/${appId}/data-review/decision`, {
     method: 'POST',
-    body: { decision, ...(reason ? { reason } : {}) },
+    body: {
+      decision,
+      ...(reason ? { reason } : {}),
+      ...(expected_version != null ? { expected_version } : {}),
+    },
   });
 }

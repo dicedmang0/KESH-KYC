@@ -10,6 +10,7 @@ import { apiFetch } from "@/lib/api";
  */
 export type BusinessIdentityPayload = Partial<{
   legal_name: string;
+  trade_name: string | null;
   legal_form: string;
   legal_form_other: string | null;
   // Nomor akta dipecah dua (migrasi 0061). deed_number legacy tetap diterima
@@ -17,7 +18,9 @@ export type BusinessIdentityPayload = Partial<{
   deed_establishment_number: string | null;
   deed_latest_amendment_number: string | null;
   incorporation_date: string;
+  country: string | null;
   business_license_number: string | null;
+  nib: string | null;
   npwp: string;
   address_line: string;
   city: string;

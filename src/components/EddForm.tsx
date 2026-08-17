@@ -197,7 +197,7 @@ function TextField({
   placeholder?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <label className="text-xs font-medium text-slate-600">
         {label}
         {required && <span className="text-red-500 ml-0.5">*</span>}
@@ -208,7 +208,7 @@ function TextField({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         placeholder={placeholder}
-        className="rounded-md border px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500"
+        className="w-full min-w-0 rounded-md border px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500"
       />
     </div>
   );
@@ -228,13 +228,13 @@ function SelectField({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <label className="text-xs font-medium text-slate-600">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="rounded-md border bg-white px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500"
+        className="w-full min-w-0 rounded-md border bg-white px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500"
       >
         <option value="">— Pilih —</option>
         {options.map((o) => (
@@ -263,7 +263,7 @@ function TextAreaField({
   placeholder?: string;
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <label className="text-xs font-medium text-slate-600">{label}</label>
       <textarea
         value={value}
@@ -271,7 +271,7 @@ function TextAreaField({
         disabled={disabled}
         rows={rows}
         placeholder={placeholder}
-        className="rounded-md border px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500 resize-y"
+        className="w-full min-w-0 rounded-md border px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500 resize-y"
       />
     </div>
   );

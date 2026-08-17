@@ -20,6 +20,7 @@ export default function LainnyaField({
   labelClassName = "text-sm font-medium",
   inputClassName = "rounded-md border px-3 py-2 text-sm",
   error,
+  disabled = false,
 }: {
   when?: string | null;
   value: string;
@@ -30,6 +31,7 @@ export default function LainnyaField({
   labelClassName?: string;
   inputClassName?: string;
   error?: string;
+  disabled?: boolean;
 }) {
   if (!isLainnya(when)) return null;
   return (
@@ -42,6 +44,7 @@ export default function LainnyaField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        disabled={disabled}
       />
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
