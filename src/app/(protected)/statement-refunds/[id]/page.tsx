@@ -28,6 +28,7 @@ import {
   isRefundMatchable,
   isRefundSubmittable,
   isRefundDecidable,
+  isRefundReceiptEligible,
   type StatementRefund,
 } from '@/lib/statement-refunds';
 
@@ -234,8 +235,16 @@ export default function StatementRefundDetailPage() {
       </div>
 
       {/* Actions */}
-      {(showMatch || showSubmit || showDecide) && (
+      {(showMatch || showSubmit || showDecide || isRefundReceiptEligible(status)) && (
         <div className="flex flex-wrap gap-2">
+          {isRefundReceiptEligible(status) && (
+            <Link
+              href={`/statement-refunds/${id}/receipt`}
+              className="rounded-lg border border-kesh-700 px-4 py-2 text-sm font-medium text-kesh-700 hover:bg-kesh-50"
+            >
+              Cetak Receipt
+            </Link>
+          )}
           {showMatch && (
             <button
               onClick={() => {

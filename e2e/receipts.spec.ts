@@ -87,6 +87,8 @@ async function expectNoAppShell(page: Page) {
   await expect(page.getByText('Portal Kepatuhan Internal')).toHaveCount(0);
 }
 
+type Refund = { id: string; refund_no: string; status: string };
+
 type Transfer = { id: string; partner_reference_no: string | null; status: string; result: string | null };
 type Complaint = {
   id: string;
@@ -114,13 +116,71 @@ const RECEIPT_COPY = {
   },
 } as const;
 
+/**
+ * Setup-only: an APPROVED refund and a still-pending (MATCHED) one to print
+ * against. SystemAdmin's RolesGuard bypass covers every stage here (create /
+ * match built into create / submit / decision), so one token drives all of
+ * it — this is precondition setup, not the tested workflow.
+ */
+async function createRefund(
+  token: string,
+  transferId: string,
+  transferReference: string,
+  amount: number,
+  ts: string,
+): Promise<Refund> {
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+  const res = await fetch(`${API_BASE_URL}/statement-refunds`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      original_transfer_reference_no: transferReference,
+      statement_date: new Date().toISOString().slice(0, 10),
+      received_at: new Date().toISOString(),
+      amount,
+      currency: 'IDR',
+      bank_name: 'Bank Test E2E',
+      bank_account_no: '1234567890',
+      bank_reference_no: `PW-E2E-RFD-${ts}`,
+      statement_description: 'Refund receipt spec setup',
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`setup: failed creating refund: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+async function approveRefund(token: string, refund: Refund): Promise<Refund> {
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+  const submitRes = await fetch(`${API_BASE_URL}/statement-refunds/${refund.id}/submit`, {
+    method: 'POST',
+    headers,
+  });
+  if (!submitRes.ok) {
+    throw new Error(`setup: failed submitting refund: ${submitRes.status} ${await submitRes.text()}`);
+  }
+  const decisionRes = await fetch(`${API_BASE_URL}/statement-refunds/${refund.id}/decision`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ decision: 'APPROVED', finance_notes: 'E2E receipt setup' }),
+  });
+  if (!decisionRes.ok) {
+    throw new Error(`setup: failed approving refund: ${decisionRes.status} ${await decisionRes.text()}`);
+  }
+  return decisionRes.json();
+}
+
 test.describe('Printable receipts — FE-to-BE', () => {
   let transfer: Transfer;
   let draftTransferId: string;
   let complaint: Complaint;
+  let approvedRefund: Refund;
+  let pendingRefund: Refund;
 
   test.beforeAll(async () => {
-    const headers = { Authorization: `Bearer ${await apiLogin(SYSADMIN_EMAIL, SYSADMIN_PASSWORD)}` };
+    const sysAdminToken = await apiLogin(SYSADMIN_EMAIL, SYSADMIN_PASSWORD);
+    const headers = { Authorization: `Bearer ${sysAdminToken}` };
 
     const transfers: Transfer[] = await (
       await fetch(`${API_BASE_URL}/transfers?limit=500`, { headers })
@@ -147,6 +207,12 @@ test.describe('Printable receipts — FE-to-BE', () => {
       ),
     );
     complaint = details.find((c) => c.transaction_partner_reference_no) ?? details[0];
+
+    const ts = String(Date.now());
+    const transferRef = transfer.partner_reference_no!;
+    const approvedDraft = await createRefund(sysAdminToken, transfer.id, transferRef, 15_000, `A-${ts}`);
+    approvedRefund = await approveRefund(sysAdminToken, approvedDraft);
+    pendingRefund = await createRefund(sysAdminToken, transfer.id, transferRef, 15_001, `P-${ts}`);
   });
 
   test('transfer detail prints a receipt keyed by the transaction reference', async ({ page }) => {
@@ -175,6 +241,9 @@ test.describe('Printable receipts — FE-to-BE', () => {
     }
 
     await expect(page.getByText('Simpan bukti ini sebagai referensi transaksi.')).toBeVisible();
+    // Matches the Complaint receipt's structure — this used to be missing.
+    await expect(page.locator('[data-receipt-signatures]')).toContainText('Petugas KESH');
+    await expect(page.locator('[data-receipt-signatures]')).toContainText('Nasabah/Pengirim');
     await expectNoAppShell(page);
     await expectFitsThermalWidth(page);
     await expectPageSizeParses(page);
@@ -239,5 +308,45 @@ test.describe('Printable receipts — FE-to-BE', () => {
     await page.goto(`/transfers/${draftTransferId}`);
     await expect(page.getByText('Draft', { exact: true }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cetak Resi' })).toHaveCount(0);
+  });
+
+  test('an APPROVED refund prints a receipt keyed by the refund number, matching Complaint structure', async ({ page }) => {
+    await login(page, SYSADMIN_EMAIL, SYSADMIN_PASSWORD);
+    await page.goto(`/statement-refunds/${approvedRefund.id}`);
+
+    await page.getByRole('link', { name: 'Cetak Receipt' }).click();
+    await page.waitForURL(`**/statement-refunds/${approvedRefund.id}/receipt`);
+
+    await expect(page.getByRole('heading', { name: 'Bukti Refund' })).toBeVisible();
+    await expect(page.getByText('PT Radhana Solusi Indonesia', { exact: true })).toBeVisible();
+
+    await expect(row(page, 'Nomor Refund')).toHaveText(approvedRefund.refund_no);
+    await expect(page.getByText(`Refund #${approvedRefund.id}`)).toHaveCount(0);
+    await expect(row(page, 'Status')).toHaveText('APPROVED');
+
+    // Officer row carries a name/email; a bare number would mean *_by_name regressed.
+    await expect(row(page, 'Disetujui Oleh')).not.toHaveText(/^\d+$/);
+
+    // Same visual system as Complaint: signatures block + no app shell + thermal-safe.
+    await expect(page.locator('[data-receipt-signatures]')).toContainText('Petugas KESH');
+    await expectNoAppShell(page);
+    await expectFitsThermalWidth(page);
+    await expectPageSizeParses(page);
+
+    await page.getByRole('button', { name: 'Kembali' }).click();
+    await page.waitForURL(`**/statement-refunds/${approvedRefund.id}`);
+  });
+
+  test('a pending (not yet APPROVED) refund offers no receipt', async ({ page }) => {
+    await login(page, SYSADMIN_EMAIL, SYSADMIN_PASSWORD);
+    await page.goto(`/statement-refunds/${pendingRefund.id}`);
+    await expect(page.getByRole('link', { name: 'Cetak Receipt' })).toHaveCount(0);
+
+    // Backend-enforced, not just hidden client-side: even a direct hit 400s.
+    const res = await page.request.get(
+      `${API_BASE_URL}/statement-refunds/${pendingRefund.id}/receipt`,
+      { headers: { Authorization: `Bearer ${await apiLogin(SYSADMIN_EMAIL, SYSADMIN_PASSWORD)}` } },
+    );
+    expect(res.status()).toBe(400);
   });
 });

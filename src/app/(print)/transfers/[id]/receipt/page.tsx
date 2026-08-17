@@ -18,7 +18,11 @@ import {
   type TransferDetail,
 } from '@/lib/transfers';
 import { transferStatusLabel, transferResultLabel } from '@/components/transfer-badges';
-import ReceiptLayout, { ReceiptRow, ReceiptSection } from '@/components/print/receipt-layout';
+import ReceiptLayout, {
+  ReceiptRow,
+  ReceiptSection,
+  ReceiptSignatures,
+} from '@/components/print/receipt-layout';
 
 const FOOTER_NOTE =
   'Bukti ini diterbitkan oleh PT Radhana Solusi Indonesia / KESH. ' +
@@ -103,6 +107,8 @@ export default function TransferReceiptPage() {
         <ReceiptRow label="Direview Finance" value={row.finance_reviewed_by_name} />
         <ReceiptRow label="Disetujui Oleh" value={row.approved_by_name} />
       </ReceiptSection>
+
+      <ReceiptSignatures left="Petugas KESH" right="Nasabah/Pengirim" />
     </ReceiptLayout>
   );
 }

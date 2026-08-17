@@ -68,7 +68,7 @@ export default function Sidebar() {
     ComplaintHandling:   ['/dashboard', '/complaints', '/reports'],
     // COO adalah layer review di alur pengaduan — bukan akses direksi penuh.
     COO:                 ['/dashboard', '/complaints', '/reports'],
-    FrontDesk:           ['/dashboard', '/users', '/kyc', '/data-reviews', '/transfers', '/watchlist'],
+    FrontDesk:           ['/dashboard', '/users', '/kyc', '/data-reviews', '/transfers', '/statement-refunds', '/watchlist'],
     FinanceStaff:        ['/dashboard', '/users', '/transfers', '/complaints', '/statement-refunds', '/reports'],
     FinanceManager:      ['/dashboard', '/users', '/transfers', '/complaints', '/statement-refunds', '/reports'],
     Auditor:             ['/dashboard', '/kyc', '/data-reviews', '/complaints', '/statement-refunds', '/monitoring', '/reports'],

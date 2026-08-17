@@ -6,12 +6,21 @@ for the workflow under test. Specs:
 - `kyb-step2-cdd-regression.spec.ts` — regression test for the KYB bug where
   Step 2 "Pengurus & Pemegang Saham" → "Lanjut" incorrectly called the
   Individual-only `PATCH /api/applications/:id` CDD endpoint.
-- `receipts.spec.ts` — printable receipts: `/transfers/:id/receipt` and
-  `/complaints/:id/receipt` render outside the app shell, are keyed by the
-  customer-facing reference (`KESH-TRF-…` / `KESH-CMP-…`) rather than an
-  internal id, show officer names instead of numeric user ids, and the "Cetak
-  Resi" button stays hidden on a draft transfer. Picks an existing COMPLETED
-  transfer and an existing complaint from the local DB.
+- `receipts.spec.ts` — printable receipts: `/transfers/:id/receipt`,
+  `/complaints/:id/receipt` and `/statement-refunds/:id/receipt` render
+  outside the app shell, are keyed by the customer-facing reference
+  (`KESH-TRF-…` / `KESH-CMP-…` / `KESH-RFD-…`) rather than an internal id,
+  show officer names instead of numeric user ids, and the "Cetak Resi" /
+  "Cetak Receipt" button stays hidden on a draft transfer / non-`APPROVED`
+  refund. The Transfer and Refund receipts both assert a
+  `[data-receipt-signatures]` block, matching the Complaint receipt's visual
+  structure (all three share `components/print/receipt-layout.tsx`). The
+  refund receipt gate is also checked backend-side directly (a pending
+  refund's `GET /statement-refunds/:id/receipt` 400s even for SystemAdmin —
+  it is a status check, not a role bypass). Picks an existing COMPLETED
+  transfer and an existing complaint from the local DB; creates its own
+  APPROVED and pending refunds against that transfer (setup-only, direct
+  API calls).
 - `complaint-refund-flow.spec.ts` — Complaint Handling + Statement Refund
   happy path (create → verify data → operation investigation → finance
   review → statement refund → match → submit → approve → resolve → close),

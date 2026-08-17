@@ -212,6 +212,27 @@ export type StatementRefundDecisionPayload = {
   reason?: string;
 };
 
+// Bentuk sudah dipilah backend (statement-refunds.service.ts getReceipt()) —
+// hanya field yang boleh tampil di bukti refund, dan hanya untuk status APPROVED.
+export type StatementRefundReceipt = {
+  id: number | string;
+  public_id?: string | null;
+  refund_no: string;
+  status: RefundStatus;
+  statement_date: string | null;
+  approved_at: string | null;
+  complaint_no: string | null;
+  original_transfer_reference_no: string | null;
+  original_transfer_amount: string | number | null;
+  customer_name: string | null;
+  amount: string | number | null;
+  currency: string | null;
+  bank_name: string | null;
+  bank_account_no: string | null;
+  reason: string | null;
+  approved_by_name: string | null;
+};
+
 // ── RBAC (mirrors backend RolesGuard + SystemAdmin/Director bypass) ───────────
 
 export const REFUND_VIEW_ROLES = [
@@ -219,9 +240,15 @@ export const REFUND_VIEW_ROLES = [
   'FinanceManager',
   'ComplianceLead',
   'Auditor',
+  'FrontDesk',
   'SystemAdmin',
   'Director',
 ];
+
+/** FrontDesk read access mirrors Auditor: full view, zero write, plus receipt. */
+export function canPrintRefundReceipt(role?: string | null): boolean {
+  return canViewStatementRefund(role);
+}
 
 export function canViewStatementRefund(role?: string | null): boolean {
   return !!role && REFUND_VIEW_ROLES.includes(role);
@@ -259,6 +286,12 @@ export function isRefundSubmittable(status?: string | null): boolean {
 }
 export function isRefundDecidable(status?: string | null): boolean {
   return status === 'PENDING_APPROVAL';
+}
+/** Satu-satunya status terminal yang benar-benar tercapai lewat API — lihat
+ * backend statement-refunds.service.ts getReceipt(). BALANCE_CREDITED belum
+ * punya jalur pencapaian. */
+export function isRefundReceiptEligible(status?: string | null): boolean {
+  return status === 'APPROVED';
 }
 
 // ── Display maps ─────────────────────────────────────────────────────────────
@@ -327,6 +360,11 @@ export function listStatementRefunds(params: StatementRefundListParams = {}) {
 
 export function getStatementRefund(id: number | string) {
   return apiFetch<StatementRefund>(`/statement-refunds/${id}`);
+}
+
+/** 400 dari backend kalau refund belum APPROVED — bukan hanya gerbang UI. */
+export function getStatementRefundReceipt(id: number | string) {
+  return apiFetch<StatementRefundReceipt>(`/statement-refunds/${id}/receipt`);
 }
 
 export function createStatementRefund(payload: CreateStatementRefundPayload) {

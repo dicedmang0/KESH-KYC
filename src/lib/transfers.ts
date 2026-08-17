@@ -101,16 +101,23 @@ export const TRANSFER_RED_FLAGS = [
   // Raised automatically by beneficiary screening on submit (not user-picked).
   ["WATCHLIST_HIT", "Watchlist hit"],
   ["DTTOT_HIT", "DTTOT hit"],
+  // Raised automatically on submit when amount >= Rp50.000.000 (not user-picked).
+  ["AMOUNT_EDD_THRESHOLD", "Wajib EDD (nominal ≥ Rp50 juta)"],
   ["DOCUMENT_OR_INFORMATION_UNUSUAL", "Dokumen/informasi tidak wajar"],
   ["OTHER", "Lainnya"],
 ] as const;
 
 /**
- * Red flags the backend sets itself from watchlist screening. They must not
- * appear in the manual "Ajukan Review Compliance" checklist — a user picking
- * them by hand would claim a screening result that never happened.
+ * Red flags the backend sets itself (watchlist screening or amount
+ * threshold). They must not appear in the manual "Ajukan Review Compliance"
+ * checklist — a user picking them by hand would claim a system result that
+ * never happened.
  */
-export const AUTO_RED_FLAGS: readonly string[] = ["WATCHLIST_HIT", "DTTOT_HIT"];
+export const AUTO_RED_FLAGS: readonly string[] = [
+  "WATCHLIST_HIT",
+  "DTTOT_HIT",
+  "AMOUNT_EDD_THRESHOLD",
+];
 
 export type TransferRedFlag = (typeof TRANSFER_RED_FLAGS)[number][0];
 
