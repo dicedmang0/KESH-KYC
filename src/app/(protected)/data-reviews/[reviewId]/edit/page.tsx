@@ -211,6 +211,12 @@ export default function DataReviewEditPage() {
               key={reviewId}
               person={draft.proposed.person}
               compareTo={draft.current.person}
+              customerType={
+                (draft.proposed.person?.cif_relationship_type ??
+                  draft.current.person?.cif_relationship_type) === 'WIC'
+                  ? 'WIC'
+                  : 'OUR_CUSTOMER'
+              }
               disabled={formDisabled}
               submitLabel="Simpan Draft"
               save={(patch) => stagePersonDraft(reviewId, patch, draft!.review.version)}

@@ -17,11 +17,13 @@ export function formatCif(value?: string | number | null, fallback = "—"): str
 }
 
 /**
- * True only when a dropdown value is exactly "Lainnya" (case-insensitive).
+ * Recognizes the exact enum and canonical labels ending in "/Lainnya".
  * Mirrors the backend RBA V01 rule: when a dropdown value is "Lainnya" the
  * matching `*_other` free-text companion must be sent, and the dropdown value
  * itself is preserved (never replaced with the typed text).
  */
 export function isLainnya(value?: string | null): boolean {
-  return typeof value === "string" && value.trim().toLowerCase() === "lainnya"
+  if (typeof value !== "string") return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === "lainnya" || normalized.endsWith("/lainnya")
 }

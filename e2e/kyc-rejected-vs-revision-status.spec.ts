@@ -272,6 +272,14 @@ test.describe('Rejected vs revision-required status display — FE-to-BE', () =>
     await expect(page.getByText('Perlu Perbaikan')).toBeVisible();
     await expect(page.getByText(REVISION_REASON)).toBeVisible();
     // The resubmit affordance must survive — this is the flow REJECTED loses.
-    await expect(page.getByRole('button', { name: 'Ajukan Ulang', exact: true })).toBeVisible();
+    await expect(page.locator('label[for=draft-monthly_income_range]')).toHaveText('Rentang Penghasilan');
+    await expect(page.locator('#draft-monthly_income_range')).toHaveValue('');
+    const resubmittedResponse = page.waitForResponse((response) =>
+      response.url().endsWith(`/applications/${revisionAppId}/submit`) &&
+      response.request().method() === 'PATCH',
+    );
+    await page.getByRole('button', { name: 'Ajukan Ulang', exact: true }).click();
+    const resubmitted = await resubmittedResponse;
+    expect(resubmitted.status(), await resubmitted.text()).toBe(200);
   });
 });

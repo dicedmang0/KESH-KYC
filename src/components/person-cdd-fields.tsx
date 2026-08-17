@@ -120,15 +120,17 @@ function Text({
 }
 
 function Select({
-  id, label, value, onChange, options, disabled, placeholder = '— Pilih —',
+  id, label, value, onChange, options, disabled, required, placeholder = '— Pilih —',
 }: {
   id: string; label: string; value: string; onChange: (v: string) => void;
-  options: { value: string; label: string }[]; disabled?: boolean; placeholder?: string;
+  options: { value: string; label: string }[]; disabled?: boolean; required?: boolean; placeholder?: string;
 }) {
   const hasCurrent = !value || options.some((o) => o.value === value);
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <label htmlFor={id} className="text-xs text-slate-500">{label}</label>
+      <label htmlFor={id} className="text-xs text-slate-500">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
       <select
         id={id}
         value={value}
@@ -156,6 +158,10 @@ export type PersonCddFieldsProps = {
   /** Nilai live untuk ditampilkan sebagai pembanding (dipakai di konteks draft). */
   compareTo?: Record<string, unknown> | null;
   submitLabel?: string;
+  /** Klasifikasi tetap otoritatif; hanya mengatur requiredness dan field tambahan WIC. */
+  customerType?: 'OUR_CUSTOMER' | 'WIC';
+  /** Field audit/operasional yang bukan bagian payload create aplikasi. */
+  showOperationalFields?: boolean;
 };
 
 export default function PersonCddFields({
@@ -165,6 +171,8 @@ export default function PersonCddFields({
   disabled = false,
   compareTo = null,
   submitLabel = 'Simpan Data',
+  customerType,
+  showOperationalFields = true,
 }: PersonCddFieldsProps) {
   const initial = useMemo(() => toForm(person), [person]);
   const [form, setForm] = useState<FormState>(initial);
@@ -256,6 +264,30 @@ export default function PersonCddFields({
     }));
 
   function validate(): string {
+    for (const [key, label] of [
+      ['full_name', 'Nama Lengkap'],
+      ['pob', 'Tempat Lahir'],
+      ['dob', 'Tanggal Lahir'],
+    ] as const) {
+      if (customerType && !form[key]?.trim()) return `${label} wajib diisi.`;
+    }
+    if (customerType === 'OUR_CUSTOMER') {
+      if (!/^\d{15,16}$/.test(form.ktp_number?.trim() ?? '')) return 'Nomor KTP wajib diisi 15–16 digit angka.';
+      if (!form.nationality?.trim()) return 'Kewarganegaraan wajib diisi.';
+      if (!form.phone?.trim()) return 'Telepon wajib diisi.';
+      if (!form.gender?.trim()) return 'Jenis Kelamin wajib diisi.';
+      if (!form.occupation?.trim()) return 'Pekerjaan wajib diisi.';
+    }
+    if (customerType === 'WIC') {
+      if (!form.identity_type?.trim()) return 'Jenis Identitas wajib diisi.';
+      if (!form.identity_number?.trim()) return 'Nomor Identitas wajib diisi.';
+      if (form.identity_type === 'KTP' && !/^\d{15,16}$/.test(form.identity_number.trim())) {
+        return 'Nomor Identitas KTP wajib 15–16 digit angka.';
+      }
+      if (!form.address_identity?.trim()) return 'Alamat Identitas wajib diisi.';
+      if (!form.wic_transaction_purpose?.trim()) return 'Tujuan Transaksi WIC wajib diisi.';
+      if (!form.wic_recipient_relationship?.trim()) return 'Hubungan dengan Penerima wajib diisi.';
+    }
     for (const [main, other, label] of [
       ['occupation', 'occupation_other', 'Pekerjaan'],
       ['industry_category', 'industry_category_other', 'Bidang Industri'],
@@ -315,20 +347,22 @@ export default function PersonCddFields({
       <section className="space-y-3">
         <p className="border-b pb-1 text-xs font-semibold text-slate-600">Data Pribadi</p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <F k="full_name"><Text id="draft-full_name" label="Nama Lengkap" value={form.full_name} onChange={(v) => set('full_name', v)} disabled={disabled} /></F>
+          <F k="full_name"><Text id="draft-full_name" label="Nama Lengkap" value={form.full_name} onChange={(v) => set('full_name', v)} disabled={disabled} required={Boolean(customerType)} /></F>
           <F k="alias"><Text id="draft-alias" label="Alias" value={form.alias} onChange={(v) => set('alias', v)} disabled={disabled} placeholder="Nama alias (opsional)" /></F>
-          <F k="pob"><Text id="draft-pob" label="Tempat Lahir" value={form.pob} onChange={(v) => set('pob', v)} disabled={disabled} /></F>
-          <F k="dob"><Text id="draft-dob" label="Tanggal Lahir" type="date" value={form.dob} onChange={(v) => set('dob', v)} disabled={disabled} /></F>
+          <F k="pob"><Text id="draft-pob" label="Tempat Lahir" value={form.pob} onChange={(v) => set('pob', v)} disabled={disabled} required={Boolean(customerType)} /></F>
+          <F k="dob"><Text id="draft-dob" label="Tanggal Lahir" type="date" value={form.dob} onChange={(v) => set('dob', v)} disabled={disabled} required={Boolean(customerType)} /></F>
           <F k="gender">
             <Select id="draft-gender" label="Jenis Kelamin" value={form.gender} disabled={disabled}
+              required={customerType === 'OUR_CUSTOMER'}
               onChange={(v) => set('gender', v)}
               options={[{ value: 'M', label: 'Laki-laki' }, { value: 'F', label: 'Perempuan' }, { value: 'O', label: 'Lainnya' }]} />
           </F>
           <F k="nationality">
             <Select id="draft-nationality" label="Kewarganegaraan" value={form.nationality} disabled={disabled}
+              required={customerType === 'OUR_CUSTOMER'}
               onChange={(v) => set('nationality', v)} options={opts(nationalities, true)} />
           </F>
-          <F k="phone"><Text id="draft-phone" label="Telepon" value={form.phone} onChange={(v) => set('phone', v)} disabled={disabled} /></F>
+          <F k="phone"><Text id="draft-phone" label="Telepon" value={form.phone} onChange={(v) => set('phone', v)} disabled={disabled} required={customerType === 'OUR_CUSTOMER'} /></F>
           <F k="email"><Text id="draft-email" label="Email" value={form.email} onChange={(v) => set('email', v)} disabled={disabled} /></F>
         </div>
       </section>
@@ -336,22 +370,23 @@ export default function PersonCddFields({
       <section className="space-y-3">
         <p className="border-b pb-1 text-xs font-semibold text-slate-600">Identitas</p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <F k="ktp_number"><Text id="draft-ktp_number" label="Nomor KTP" value={form.ktp_number} onChange={(v) => set('ktp_number', v.replace(/\D/g, ''))} disabled={disabled} /></F>
+          <F k="ktp_number"><Text id="draft-ktp_number" label="Nomor KTP" value={form.ktp_number} onChange={(v) => set('ktp_number', v.replace(/\D/g, ''))} disabled={disabled} required={customerType === 'OUR_CUSTOMER'} /></F>
           <F k="sim_number"><Text id="draft-sim_number" label="Nomor SIM" value={form.sim_number} onChange={(v) => set('sim_number', v)} disabled={disabled} /></F>
           <F k="passport_number"><Text id="draft-passport_number" label="Nomor Paspor" value={form.passport_number} onChange={(v) => set('passport_number', v)} disabled={disabled} /></F>
           <F k="identity_type">
             <Select id="draft-identity_type" label="Jenis Identitas" value={form.identity_type} disabled={disabled}
+              required={customerType === 'WIC'}
               onChange={(v) => set('identity_type', v)}
               options={[{ value: 'KTP', label: 'KTP' }, { value: 'SIM', label: 'SIM' }, { value: 'PASPOR', label: 'Paspor' }, { value: 'LAINNYA', label: 'Lainnya' }]} />
           </F>
-          <F k="identity_number"><Text id="draft-identity_number" label="Nomor Identitas" value={form.identity_number} onChange={(v) => set('identity_number', v)} disabled={disabled} /></F>
+          <F k="identity_number"><Text id="draft-identity_number" label="Nomor Identitas" value={form.identity_number} onChange={(v) => set('identity_number', v)} disabled={disabled} required={customerType === 'WIC'} /></F>
         </div>
       </section>
 
       <section className="space-y-3">
         <p className="border-b pb-1 text-xs font-semibold text-slate-600">Alamat</p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <F k="address_identity"><Text id="draft-address_identity" label="Alamat Identitas" value={form.address_identity} onChange={(v) => set('address_identity', v)} disabled={disabled} /></F>
+          <F k="address_identity"><Text id="draft-address_identity" label="Alamat Identitas" value={form.address_identity} onChange={(v) => set('address_identity', v)} disabled={disabled} required={customerType === 'WIC'} /></F>
           <F k="address_residential"><Text id="draft-address_residential" label="Alamat Domisili" value={form.address_residential} onChange={(v) => set('address_residential', v)} disabled={disabled} /></F>
           <F k="province_code">
             <Select id="draft-province_code" label="Provinsi" value={form.province_code} disabled={disabled}
@@ -382,6 +417,7 @@ export default function PersonCddFields({
         <div className="grid gap-3 sm:grid-cols-2">
           <F k="occupation">
             <Select id="draft-occupation" label="Pekerjaan" value={form.occupation} disabled={disabled}
+              required={customerType === 'OUR_CUSTOMER'}
               onChange={(v) => set('occupation', v)} options={opts(occupations, true)} />
             <LainnyaField when={form.occupation} value={form.occupation_other ?? ''} disabled={disabled}
               onChange={(v) => set('occupation_other', v)} label="Keterangan Pekerjaan Lainnya" />
@@ -414,27 +450,31 @@ export default function PersonCddFields({
             <Select id="draft-distribution_channel" label="Saluran Distribusi" value={form.distribution_channel} disabled={disabled}
               onChange={(v) => set('distribution_channel', v)} options={opts(distributions)} />
           </F>
-          <F k="pep_self_declared">
-            <Select id="draft-pep_self_declared" label="PEP (deklarasi mandiri)" value={form.pep_self_declared} disabled={disabled}
-              onChange={(v) => set('pep_self_declared', v)}
-              options={[{ value: 'true', label: 'Ya' }, { value: 'false', label: 'Tidak' }]} />
-          </F>
-          <F k="signature_uri"><Text id="draft-signature_uri" label="URI Tanda Tangan" value={form.signature_uri} onChange={(v) => set('signature_uri', v)} disabled={disabled} /></F>
+          {showOperationalFields && (
+            <>
+              <F k="pep_self_declared">
+                <Select id="draft-pep_self_declared" label="PEP (deklarasi mandiri)" value={form.pep_self_declared} disabled={disabled}
+                  onChange={(v) => set('pep_self_declared', v)}
+                  options={[{ value: 'true', label: 'Ya' }, { value: 'false', label: 'Tidak' }]} />
+              </F>
+              <F k="signature_uri"><Text id="draft-signature_uri" label="URI Tanda Tangan" value={form.signature_uri} onChange={(v) => set('signature_uri', v)} disabled={disabled} /></F>
+            </>
+          )}
         </div>
       </section>
 
-      {/* Field WIC hanya relevan untuk pengguna jasa Walk-In Customer. */}
-      {(
+      {/* Field ini menambah konteks WIC tanpa menggandakan form CDD bersama. */}
+      {customerType === 'WIC' && (
         <section className="space-y-3">
           <p className="border-b pb-1 text-xs font-semibold text-slate-600">Walk-In Customer</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <F k="wic_transaction_purpose">
-              <Text id="draft-wic_transaction_purpose" label="Tujuan Transaksi" value={form.wic_transaction_purpose} onChange={(v) => set('wic_transaction_purpose', v)} disabled={disabled} />
+              <Text id="draft-wic_transaction_purpose" label="Tujuan Transaksi" value={form.wic_transaction_purpose} onChange={(v) => set('wic_transaction_purpose', v)} disabled={disabled} required />
               <LainnyaField when={form.wic_transaction_purpose} value={form.wic_transaction_purpose_other ?? ''} disabled={disabled}
                 onChange={(v) => set('wic_transaction_purpose_other', v)} label="Keterangan Tujuan Transaksi Lainnya" />
             </F>
             <F k="wic_recipient_relationship">
-              <Text id="draft-wic_recipient_relationship" label="Hubungan dengan Penerima" value={form.wic_recipient_relationship} onChange={(v) => set('wic_recipient_relationship', v)} disabled={disabled} />
+              <Text id="draft-wic_recipient_relationship" label="Hubungan dengan Penerima" value={form.wic_recipient_relationship} onChange={(v) => set('wic_recipient_relationship', v)} disabled={disabled} required />
               <LainnyaField when={form.wic_recipient_relationship} value={form.wic_recipient_relationship_other ?? ''} disabled={disabled}
                 onChange={(v) => set('wic_recipient_relationship_other', v)} label="Keterangan Hubungan Lainnya" />
             </F>

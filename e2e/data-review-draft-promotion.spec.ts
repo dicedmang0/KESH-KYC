@@ -60,6 +60,7 @@ async function seedApprovedIndividual(token: string, seq: string): Promise<strin
       identity_number: `37${seq}${ts}`, address_identity: OLD_ADDRESS, pob: 'Jakarta', dob: '1990-01-01',
       nationality: 'ID', phone: `0858${seq}${ts}`, occupation: 'Karyawan Swasta', gender: 'M',
       signature_uri: 'https://storage.test/pw_sig.png', source_of_funds: 'Gaji',
+      monthly_income_range: 'Rata-rata Rp5 juta sampai Rp10 juta per bulan',
     },
   });
   const id = String(created.id);
@@ -215,10 +216,14 @@ test.describe.serial('ADR-047 Pengkinian Data draft promotion', () => {
     await reviewCard(page).getByRole('link', { name: 'Perbarui Data' }).click();
     await expect(page.getByTestId('draft-context-banner')).toContainText('belum berlaku');
     await page.locator('#draft-address_identity').fill(NEW_ADDRESS);
+    await expect(page.locator('#draft-monthly_income_range')).toHaveValue('Rata-rata Rp5 juta sampai Rp10 juta per bulan');
+    await page.locator('#draft-monthly_income_range').selectOption('');
     await page.locator('#draft-source_of_funds').selectOption({ label: 'Gaji' }).catch(() => undefined);
     await page.getByRole('button', { name: 'Simpan Draft', exact: true }).click();
     await expect(page.getByTestId('data-review-diff')).toContainText(NEW_ADDRESS);
-    expect((await api<{ person: { address_identity: string } }>(sysToken, `/applications/${appId}`)).person.address_identity).toBe(OLD_ADDRESS);
+    const liveBeforeApproval = await api<{ person: { address_identity: string; monthly_income_range: string | null } }>(sysToken, `/applications/${appId}`);
+    expect(liveBeforeApproval.person.address_identity).toBe(OLD_ADDRESS);
+    expect(liveBeforeApproval.person.monthly_income_range).toBe('Rata-rata Rp5 juta sampai Rp10 juta per bulan');
 
     await page.getByRole('button', { name: 'Ajukan untuk Review Compliance' }).click();
     await page.waitForURL(`**/users/${appId}`);
@@ -237,6 +242,9 @@ test.describe.serial('ADR-047 Pengkinian Data draft promotion', () => {
     const diff = page.getByTestId('data-review-diff');
     await expect(diff).toContainText(OLD_ADDRESS);
     await expect(diff).toContainText(NEW_ADDRESS);
+    await expect(diff).toContainText('Rentang Penghasilan');
+    await expect(diff).toContainText('Rata-rata Rp5 juta sampai Rp10 juta per bulan');
+    await expect(diff).toContainText('—');
     const panel = page.getByTestId('compliance-decision-panel');
     await panel.getByRole('button', { name: 'Kembalikan untuk Revisi' }).click();
     await page.locator('#compliance-decision-notes').fill('Mohon periksa kembali alamat dan nomor telepon.');
@@ -257,10 +265,12 @@ test.describe.serial('ADR-047 Pengkinian Data draft promotion', () => {
     await approvePanel.getByRole('button', { name: 'Setujui' }).click();
     await approvePanel.getByRole('button', { name: 'Konfirmasi Keputusan' }).click();
     await page.waitForURL(`**/users/${appId}`);
-    const live = await api<{ person: { address_identity: string; phone: string } }>(sysToken, `/applications/${appId}`);
+    const live = await api<{ person: { address_identity: string; phone: string; monthly_income_range: string | null } }>(sysToken, `/applications/${appId}`);
     expect(live.person.address_identity).toBe(NEW_ADDRESS);
     expect(live.person.phone).toBe(`0812${ts}`);
-    await expect(page.getByText(NEW_ADDRESS).first()).toBeVisible();
+    expect(live.person.monthly_income_range).toBeNull();
+    await expect(page.locator('#draft-address_identity')).toHaveValue(NEW_ADDRESS);
+    await expect(page.locator('#draft-monthly_income_range')).toHaveValue('');
   });
 
   test('BUSINESS: scalar, Party/BO ADD UPDATE DELETE, document ADD REPLACE DELETE, and EDD are staged', async ({ page }) => {
