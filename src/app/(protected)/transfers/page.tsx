@@ -16,7 +16,7 @@ import {
 import { useAuth } from '@/app/providers';
 import { formatCif } from '@/lib/utils';
 import { Pagination } from '@/components/pagination';
-import { TransferStatusBadge, TransferResultBadge, WatchlistHitBadge } from '@/components/transfer-badges';
+import { TransferStatusBadge, TransferResultBadge, WatchlistHitBadge, transferStatusLabel } from '@/components/transfer-badges';
 
 type ListTab = 'single' | 'bulk';
 
@@ -32,7 +32,7 @@ function StatusSummaryBadges({ value }: { value?: BulkBatchStatusSummary | strin
           key={status}
           className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700"
         >
-          {status}: {count}
+          {transferStatusLabel(status)}: {count}
         </span>
       ))}
     </div>
@@ -172,6 +172,7 @@ export default function TransfersPage() {
               <option value="SUBMITTED">Menunggu Review Operation Supervisor</option>
               <option value="PENDING_FINANCE_STAFF_REVIEW">Menunggu Review Finance Staff</option>
               <option value="PENDING_FINANCE_MANAGER_APPROVAL">Menunggu Approval Finance Manager</option>
+              <option value="PENDING_FINANCE_STAFF_RESULT">Menunggu Hasil Finance Staff</option>
               <option value="REVISION_REQUIRED">Dikembalikan</option>
               <option value="REJECTED">Ditolak</option>
               <option value="COMPLETED">Selesai</option>
@@ -235,7 +236,7 @@ export default function TransfersPage() {
                   <div className="col-span-1 font-medium whitespace-nowrap text-right">{formatTransferAmount(r)}</div>
                   <div className="col-span-1 whitespace-nowrap">
                     <TransferStatusBadge status={r.status} />
-                    {/* Tanggal transaksi dibuat backend saat diajukan — DRAFT masih "—". */}
+                    {/* Tanggal transaksi dibuat backend saat approval Finance Manager — DRAFT masih "—". */}
                     <div className="mt-1 text-xs text-muted-foreground" data-testid="transfer-transaction-date">
                       Tgl. {r.transaction_date ? new Date(r.transaction_date).toLocaleDateString('id-ID') : '—'}
                     </div>

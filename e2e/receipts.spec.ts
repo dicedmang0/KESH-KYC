@@ -185,10 +185,9 @@ test.describe('Printable receipts — FE-to-BE', () => {
     const transfers: Transfer[] = await (
       await fetch(`${API_BASE_URL}/transfers?limit=500`, { headers })
     ).json();
-    const completed = transfers.filter((t) => t.status === 'COMPLETED');
-    transfer = completed.find((t) => t.result === 'SUCCESS') ?? completed[0];
+    transfer = transfers.find((t) => t.status === 'COMPLETED' && t.result === 'SUCCESS');
     if (!transfer) {
-      throw new Error('setup: no COMPLETED transfer exists locally to print a receipt for.');
+      throw new Error('setup: no COMPLETED + SUCCESS transfer exists locally to print a receipt for.');
     }
     draftTransferId = String(transfers.find((t) => t.status === 'DRAFT')?.id ?? '');
 

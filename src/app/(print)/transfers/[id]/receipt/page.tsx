@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { formatCif } from '@/lib/utils';
 import {
-  getTransfer,
+  getTransferReceipt,
   transferReference,
   formatTransferAmount,
   formatDateTime,
@@ -44,7 +44,7 @@ export default function TransferReceiptPage() {
     let alive = true;
     (async () => {
       try {
-        const data = await getTransfer(id);
+        const data = await getTransferReceipt(id);
         if (alive) setRow(data);
       } catch (e: unknown) {
         if (alive) setErr(e instanceof Error ? e.message : 'Gagal memuat detail transfer');

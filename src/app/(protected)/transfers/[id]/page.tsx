@@ -162,7 +162,7 @@ export default function TransferDetailPage() {
   const [actionErr, setActionErr] = useState('');
 
   // panel: which action form is open
-  const [panel, setPanel] = useState<'none' | 'approve' | 'reject' | 'result' | 'return' | 'edit'>('none');
+  const [panel, setPanel] = useState<'none' | 'approve' | 'reject' | 'return' | 'edit'>('none');
 
   // decision form
   const [decisionNotes, setDecisionNotes] = useState('');
@@ -199,6 +199,7 @@ export default function TransferDetailPage() {
   // result form
   const [resultForm, setResultForm] = useState({
     result: 'SUCCESS' as 'SUCCESS' | 'FAILED',
+    provider_name: '',
     result_notes: '',
     result_reference_no: '',
     bank_reference_no: '',
@@ -509,6 +510,9 @@ export default function TransferDetailPage() {
       setDecisionNotes('');
       setRejectReason('');
       await reload();
+      if (decision === 'APPROVE') {
+        toast.success('Disetujui. Menunggu Hasil dari Finance Staff.');
+      }
     } catch (e) {
       handleActionError(e);
     } finally {
@@ -519,8 +523,16 @@ export default function TransferDetailPage() {
   async function doResult() {
     if (!id) return;
     const f = resultForm;
+    if (!f.provider_name.trim()) {
+      setActionErr('Provider wajib diisi.');
+      return;
+    }
     if (f.result === 'FAILED' && !f.failed_reason.trim()) {
-      setActionErr('Alasan kegagalan disarankan ketika hasil adalah FAILED.');
+      setActionErr('Alasan kegagalan wajib diisi ketika hasil adalah Gagal.');
+      return;
+    }
+    if (![f.result_reference_no, f.bank_reference_no, f.provider_reference_no].some((value) => value.trim())) {
+      setActionErr('Isi minimal satu nomor referensi hasil, bank, atau provider.');
       return;
     }
     let providerResponse: Record<string, unknown> | undefined;
@@ -543,6 +555,7 @@ export default function TransferDetailPage() {
     try {
       await setTransferResult(id, {
         result: f.result,
+        provider_name: f.provider_name.trim(),
         result_notes: c(f.result_notes),
         result_reference_no: c(f.result_reference_no),
         bank_reference_no: c(f.bank_reference_no),
@@ -625,10 +638,10 @@ export default function TransferDetailPage() {
   // FinanceManager only ever acts on PENDING_FINANCE_MANAGER_APPROVAL, so a
   // returned transfer never offers the final approve/reject actions.
   const canDecide = canApproveTransfer(role) && row?.status === 'PENDING_FINANCE_MANAGER_APPROVAL';
-  const canSetResult = canUpdateTransferResult(role) && row?.status === 'COMPLETED' && row?.result !== 'SUCCESS';
+  const canSetResult = canUpdateTransferResult(role) && row?.status === 'PENDING_FINANCE_STAFF_RESULT';
   // canReviewCompliance renders its own panel, so it is excluded here.
   const hasAnyAction =
-    canSubmit || canEdit || canSubmitCompliance || canSupervisorReview || canFinanceReview || canDecide || canSetResult;
+    canSubmit || canEdit || canSubmitCompliance || canSupervisorReview || canFinanceReview || canDecide;
   const cr = row?.latest_compliance_review;
   const canEvaluateMonitoring = role === 'ComplianceLead' || role === 'SystemAdmin' || role === 'Director';
 
@@ -688,7 +701,7 @@ export default function TransferDetailPage() {
         </div>
         <div className="flex items-center gap-3">
           {/* Resi hanya untuk transaksi yang benar-benar selesai & berhasil. */}
-          {row && (row.result === 'SUCCESS' || row.status === 'COMPLETED') && (
+          {row && row.status === 'COMPLETED' && row.result === 'SUCCESS' && (
             <button
               className="rounded-lg border border-kesh-700 px-3 py-1.5 text-sm font-medium text-kesh-700 hover:bg-kesh-50"
               onClick={() => router.push(`/transfers/${row.id ?? id}/receipt`)}
@@ -725,7 +738,7 @@ export default function TransferDetailPage() {
               <Field label="Metode Transfer" value={row.transfer_method} />
               <Field label="Kanal Transfer" value={row.transfer_channel} />
               <Field label="Dibuat Pada" value={formatDateTime(row.created_at)} />
-              {/* Diisi backend saat pengajuan — DRAFT tetap kosong ("-"). */}
+              {/* Diisi backend saat approval Finance Manager — DRAFT tetap kosong ("-"). */}
               <Field
                 label="Tanggal Transaksi"
                 value={row.transaction_date ? formatDateTime(row.transaction_date) : undefined}
@@ -734,6 +747,15 @@ export default function TransferDetailPage() {
               {row.bulk_reference_no && <Field label="No. Referensi Bulk" value={row.bulk_reference_no} />}
             </div>
           </SectionCard>
+
+          {row.status === 'PENDING_FINANCE_STAFF_RESULT' && (
+            <div className="rounded-lg border border-cyan-300 bg-cyan-50 p-3 text-sm text-cyan-900">
+              <p className="font-semibold">Menunggu Hasil dari Finance Staff</p>
+              <p className="mt-1 text-xs text-cyan-800">
+                Finance Manager telah menyetujui transaksi. Hasil aktual bank/provider belum tersedia.
+              </p>
+            </div>
+          )}
 
           {/* Returned by FinanceStaff — the reason is what FrontDesk must fix */}
           {isReturned && (
@@ -934,19 +956,128 @@ export default function TransferDetailPage() {
 
           {/* 6. Result / Provider */}
           <SectionCard title="Hasil / Provider">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <Field label="Nomor Referensi Hasil" value={row.result_reference_no} />
-              <Field label="Nomor Referensi Bank" value={row.bank_reference_no} />
-              <Field label="Nomor Referensi Eksternal" value={row.external_reference_no} />
-              <Field label="Nomor Referensi Provider" value={row.provider_reference_no} />
-              <Field label="Kode Respons Provider" value={row.provider_response_code} />
-              <Field label="Pesan Respons Provider" value={row.provider_response_message} />
-              <Field label="Status Transaksi Terkini" value={row.latest_transaction_status} />
-              <Field label="Deskripsi Status Transaksi" value={row.transaction_status_desc} />
-              <Field label="Alasan Kegagalan" value={row.failed_reason} />
-              <Field label="URI Lampiran Hasil" value={row.result_attachment_uri} />
-              <Field label="Catatan Hasil" value={row.result_notes} />
-            </div>
+            {!row.result && !canSetResult && (
+              <p className="text-sm text-neutral-500" data-testid="provider-result-unavailable">
+                Hasil transaksi belum tersedia.
+              </p>
+            )}
+
+            {row.result && (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3" data-testid="provider-result-readonly">
+                <Field label="Hasil" value={<TransferResultBadge result={row.result} />} />
+                <Field label="Provider" value={row.provider_name} />
+                <Field label="Bank Penerima" value={row.beneficiary_bank_name} />
+                <Field label="Nomor Referensi Hasil" value={row.result_reference_no} />
+                <Field label="Nomor Referensi Bank" value={row.bank_reference_no} />
+                <Field label="Nomor Referensi Eksternal" value={row.external_reference_no} />
+                <Field label="Nomor Referensi Provider" value={row.provider_reference_no} />
+                <Field label="Kode Respons Provider" value={row.provider_response_code} />
+                <Field label="Pesan Respons Provider" value={row.provider_response_message} />
+                <Field label="Status Transaksi Terkini" value={row.latest_transaction_status} />
+                <Field label="Deskripsi Status Transaksi" value={row.transaction_status_desc} />
+                <Field label="Alasan Kegagalan" value={row.failed_reason} />
+                <Field label="URI Lampiran Hasil" value={row.result_attachment_uri} />
+                <Field label="Catatan Hasil" value={row.result_notes} />
+              </div>
+            )}
+
+            {canSetResult && (
+              <div className="space-y-3" data-testid="provider-result-form">
+                <p className="text-xs text-neutral-500">
+                  Catat hasil aktual yang diterima dari bank/provider. Ini bukan persetujuan ulang.
+                </p>
+                <div>
+                  <label className="text-xs text-muted-foreground">Hasil</label>
+                  <select
+                    className={inputCls}
+                    value={resultForm.result}
+                    onChange={(e) => setResultForm((s) => ({ ...s, result: e.target.value as 'SUCCESS' | 'FAILED' }))}
+                  >
+                    <option value="SUCCESS">Berhasil</option>
+                    <option value="FAILED">Gagal</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs text-muted-foreground">Provider (wajib)</label>
+                  <input
+                    className={inputCls}
+                    value={resultForm.provider_name}
+                    onChange={(e) => setResultForm((s) => ({ ...s, provider_name: e.target.value }))}
+                    placeholder="Contoh: Bank Nobu"
+                  />
+                </div>
+
+                {resultForm.result === 'FAILED' && (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Alasan kegagalan (wajib)</label>
+                    <input
+                      className={inputCls}
+                      value={resultForm.failed_reason}
+                      onChange={(e) => setResultForm((s) => ({ ...s, failed_reason: e.target.value }))}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-xs text-muted-foreground">Catatan hasil</label>
+                  <textarea
+                    rows={2}
+                    className={inputCls}
+                    value={resultForm.result_notes}
+                    onChange={(e) => setResultForm((s) => ({ ...s, result_notes: e.target.value }))}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {([
+                    ['result_reference_no', 'Nomor Referensi Hasil'],
+                    ['bank_reference_no', 'Nomor Referensi Bank'],
+                    ['external_reference_no', 'Nomor Referensi Eksternal'],
+                    ['provider_reference_no', 'Nomor Referensi Provider'],
+                    ['provider_response_code', 'Kode Respons Provider'],
+                    ['provider_response_message', 'Pesan Respons Provider'],
+                    ['latest_transaction_status', 'Status Transaksi Terkini'],
+                    ['transaction_status_desc', 'Deskripsi Status Transaksi'],
+                    ['result_attachment_uri', 'URI Lampiran Hasil'],
+                  ] as const).map(([key, label]) => (
+                    <div key={key}>
+                      <label className="text-xs text-muted-foreground">{label}</label>
+                      <input
+                        className={inputCls}
+                        value={resultForm[key]}
+                        onChange={(e) => setResultForm((s) => ({ ...s, [key]: e.target.value }))}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div>
+                  <label className="text-xs text-muted-foreground">Respons provider (JSON object, opsional)</label>
+                  <textarea
+                    rows={4}
+                    className={`${inputCls} font-mono`}
+                    value={resultForm.provider_response}
+                    onChange={(e) => setResultForm((s) => ({ ...s, provider_response: e.target.value }))}
+                    placeholder='{ "raw": "..." }'
+                  />
+                </div>
+
+                <button
+                  className="rounded-lg bg-kesh-700 px-3 py-2 text-sm text-white hover:bg-kesh-600 disabled:opacity-50"
+                  disabled={actionLoading}
+                  onClick={doResult}
+                >
+                  {actionLoading ? 'Menyimpan…' : 'Finalisasi Hasil Transaksi'}
+                </button>
+
+                {actionErr && (
+                  <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+                    {actionErr}
+                  </div>
+                )}
+              </div>
+            )}
           </SectionCard>
 
           {/* 7. Additional Info / Provider JSON */}
@@ -1126,15 +1257,6 @@ export default function TransferDetailPage() {
                       Tolak
                     </button>
                   </>
-                )}
-                {canSetResult && (
-                  <button
-                    className="rounded-lg bg-kesh-700 px-3 py-2 text-sm text-white hover:bg-kesh-600 disabled:opacity-50"
-                    disabled={actionLoading}
-                    onClick={() => { setPanel(panel === 'result' ? 'none' : 'result'); setActionErr(''); }}
-                  >
-                    Tetapkan Hasil
-                  </button>
                 )}
               </div>
 
@@ -1426,86 +1548,6 @@ export default function TransferDetailPage() {
                     onClick={() => doDecide('REJECT')}
                   >
                     {actionLoading ? 'Menyimpan…' : 'Konfirmasi Tolak'}
-                  </button>
-                </div>
-              )}
-
-              {/* Result form */}
-              {canSetResult && panel === 'result' && (
-                <div className="rounded-lg border p-3 space-y-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground">Hasil</label>
-                    <select
-                      className={inputCls}
-                      value={resultForm.result}
-                      onChange={(e) => setResultForm((s) => ({ ...s, result: e.target.value as 'SUCCESS' | 'FAILED' }))}
-                    >
-                      <option value="SUCCESS">SUCCESS</option>
-                      <option value="FAILED">FAILED</option>
-                    </select>
-                  </div>
-
-                  {resultForm.result === 'FAILED' && (
-                    <div>
-                      <label className="text-xs text-muted-foreground">Alasan kegagalan (disarankan)</label>
-                      <input
-                        className={inputCls}
-                        value={resultForm.failed_reason}
-                        onChange={(e) => setResultForm((s) => ({ ...s, failed_reason: e.target.value }))}
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="text-xs text-muted-foreground">Catatan hasil</label>
-                    <textarea
-                      rows={2}
-                      className={inputCls}
-                      value={resultForm.result_notes}
-                      onChange={(e) => setResultForm((s) => ({ ...s, result_notes: e.target.value }))}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    {([
-                      ['result_reference_no', 'Nomor Referensi Hasil'],
-                      ['bank_reference_no', 'Nomor Referensi Bank'],
-                      ['external_reference_no', 'Nomor Referensi Eksternal'],
-                      ['provider_reference_no', 'Nomor Referensi Provider'],
-                      ['provider_response_code', 'Kode Respons Provider'],
-                      ['provider_response_message', 'Pesan Respons Provider'],
-                      ['latest_transaction_status', 'Status Transaksi Terkini'],
-                      ['transaction_status_desc', 'Deskripsi Status Transaksi'],
-                      ['result_attachment_uri', 'URI Lampiran Hasil'],
-                    ] as const).map(([key, label]) => (
-                      <div key={key}>
-                        <label className="text-xs text-muted-foreground">{label}</label>
-                        <input
-                          className={inputCls}
-                          value={resultForm[key]}
-                          onChange={(e) => setResultForm((s) => ({ ...s, [key]: e.target.value }))}
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-muted-foreground">Respons provider (JSON object, opsional)</label>
-                    <textarea
-                      rows={4}
-                      className={`${inputCls} font-mono`}
-                      value={resultForm.provider_response}
-                      onChange={(e) => setResultForm((s) => ({ ...s, provider_response: e.target.value }))}
-                      placeholder='{ "raw": "..." }'
-                    />
-                  </div>
-
-                  <button
-                    className="rounded-lg bg-kesh-700 px-3 py-2 text-sm text-white hover:bg-kesh-600 disabled:opacity-50"
-                    disabled={actionLoading}
-                    onClick={doResult}
-                  >
-                    {actionLoading ? 'Menyimpan…' : 'Kirim Hasil'}
                   </button>
                 </div>
               )}

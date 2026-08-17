@@ -58,7 +58,7 @@ export function canApproveTransfer(role: string | null | undefined): boolean {
 }
 
 export function canUpdateTransferResult(role: string | null | undefined): boolean {
-  return role === 'FinanceManager' || role === 'SystemAdmin' || role === 'Director';
+  return role === 'FinanceStaff' || role === 'SystemAdmin' || role === 'Director';
 }
 
 export type TransferStatus =
@@ -67,6 +67,7 @@ export type TransferStatus =
   | "SUBMITTED"
   | "PENDING_FINANCE_STAFF_REVIEW"
   | "PENDING_FINANCE_MANAGER_APPROVAL"
+  | "PENDING_FINANCE_STAFF_RESULT"
   | "REVISION_REQUIRED"
   | "APPROVED"
   | "REJECTED"
@@ -261,6 +262,7 @@ export type TransferDetail = TransferListRow & {
 
   external_reference_no?: string | null;
   bank_reference_no?: string | null;
+  provider_name?: string | null;
   provider_reference_no?: string | null;
   result_reference_no?: string | null;
 
@@ -365,7 +367,7 @@ export type CreateTransferBody = {
   transfer_method?: string;
   transfer_channel?: string;
   // `transaction_date` sengaja tidak ada di sini: backend yang mengisinya dengan
-  // waktu server saat pengajuan. FE tidak pernah mengirim tanggal transaksi.
+  // waktu server saat approval Finance Manager. FE tidak pernah mengirim tanggal transaksi.
   requested_execution_date?: string;
   additional_info?: Record<string, unknown>;
 };
@@ -402,6 +404,7 @@ export type DecideComplianceReviewBody = {
 
 export type SetTransferResultBody = {
   result: "SUCCESS" | "FAILED";
+  provider_name: string;
   result_notes?: string;
   result_reference_no?: string;
   bank_reference_no?: string;
@@ -521,6 +524,11 @@ export function getTransfers(params?: { status?: string; transfer_mode?: Transfe
 
 export function getTransfer(id: number | string) {
   return apiFetch<TransferDetail>(`/transfers/${id}`);
+}
+
+/** Backend-enforced receipt gate: only COMPLETED + SUCCESS is printable. */
+export function getTransferReceipt(id: number | string) {
+  return apiFetch<TransferDetail>(`/transfers/${id}/receipt`);
 }
 
 export function getTransferSnapPreview(id: number | string) {

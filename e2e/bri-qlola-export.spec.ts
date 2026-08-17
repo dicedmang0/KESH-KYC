@@ -142,12 +142,23 @@ async function ensureFrontDesk(sysAdminToken: string) {
   return { email, password: FRONTDESK_PASSWORD };
 }
 
-/** SystemAdmin punya full access → boleh memutus langsung dari SUBMITTED. */
+/** SystemAdmin setup: manager approval lalu hasil aktual per child. */
 async function approveChild(token: string, id: string) {
   await api(token, `/transfers/${id}/submit`, { method: 'POST' });
-  return api(token, `/transfers/${id}/decision`, {
+  const approved = await api(token, `/transfers/${id}/decision`, {
     method: 'POST',
     body: JSON.stringify({ decision: 'APPROVE' }),
+  });
+  if (approved.status !== 'PENDING_FINANCE_STAFF_RESULT') {
+    throw new Error(`setup: expected PENDING_FINANCE_STAFF_RESULT, got ${approved.status}`);
+  }
+  return api(token, `/transfers/${id}/result`, {
+    method: 'POST',
+    body: JSON.stringify({
+      result: 'SUCCESS',
+      provider_name: 'Bank Nobu',
+      bank_reference_no: `QLOLA-E2E-${id}`,
+    }),
   });
 }
 

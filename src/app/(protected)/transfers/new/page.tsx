@@ -684,7 +684,7 @@ export default function NewTransferPage() {
 
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">
-          Tanggal transaksi akan dibuat otomatis saat transaksi diajukan.
+          Tanggal transaksi akan dibuat otomatis saat disetujui Finance Manager.
         </p>
         <button
           onClick={submit}
