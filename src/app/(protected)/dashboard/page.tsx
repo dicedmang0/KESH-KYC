@@ -194,7 +194,7 @@ export default function DashboardPage() {
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
                   {summary.totalRegisteredUsers.toLocaleString("id-ID")}
                 </p>
-                <p className="mt-1 text-xs text-emerald-600">+8,2% dari bulan lalu</p>
+                <p className="mt-1 text-xs text-emerald-600"></p>
               </CardContent>
             </Card>
 
@@ -204,7 +204,7 @@ export default function DashboardPage() {
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
                   {summary.verifiedUsers.toLocaleString("id-ID")}
                 </p>
-                <p className="mt-1 text-xs text-emerald-600">+5,4% dari bulan lalu</p>
+                <p className="mt-1 text-xs text-emerald-600"></p>
               </CardContent>
             </Card>
 
@@ -214,7 +214,7 @@ export default function DashboardPage() {
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
                   {summary.pendingVerification.toLocaleString("id-ID")}
                 </p>
-                <p className="mt-1 text-xs text-amber-600">+12,1% dari kemarin</p>
+                <p className="mt-1 text-xs text-amber-600"></p>
               </CardContent>
             </Card>
 
@@ -224,7 +224,7 @@ export default function DashboardPage() {
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
                   {summary.rejectedKyc.toLocaleString("id-ID")}
                 </p>
-                <p className="mt-1 text-xs text-red-600">-2,3% dari bulan lalu</p>
+                <p className="mt-1 text-xs text-red-600"></p>
               </CardContent>
             </Card>
           </>
