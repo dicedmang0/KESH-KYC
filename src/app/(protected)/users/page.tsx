@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/app/providers";
+import { getRoleFromToken } from "@/lib/api";
+import { canCreateKyc } from "@/lib/kyc-access";
 import { formatCif } from "@/lib/utils";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -124,6 +126,7 @@ const EMPTY_API: ApiRes = { data: [], total: 0, page: 1, limit: 20 };
 
 function UsersPageInner() {
   const { token } = useAuth();
+  const role = getRoleFromToken(token);
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -209,7 +212,7 @@ function UsersPageInner() {
           </p>
         </div>
 
-        <div className="flex gap-2">
+        {canCreateKyc(role) && <div className="flex gap-2">
           <button
             type="button"
             onClick={() => router.push("/applications/new?type=individual")}
@@ -229,7 +232,7 @@ function UsersPageInner() {
             <Plus className="h-4 w-4" />
             Tambah Perusahaan
           </button>
-        </div>
+        </div>}
       </div>
 
       {/* Filters */}

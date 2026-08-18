@@ -13,6 +13,7 @@ import BusinessIdentityForm from '@/components/business-identity-form';
 import EddForm, { DEFAULT_EDD, type EddFormData } from '@/components/EddForm';
 import WebcamCapture from '@/components/WebcamCapture';
 import DataReviewCard from '@/components/DataReviewCard';
+import { canEditKyc, canViewKycEdd, canViewKycRisk } from '@/lib/kyc-access';
 
 type Status = 'DRAFT' | 'SUBMITTED' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'REVISION_REQUIRED';
 
@@ -1227,7 +1228,7 @@ export default function UserDetailPage() {
   // it may upload documents and manage parties but cannot edit the business
   // identity, delete a document or submit, so a BranchAdmin-only edit journey
   // dead-ends in a 403. Finance, Auditor and OperationSupervisor are read-only.
-  const canWrite = ['FrontDesk', 'ComplianceLead', 'SystemAdmin', 'Director'].includes(userRole ?? '');
+  const canWrite = canEditKyc(userRole);
   // DRAFT and REVISION_REQUIRED are the two statuses the backend still accepts
   // edits and a (re)submit for.
   const canSubmit = canWrite && (app.status === 'DRAFT' || app.status === 'REVISION_REQUIRED');
@@ -1286,9 +1287,9 @@ export default function UserDetailPage() {
     screening.some((h) => h.status !== 'CLEAR' && String(h.list_type ?? '').toUpperCase() === 'PEP');
   const canRescreen = ['ComplianceLead', 'SystemAdmin', 'Director'].includes(userRole ?? '');
 
-  const canViewRisk = ['SystemAdmin', 'Director', 'ComplianceLead', 'OperationSupervisor', 'FrontDesk', 'Auditor'].includes(userRole ?? '');
+  const canViewRisk = canViewKycRisk(userRole);
   const canEditEdd = ['SystemAdmin', 'Director', 'FrontDesk', 'ComplianceLead'].includes(userRole ?? '');
-  const canViewEdd = ['SystemAdmin', 'Director', 'FrontDesk', 'ComplianceLead', 'Auditor'].includes(userRole ?? '');
+  const canViewEdd = canViewKycEdd(userRole);
   const showEddSection = canViewEdd && (eddRequired || Object.keys(eddData).length > 0);
 
   return (

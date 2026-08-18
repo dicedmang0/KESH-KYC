@@ -7,6 +7,10 @@ import { toast } from "@/lib/toast";
 import BusinessWizard from "@/components/business-wizard";
 import PersonCddFields from "@/components/person-cdd-fields";
 import { Card, CardContent } from "@/components/ui/card";
+import { ShieldOff } from "lucide-react";
+import { useAuth } from "@/app/providers";
+import { getRoleFromToken } from "@/lib/api";
+import { canCreateKyc } from "@/lib/kyc-access";
 
 type Kind = "INDIVIDUAL" | "BUSINESS";
 type CustomerType = "OUR_CUSTOMER" | "WIC";
@@ -19,6 +23,8 @@ const EMPTY_INDIVIDUAL: Record<string, unknown> = {
 
 function NewApplicationPageInner() {
   const router = useRouter();
+  const { token } = useAuth();
+  const role = getRoleFromToken(token);
   const sp = useSearchParams();
   const kind = (
     sp.get("type")?.toUpperCase() === "BUSINESS" ? "BUSINESS" : "INDIVIDUAL"
@@ -76,6 +82,23 @@ function NewApplicationPageInner() {
     toast.success("Aplikasi berhasil dibuat.");
     router.push(`/users/${String(appId)}`);
     return created;
+  }
+
+  if (token !== null && !canCreateKyc(role)) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-slate-500">
+        <ShieldOff className="h-10 w-10 text-slate-300" />
+        <p className="text-base font-medium text-slate-700">Akses Ditolak</p>
+        <p className="text-sm">Anda hanya memiliki akses baca untuk CDD/KYC/KYB.</p>
+        <button
+          type="button"
+          onClick={() => router.replace('/users')}
+          className="mt-1 text-sm text-kesh-700 hover:underline"
+        >
+          Kembali ke Manajemen Pengguna Jasa
+        </button>
+      </div>
+    );
   }
 
   return (
