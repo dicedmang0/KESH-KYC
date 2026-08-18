@@ -8,8 +8,8 @@ import { useEffect, useState } from 'react';
 export default function LoginPage() {
   const { token, setToken } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState('admin@example.com');
-  const [password, setPassword] = useState('Admin123!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
