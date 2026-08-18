@@ -110,14 +110,10 @@ function NewApplicationPageInner() {
                 </label>
                 <div className="rounded-lg bg-white/70 p-3 text-xs text-slate-600">
                   <p className="font-semibold text-emerald-800">
-                    {customerType === "WIC"
-                      ? "Walk-In Customer (WIC)"
-                      : "Our Customer"}
+                    
                   </p>
                   <p className="mt-1">
-                    {customerType === "WIC"
-                      ? "Menggunakan form CDD lengkap yang sama. Klasifikasi WIC, tanpa CIF, dan batas transaksi tetap berlaku."
-                      : "CIF diterbitkan sesuai alur Our Customer yang berlaku."}
+                    
                   </p>
                 </div>
               </div>
